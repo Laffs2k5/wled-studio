@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
 import { DeviceBar } from "./components/DeviceBar";
 import { DevicePanel } from "./components/DevicePanel";
+import { Firmware } from "./components/Firmware";
 import { TokenPrompt } from "./components/TokenPrompt";
 import type { Device } from "./types";
 
@@ -11,6 +12,7 @@ export function App() {
   const [current, setCurrent] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
   const [needToken, setNeedToken] = useState(false);
+  const [view, setView] = useState<"looks" | "firmware">("looks");
 
   const notify = useCallback((msg: string, error = false) => {
     setToast({ msg, error });
@@ -44,9 +46,14 @@ export function App() {
     <div className="app">
       <header>
         <h1>wled-studio</h1>
-        {devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify} />}
+        <nav className="row" aria-label="Views">
+          <button className={view === "looks" ? "primary" : ""} onClick={() => setView("looks")}>Looks &amp; effects</button>
+          <button className={view === "firmware" ? "primary" : ""} onClick={() => setView("firmware")}>Firmware</button>
+        </nav>
+        {view === "looks" && devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify} />}
       </header>
-      {current ? <DevicePanel key={current} deviceId={current} notify={notify} /> : devices && <p className="muted">Add a WLED device to start.</p>}
+      {view === "firmware" ? <Firmware notify={notify} /> :
+        current ? <DevicePanel key={current} deviceId={current} notify={notify} /> : devices && <p className="muted">Add a WLED device to start.</p>}
       {toast && <div role="status" className={`toast ${toast.error ? "error" : ""}`}>{toast.msg}</div>}
     </div>
   );

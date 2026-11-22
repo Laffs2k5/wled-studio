@@ -1,5 +1,8 @@
 # docker compose up                  -> http://localhost:8080
 # docker compose --profile demo up   -> also a fake WLED device; add it as host "demo-device:8081"
+# WLEDSTUDIO_BUILDER_URL=http://builder:8090 docker compose --profile firmware up
+#                                    -> also the firmware builder (wled-studio-builder); your own
+#                                       effects (usermod folders) go in ./effects (git-ignored)
 services:
   wled-studio:
     image: ghcr.io/laffs2k5/wled-studio:${WLEDSTUDIO_TAG:-edge}
@@ -12,6 +15,7 @@ services:
     environment:
       WLEDSTUDIO_ALLOWED_HOSTS: ${WLEDSTUDIO_ALLOWED_HOSTS:-localhost,127.0.0.1}
       WLEDSTUDIO_TOKEN: ${WLEDSTUDIO_TOKEN:-}
+      WLEDSTUDIO_BUILDER_URL: ${WLEDSTUDIO_BUILDER_URL:-}
     volumes:
       - wled-studio-data:/data
     read_only: true
@@ -34,5 +38,21 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
+  builder:
+    profiles: [firmware]
+    image: ghcr.io/laffs2k5/wled-studio-builder:${BUILDER_TAG:-edge}
+    entrypoint: ["/home/builder/venv/bin/python", "/home/builder/studio-src/studio/service.py"]
+    # no ports: only wled-studio reaches it, on the compose network. It needs outbound
+    # HTTPS to GitHub, the PlatformIO registry and npm for builds.
+    volumes:
+      - builder-work:/work
+      - builder-out:/out
+      - ${WLEDSTUDIO_EFFECTS_DIR:-./effects}:/effects:ro
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
 volumes:
   wled-studio-data:
+  builder-work:
+  builder-out:

@@ -18,6 +18,9 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
   - backup, then a drift check (refuses if someone else changed the presets);
   - upload with the settings PIN, then read back and verify;
   - effects are resolved by name, and each look gets a change-check status.
+- **Firmware with your effects:** gate builds through
+  [wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder). The vendor's stock image is
+  rebuilt and checked first, then only your code may differ. Flashing isn't built yet.
 - A fake WLED device for tests and a demo mode.
 
 ## Run it
@@ -25,6 +28,8 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
 ```bash
 docker compose up                    # http://localhost:8080
 docker compose --profile demo up     # also starts a fake WLED device at demo-device:8081
+WLEDSTUDIO_BUILDER_URL=http://builder:8090 docker compose --profile firmware up
+                                     # also the firmware builder; your effects go in ./effects
 ```
 
 By default it listens on `127.0.0.1` only. See [docs/security.md](docs/security.md) before

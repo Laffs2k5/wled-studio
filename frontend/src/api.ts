@@ -45,6 +45,34 @@ export async function request<T>(method: string, path: string, body?: unknown): 
 
 const enc = encodeURIComponent;
 
+export interface FirmwareTarget { pins: string; release: string; target: string; verified: string[] }
+export interface FirmwareJob {
+  id: string;
+  state: "queued" | "running" | "passed" | "failed";
+  pins: string;
+  target: string;
+  usermods: string[];
+  created: number;
+  report?: { passed: boolean; checks?: Record<string, boolean>; error?: string;
+    custom?: { firmware_size: number }; objects?: { added: string[]; unexpected: string[] } };
+}
+
+export const firmware = {
+  status: () => request<{ enabled: boolean }>("GET", "/api/firmware/status"),
+  targets: () => request<FirmwareTarget[]>("GET", "/api/firmware/targets"),
+  usermods: () => request<string[]>("GET", "/api/firmware/usermods"),
+  jobs: () => request<FirmwareJob[]>("GET", "/api/firmware/jobs"),
+  job: (id: string) => request<FirmwareJob>("GET", `/api/firmware/jobs/${encodeURIComponent(id)}`),
+  log: async (id: string) => {
+    const t = token.get();
+    const r = await fetch(`/api/firmware/jobs/${encodeURIComponent(id)}/log`, { headers: t ? { Authorization: `Bearer ${t}` } : {} });
+    if (!r.ok) throw new ApiError(r.status, `log: ${r.status}`);
+    return r.text();
+  },
+  submit: (pins: string, target: string, usermods: string[]) =>
+    request<FirmwareJob>("POST", "/api/firmware/jobs", { pins, target, usermods }),
+};
+
 export const api = {
   devices: () => request<Device[]>("GET", "/api/devices"),
   addDevice: (name: string, host: string, pin?: string) =>

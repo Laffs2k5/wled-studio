@@ -51,3 +51,12 @@ input.slot { width: 4.5rem; }
 .toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: .6rem 1rem; max-width: 30rem; }
 .toast.error { border-color: var(--bad); }
 .token-prompt { max-width: 24rem; margin: 3rem auto; display: grid; gap: .6rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; }
+.firmware { padding: 1rem 1.25rem; max-width: 60rem; }
+.jobs { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: .75rem; }
+.jobs td, .jobs th { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--line); }
+.jobs tr { cursor: pointer; }
+.state-passed td:last-child, .job .ok { color: var(--ok); }
+.state-failed td:last-child, .job .bad { color: var(--bad); }
+.job ul { list-style: none; padding: 0; }
+pre.log { background: #0b0d10; border: 1px solid var(--line); border-radius: 8px; padding: .75rem; max-height: 22rem; overflow: auto; font-size: .78rem; white-space: pre-wrap; }
+code { background: #0b0d10; padding: .1rem .3rem; border-radius: 4px; }

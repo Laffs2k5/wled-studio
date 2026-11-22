@@ -10,3 +10,5 @@ __pycache__/
 htmlcov/
 *.egg-info/
 *.tsbuildinfo
+effects/*
+!effects/README.md

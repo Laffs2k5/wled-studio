@@ -12,6 +12,10 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 - **Security baseline** (docs/security.md).
 - **Tests:** backend 90 (92 % coverage), frontend 19 (93 % of statements), plus an end-to-end smoke
   test against the containers with the fake device.
+- **Firmware builds from the app:** a Firmware view that runs gate jobs on wled-studio-builder's
+  job service (`docker compose --profile firmware`): your usermods from `./effects`, the vendor's
+  stock image checked first, then only your code may differ. Flashing from the app isn't built
+  (it waits for a spare board and the owner's go).
 - **Packaging:** Dockerfile, `compose.yaml` with a demo profile, CI that builds, tests and publishes
   to ghcr.io.
 
@@ -27,8 +31,10 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 6. **Full change check UI:** a status per look, accept-review flow, preflight against a builder
    manifest.
 7. **Room model:** pixel positions per LED for a room-shaped preview.
-8. **The effect studio:** the browser preview (WebAssembly shim) and DDP streaming, then build jobs
-   through wled-studio-builder.
+8. **The effect studio:** an effect editor and the browser preview (WebAssembly shim) with DDP
+   streaming. Build jobs through the builder exist already (above).
+9. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
+   way back; spare board first.
 
 ## Waiting on
 
