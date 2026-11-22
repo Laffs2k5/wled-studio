@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { DeviceBar } from "./components/DeviceBar";
 import { DevicePanel } from "./components/DevicePanel";
+import { TokenPrompt } from "./components/TokenPrompt";
 import type { Device } from "./types";
 
 export function App() {
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [current, setCurrent] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
+  const [needToken, setNeedToken] = useState(false);
 
   const notify = useCallback((msg: string, error = false) => {
     setToast({ msg, error });
@@ -21,10 +23,22 @@ export function App() {
         setDevices(d);
         setCurrent((c) => (c && d.some((x) => x.id === c) ? c : d[0]?.id ?? null));
       })
-      .catch((e) => notify(e.message, true));
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 401) setNeedToken(true);
+        else notify(e.message, true);
+      });
   }, [notify]);
 
   useEffect(reload, [reload]);
+
+  if (needToken) {
+    return (
+      <div className="app">
+        <header><h1>wled-studio</h1></header>
+        <TokenPrompt onDone={() => { setNeedToken(false); reload(); }} />
+      </div>
+    );
+  }
 
   return (
     <div className="app">

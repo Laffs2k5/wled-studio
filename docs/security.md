@@ -34,9 +34,8 @@ that applies to such an app.
 1. Publish the port on the LAN: in `compose.yaml`, `ports: ["8080:8080"]`.
 2. Add the name you browse to: `WLEDSTUDIO_ALLOWED_HOSTS=localhost,127.0.0.1,studio.lan`.
 3. **Set a token** so not everyone on the LAN can write presets: `WLEDSTUDIO_TOKEN=<a long random
-   string>`. API requests then need `Authorization: Bearer <token>`. The web UI's login screen for
-   the token is on the to-do list (docs/status.md); until then, keep it on localhost or behind a
-   reverse proxy that authenticates.
+   string>`. API requests then need `Authorization: Bearer <token>`; the web UI asks for it once
+   per browser session (kept in session storage, sent as that header). The health check is exempt.
 
 Don't expose wled-studio to the internet.
 

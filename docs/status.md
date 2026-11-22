@@ -17,7 +17,7 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
 ## Next (in order)
 
-1. **Token login in the UI** (for LAN use with `WLEDSTUDIO_TOKEN`).
+1. ~~Token login in the UI~~ (done 2026-11-23).
 2. **Look editing in the library**, not only capture: per-segment fields, layers and blend modes,
    the mic per look (with the mic on/off rule).
 3. **Playlists** (looks as entries; durations, transitions, repeat, shuffle).

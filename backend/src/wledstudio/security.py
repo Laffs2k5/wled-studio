@@ -6,8 +6,9 @@
   header "X-WLED-Studio: 1", which a cross-site page can't send without a CORS
   preflight that this app never grants, and an Origin, if present, that matches
   the Host (CSRF).
-- Optional shared token (WLEDSTUDIO_TOKEN): every /api request then needs
-  "Authorization: Bearer <token>", compared in constant time.
+- Optional shared token (WLEDSTUDIO_TOKEN): every /api request (except the
+  health check) then needs "Authorization: Bearer <token>", compared in
+  constant time.
 - Response headers: a strict Content-Security-Policy, no framing, no sniffing,
   no referrer.
 - Request bodies are limited in size.
@@ -70,7 +71,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             return _deny(413, "request body too large")
 
         if request.url.path.startswith("/api/"):
-            if self.s.token is not None:
+            if self.s.token is not None and request.url.path != "/api/health":
                 auth = request.headers.get("authorization", "")
                 given = auth[7:] if auth.lower().startswith("bearer ") else ""
                 if not hmac.compare_digest(given.encode(), self.s.token.encode()):

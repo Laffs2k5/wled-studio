@@ -53,3 +53,22 @@ test("errors are shown", async () => {
   render(<App />);
   expect(await screen.findByRole("status")).toHaveTextContent("no route");
 });
+
+test("asks for the token when the backend wants one, then sends it", async () => {
+  sessionStorage.clear();
+  let authorised = false;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
+    authorised = auth === "Bearer tok-123";
+    if (!authorised) return new Response(JSON.stringify({ detail: "missing or wrong token" }), { status: 401 });
+    if (url === "/api/devices") return new Response("[]", { status: 200 });
+    return new Response("{}", { status: 200 });
+  }));
+  render(<App />);
+  const input = await screen.findByLabelText("Access token");
+  fireEvent.change(input, { target: { value: "tok-123" } });
+  fireEvent.click(screen.getByText("Continue"));
+  expect(await screen.findByText("Add a WLED device to start.")).toBeInTheDocument();
+  expect(authorised).toBe(true);
+  expect(sessionStorage.getItem("wledstudio.token")).toBe("tok-123");
+});

@@ -17,9 +17,23 @@ function detail(body: unknown, fallback: string): string {
   return fallback;
 }
 
+const TOKEN_KEY = "wledstudio.token";
+
+/** The optional access token (WLEDSTUDIO_TOKEN), kept for this browser session only. */
+export const token = {
+  get: (): string | null => {
+    try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
+  },
+  set: (t: string | null) => {
+    try { t ? sessionStorage.setItem(TOKEN_KEY, t) : sessionStorage.removeItem(TOKEN_KEY); } catch { /* storage off */ }
+  },
+};
+
 /** Every write carries X-WLED-Studio: 1 (the backend's cross-site request guard). */
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
+  const t = token.get();
+  if (t) headers["Authorization"] = `Bearer ${t}`;
   if (method !== "GET") headers["X-WLED-Studio"] = "1";
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });

@@ -43,9 +43,10 @@ def test_body_size_limit(client):
 def test_token(tmp_path):
     s = Settings(data_dir=tmp_path, allowed_hosts=["testserver"], token="s3cret-token")
     c = TestClient(create_app(s, resolver=private_resolver))
-    assert c.get("/api/health").status_code == 401
-    assert c.get("/api/health", headers={"Authorization": "Bearer wrong"}).status_code == 401
-    assert c.get("/api/health", headers={"Authorization": "Bearer s3cret-token"}).status_code == 200
+    assert c.get("/api/health").status_code == 200  # the container health check needs no token
+    assert c.get("/api/devices").status_code == 401
+    assert c.get("/api/devices", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert c.get("/api/devices", headers={"Authorization": "Bearer s3cret-token"}).status_code == 200
 
 
 def test_host_matching():

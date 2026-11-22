@@ -50,3 +50,4 @@ input.slot { width: 4.5rem; }
 .status-unavailable td { color: var(--bad); }
 .toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: .6rem 1rem; max-width: 30rem; }
 .toast.error { border-color: var(--bad); }
+.token-prompt { max-width: 24rem; margin: 3rem auto; display: grid; gap: .6rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; }
