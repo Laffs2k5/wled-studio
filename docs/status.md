@@ -26,9 +26,11 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 ## Next (in order)
 
 1. ~~Token login in the UI~~ (done 2026-11-23).
-2. **Look editing in the library**, not only capture: per-segment fields, layers and blend modes,
-   the mic per look (with the mic on/off rule).
-3. **Playlists** (looks as entries; durations, transitions, repeat, shuffle).
+2. **Look editing in the library** beyond capture-and-show: per-segment fields, layers and blend
+   modes. (Done 2026-11-23: the **mic per look**, by the rule: a look made for sound switches the mic
+   on, any other look switches it off.)
+3. ~~Playlists~~ (done 2026-11-23: looks by name, durations, shuffle, an end look; imported from and
+   written to the device, unchanged playlists not rewritten).
 4. **Custom palettes** (gradient editor, upload with the PIN).
 5. **Live preview** from the device's live view (one websocket client per device; the backend owns
    it and fans it out).

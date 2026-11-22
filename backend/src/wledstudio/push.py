@@ -73,13 +73,14 @@ def diff_ids(before: dict, after: dict) -> list[str]:
 
 
 async def push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, *,
-               dry_run: bool = False, adopt_drift: bool = False, accept_review: bool = False) -> PushResult:
+               dry_run: bool = False, adopt_drift: bool = False, accept_review: bool = False,
+               playlists: list[dict] | None = None) -> PushResult:
     lists = DeviceLists(await client.effects(), await client.fxdata(), await client.palettes())
     current_text = await client.presets_text()
     current = json.loads(current_text or "{}")
     last = state.last_pushed(device_id)
     drift = last is not None and sha256(current_text) != last
-    planned, report = plan_presets(current, looks, lists, accept_review=accept_review)
+    planned, report = plan_presets(current, looks, lists, accept_review=accept_review, playlists=playlists)
     changed = diff_ids(current, planned)
     if dry_run:
         return PushResult(False, drift, report, changed, reason="dry run")

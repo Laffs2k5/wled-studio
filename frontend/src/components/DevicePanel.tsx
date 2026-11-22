@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { DeviceState, Look, Profile, Segment } from "../types";
+import type { DeviceState, Look, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
 import { Looks } from "./Looks";
+import { Playlists } from "./Playlists";
 
 interface Props {
   deviceId: string;
@@ -17,12 +18,14 @@ export function DevicePanel({ deviceId, notify }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [segId, setSegId] = useState(0);
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reloadState = useCallback(() => api.state(deviceId).then(setState).catch((e) => notify(e.message, true)), [deviceId, notify]);
-  const reloadLooks = useCallback(() => api.looks().then(setLooks).catch((e) => notify(e.message, true)), [notify]);
+  const reloadLooks = useCallback(() => Promise.all([api.looks(), api.playlists()])
+    .then(([l, p]) => { setLooks(l); setPlaylists(p); }).catch((e) => notify(e.message, true)), [notify]);
 
   useEffect(() => {
     setProfile(null);
@@ -106,6 +109,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
       </main>
       <aside>
         <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify} />
+        <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} />
       </aside>
     </div>
   );

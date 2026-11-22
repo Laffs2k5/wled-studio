@@ -2,7 +2,7 @@
 import pytest
 
 from wledstudio.library import (DeviceLists, LibraryStore, LookError, check_name, classify, import_presets,
-                                plan_presets, resolve_look, worst)
+                                mic_for, plan_presets, resolve_look, worst)
 
 LISTS = DeviceLists(effects=["Solid", "Glow", "RSVD", "Comet", "Meter"],
                     fxdata=["", "!,!;!;!;1", "", "!,Tail;!;!;1", "Gain;!;!;1v"],
@@ -115,3 +115,12 @@ def test_store_keeps_history(tmp_path):
     assert set(s.looks()) == {"A", "B"}
     assert len(list((tmp_path / "history").glob("*.json"))) == 1
     assert s.delete("A") and not s.delete("A")
+
+
+def test_mic_rule():
+    assert mic_for({"segments": [{"effect": "Meter"}]}, LISTS) is True
+    assert mic_for({"segments": [{"effect": "Comet"}, {"effect": "Meter"}]}, LISTS) is True
+    assert mic_for({"segments": [{"effect": "Comet"}]}, LISTS) is False
+    assert mic_for({"segments": [{"effect_id": 4}]}, LISTS) is True
+    assert mic_for({"segments": [{"effect": "Gone"}]}, LISTS) is False
+    assert mic_for({"segments": []}, LISTS) is False

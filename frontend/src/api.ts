@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import type { Device, DeviceState, Look, Profile, PushResult } from "./types";
+import type { Device, DeviceState, Look, Playlist, Profile, PushResult } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -83,10 +83,13 @@ export const api = {
   state: (id: string) => request<DeviceState>("GET", `/api/devices/${enc(id)}/state`),
   setState: (id: string, patch: object) => request<DeviceState>("POST", `/api/devices/${enc(id)}/state`, patch),
   importPresets: (id: string) =>
-    request<{ imported: string[]; kept_existing: string[]; skipped_presets: string[] }>(
+    request<{ imported: string[]; kept_existing: string[]; imported_playlists: string[]; skipped_presets: string[] }>(
       "POST", `/api/devices/${enc(id)}/import`),
   looks: () => request<Look[]>("GET", "/api/looks"),
   deleteLook: (name: string) => request<null>("DELETE", `/api/looks/${enc(name)}`),
+  playlists: () => request<Playlist[]>("GET", "/api/playlists"),
+  putPlaylist: (p: Playlist) => request<Playlist>("PUT", `/api/playlists/${enc(p.name)}`, p),
+  deletePlaylist: (name: string) => request<null>("DELETE", `/api/playlists/${enc(name)}`),
   capture: (id: string, name: string, presetId?: number) =>
     request<Look>("POST", `/api/devices/${enc(id)}/capture/${enc(name)}` + (presetId ? `?preset_id=${presetId}` : "")),
   apply: (id: string, name: string) =>

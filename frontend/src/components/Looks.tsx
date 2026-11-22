@@ -83,8 +83,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify }: Props) 
             <thead><tr><th>Look</th><th>Slot</th><th>Status</th><th>Notes</th></tr></thead>
             <tbody>
               {plan.report.map((r) => (
-                <tr key={r.look} className={`status-${r.status}`}>
-                  <td>{r.look}</td><td>{r.preset_id ?? ""}</td><td>{r.status}</td><td>{r.notes.join("; ")}</td>
+                <tr key={r.look ?? `pl:${r.playlist}`} className={`status-${r.status}`}>
+                  <td>{r.look ?? `▶ ${r.playlist}`}</td><td>{r.preset_id ?? ""}</td><td>{r.status}</td><td>{r.notes.join("; ")}</td>
                 </tr>
               ))}
             </tbody>

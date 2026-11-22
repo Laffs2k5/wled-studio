@@ -71,7 +71,8 @@ def test_import_capture_apply_push(client, dev_id, device):
                                      "seg": [{"id": 0, "start": 0, "stop": 60, "fx": 8, "pal": 3, "sx": 10}]},
                       "9": {"n": "Mix", "playlist": {"ps": [3], "dur": [100]}}}
     r = client.post(f"/api/devices/{dev_id}/import", headers=CSRF).json()
-    assert r == {"imported": ["Evening"], "kept_existing": [], "skipped_presets": ["9"]}
+    assert r == {"imported": ["Evening"], "kept_existing": [], "imported_playlists": ["Mix"], "skipped_presets": []}
+    assert client.get("/api/playlists").json()[0]["entries"] == [{"look": "Evening", "duration": 100, "transition": 7}]
     looks = client.get("/api/looks").json()
     assert looks[0]["segments"][0]["effect"] == "Comet"
     assert looks[0]["segments"][0]["palette"] == "Sunset Haze"
@@ -146,3 +147,54 @@ def test_device_down(settings):
     did = c.post("/api/devices", json={"name": "x", "host": "wled.lan"}, headers=CSRF).json()["id"]
     for path in ("profile", "state", "presets"):
         assert c.get(f"/api/devices/{did}/{path}").status_code == 502
+
+
+def test_capture_applies_the_mic_rule(client, dev_id, device):
+    device.audio_enabled = True
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 8}]}, headers=CSRF)  # Comet
+    calm = client.post(f"/api/devices/{dev_id}/capture/Calm", headers=CSRF).json()
+    assert calm["mic"] is False  # not made for sound: switches the mic off, even though it's on now
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 5}]}, headers=CSRF)  # Pulse Meter (v)
+    loud = client.post(f"/api/devices/{dev_id}/capture/Loud", headers=CSRF).json()
+    assert loud["mic"] is True
+    client.post(f"/api/devices/{dev_id}/apply/Calm", headers=CSRF)
+    assert device.audio_enabled is False
+    client.post(f"/api/devices/{dev_id}/apply/Loud", headers=CSRF)
+    assert device.audio_enabled is True
+
+
+def test_playlists(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 8}]}, headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 4}]}, headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/B?preset_id=2", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/Loose", headers=CSRF)
+    pl = {"name": "Party", "preset_id": 10, "entries": [{"look": "A", "duration": 300}, {"look": "B", "duration": 50}],
+          "shuffle": True, "end": "A"}
+    assert client.put("/api/playlists/Party", json=pl, headers=CSRF).status_code == 200
+    bad = {**pl, "name": "Bad", "preset_id": 11, "entries": [{"look": "Loose"}]}
+    assert client.put("/api/playlists/Bad", json=bad, headers=CSRF).status_code == 200
+    clash = {**pl, "name": "Clash", "preset_id": 1}
+    client.put("/api/playlists/Clash", json=clash, headers=CSRF)
+    r = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()
+    assert r["done"] is True
+    status = {x.get("playlist"): x for x in r["report"] if "playlist" in x}
+    assert status["Party"]["status"] == "ok"
+    assert status["Bad"]["status"] == "unavailable" and "no slot" in status["Bad"]["notes"][0]
+    assert status["Clash"]["status"] == "unavailable"
+    assert device.presets["10"] == {"n": "Party", "playlist": {"ps": [1, 2], "dur": [300, 50], "transition": [7, 7],
+                                                               "repeat": 0, "r": True, "end": 1}}
+    assert device.presets["1"]["n"] == "A"  # the clash didn't overwrite the look
+    # validation
+    assert client.put("/api/playlists/X", json={"name": "X", "entries": []}, headers=CSRF).status_code == 422
+    assert client.put("/api/playlists/X", json={"name": "Y", "entries": [{"look": "A"}]}, headers=CSRF).status_code == 422
+    assert client.delete("/api/playlists/Party", headers=CSRF).status_code == 204
+    assert client.delete("/api/playlists/Party", headers=CSRF).status_code == 404
+
+
+def test_unchanged_playlist_isnt_rewritten(client, dev_id, device):
+    device.presets = {"0": {}, "3": {"n": "Evening", "seg": [{"id": 0, "start": 0, "stop": 60, "fx": 8}]},
+                      "9": {"n": "Mix", "playlist": {"ps": [3], "dur": [100]}}}
+    client.post(f"/api/devices/{dev_id}/import", headers=CSRF)
+    r = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert "9" not in r["changed_ids"]

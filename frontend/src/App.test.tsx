@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "./App";
 import { profile, state } from "./test/fixtures";
 
@@ -33,12 +33,13 @@ test("shows the device's effect with its own controls, and sends live changes", 
     "GET /api/devices/desk/profile": () => profile,
     "GET /api/devices/desk/state": () => state,
     "GET /api/looks": () => [{ name: "Evening", preset_id: 3, segments: [] }],
+    "GET /api/playlists": () => [],
     "POST /api/devices/desk/state": () => state,
   });
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();
   expect(screen.getByLabelText("Tail")).toBeInTheDocument();
-  expect(screen.getByText("Evening")).toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "Looks" })).getByText("Evening")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Tail"), { target: { value: "201" } });
   await waitFor(() => expect(calls.some((c) => c.init?.method === "POST")).toBe(true));
   const post = calls.find((c) => c.init?.method === "POST")!;

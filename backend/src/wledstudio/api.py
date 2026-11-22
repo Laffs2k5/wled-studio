@@ -11,7 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from . import fxmeta, netcheck
 from .devices import Device, DeviceStore
-from .library import DeviceLists, LibraryStore, LookError, check_name, import_presets, resolve_look, segment_from_state
+from .library import (DeviceLists, LibraryStore, LookError, check_name, import_presets, mic_for,
+                      playlist_from_preset, resolve_look, segment_from_state)
 from .push import StateStore, push
 from .wled import WLEDClient, WLEDError, WLEDLocked
 
@@ -95,6 +96,21 @@ class LookIn(BaseModel):
     mic: bool | None = None
     segments: list[LookSegment] = Field(default_factory=list, max_length=32)
     snapshot: dict[str, str] = Field(default_factory=dict)
+
+
+class PlaylistEntry(Strict):
+    look: str = Field(min_length=1, max_length=64)
+    duration: int = Field(default=100, ge=0, le=65530)    # tenths of a second; 0 = stay
+    transition: int = Field(default=7, ge=0, le=65530)    # tenths of a second
+
+
+class PlaylistIn(Strict):
+    name: str
+    preset_id: int | None = Field(default=None, ge=1, le=250)
+    entries: list[PlaylistEntry] = Field(min_length=1, max_length=100)
+    repeat: int = Field(default=0, ge=0, le=127)          # 0 = forever
+    shuffle: bool = False
+    end: str | None = Field(default=None, max_length=64)
 
 
 class PushIn(Strict):
@@ -237,6 +253,14 @@ async def import_from_device(device_id: str, request: Request, replace: bool = F
             raise device_errors(e) from None
     looks, skipped = import_presets(presets, lists)
     data = lib.load()
+    name_by_id = {lk["preset_id"]: lk["name"] for lk in looks}
+    imported_playlists = []
+    for pid in list(skipped):
+        pl = playlist_from_preset(pid, presets[pid], name_by_id)
+        if pl is not None and (pl["name"] not in data["playlists"] or replace):
+            data["playlists"][pl["name"]] = pl
+            imported_playlists.append(pl["name"])
+            skipped.remove(pid)
     added, kept = [], []
     for look in looks:
         try:
@@ -250,7 +274,8 @@ async def import_from_device(device_id: str, request: Request, replace: bool = F
         data["looks"][look["name"]] = look
         added.append(look["name"])
     lib.save(data)
-    return {"imported": added, "kept_existing": kept, "skipped_presets": skipped}
+    return {"imported": added, "kept_existing": kept, "imported_playlists": imported_playlists,
+            "skipped_presets": skipped}
 
 
 @router.get("/looks")
@@ -275,6 +300,28 @@ def delete_look(name: str, request: Request):
         raise HTTPException(404, "no such look")
 
 
+@router.get("/playlists")
+def list_playlists(request: Request):
+    return list(request.app.state.library.playlists().values())
+
+
+@router.put("/playlists/{name}")
+def put_playlist(name: str, body: PlaylistIn, request: Request):
+    pl = body.model_dump(exclude_none=True)
+    if pl["name"] != name:
+        raise HTTPException(422, "the name in the path and the body differ")
+    try:
+        return request.app.state.library.put_playlist(pl)
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@router.delete("/playlists/{name}", status_code=204)
+def delete_playlist(name: str, request: Request):
+    if not request.app.state.library.delete_playlist(name):
+        raise HTTPException(404, "no such playlist")
+
+
 @router.post("/devices/{device_id}/capture/{name}")
 async def capture(device_id: str, name: str, request: Request, preset_id: int | None = None):
     """Save what the device shows now as a look."""
@@ -295,9 +342,6 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
     for k in ("on", "bri", "transition"):
         if k in st:
             look[k] = st[k]
-    ar = st.get("AudioReactive")
-    if isinstance(ar, dict) and "on" in ar:
-        look["mic"] = bool(ar["on"])
     for seg in st.get("seg", []):
         s, fxname = segment_from_state(seg, lists)
         s.pop("n", None)
@@ -307,6 +351,9 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
             look["imported_ids"][fxname] = seg["fx"]
     if preset_id is not None:
         look["preset_id"] = preset_id
+    # the mic rule: on for looks made for sound, off for the rest (the device's current
+    # mic state isn't part of the look)
+    look["mic"] = mic_for(look, lists)
     return request.app.state.library.put(look)
 
 
@@ -333,10 +380,11 @@ async def apply_look(device_id: str, name: str, request: Request):
 async def push_looks(device_id: str, body: PushIn, request: Request):
     dev = device_or_404(device_id, request)
     looks = list(request.app.state.library.looks().values())
+    playlists = list(request.app.state.library.playlists().values())
     async with make_client(request, dev) as c:
         try:
             res = await push(c, dev.id, looks, request.app.state.statestore, dry_run=body.dry_run,
-                             adopt_drift=body.adopt_drift, accept_review=body.accept_review)
+                             adopt_drift=body.adopt_drift, accept_review=body.accept_review, playlists=playlists)
         except WLEDError as e:
             raise device_errors(e) from None
     return res.__dict__

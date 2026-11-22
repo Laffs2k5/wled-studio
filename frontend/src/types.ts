@@ -86,7 +86,8 @@ export interface Look {
 }
 
 export interface PushReportItem {
-  look: string;
+  look?: string;
+  playlist?: string;
   preset_id?: number;
   status: "ok" | "remapped" | "check" | "review" | "unavailable";
   notes: string[];
@@ -100,4 +101,15 @@ export interface PushResult {
   changed_ids: string[];
   backup: string | null;
   reason: string | null;
+}
+
+export interface PlaylistEntry { look: string; duration: number; transition: number }
+
+export interface Playlist {
+  name: string;
+  preset_id?: number;
+  entries: PlaylistEntry[];
+  repeat: number;
+  shuffle: boolean;
+  end?: string;
 }

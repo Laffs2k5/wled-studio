@@ -134,6 +134,79 @@ def import_presets(presets: dict, lists: DeviceLists) -> tuple[list[dict], list[
     return looks, skipped
 
 
+def _as_list(v, n: int, default: int) -> list[int]:
+    if isinstance(v, list):
+        return [int(x) for x in v] + [default] * (n - len(v))
+    return [int(v) if v is not None else default] * n
+
+
+def playlist_from_preset(pid: str, preset: dict, name_by_id: dict[int, str]) -> dict | None:
+    """A presets.json playlist -> a library playlist with looks by name; None if it isn't one
+    or refers to presets that aren't looks."""
+    pl = preset.get("playlist") if isinstance(preset, dict) else None
+    if not isinstance(pl, dict) or not isinstance(pl.get("ps"), list) or not pl["ps"]:
+        return None
+    ids = [int(x) for x in pl["ps"]]
+    if any(i not in name_by_id for i in ids):
+        return None
+    n = len(ids)
+    durs, trans = _as_list(pl.get("dur"), n, 100), _as_list(pl.get("transition"), n, 7)
+    end = pl.get("end")
+    return {
+        "name": preset.get("n") or f"Playlist {pid}", "preset_id": int(pid),
+        "entries": [{"look": name_by_id[i], "duration": durs[k], "transition": trans[k]} for k, i in enumerate(ids)],
+        "repeat": int(pl.get("repeat", 0)), "shuffle": bool(pl.get("r", False)),
+        "end": name_by_id.get(int(end)) if isinstance(end, int) and end not in (0, 255) else None,
+    }
+
+
+def normalized_playlist(preset: dict) -> dict | None:
+    """A playlist preset with WLED's defaults filled in, for comparing."""
+    pl = preset.get("playlist") if isinstance(preset, dict) else None
+    if not isinstance(pl, dict) or not isinstance(pl.get("ps"), list):
+        return None
+    n = len(pl["ps"])
+    return {"n": preset.get("n"), "ps": [int(x) for x in pl["ps"]], "dur": _as_list(pl.get("dur"), n, 100),
+            "transition": _as_list(pl.get("transition"), n, 7), "repeat": int(pl.get("repeat", 0)),
+            "r": bool(pl.get("r", False)), "end": int(pl.get("end", 0) or 0)}
+
+
+def resolve_playlist(pl: dict, looks: dict[str, dict]) -> Resolved:
+    """A library playlist -> a presets.json entry; its looks must have slots."""
+    ids, notes = [], []
+    for e in pl.get("entries", []):
+        look = looks.get(e["look"])
+        if look is None:
+            return Resolved(None, "unavailable", [f"look {e['look']!r} isn't in the library"])
+        if look.get("preset_id") is None:
+            return Resolved(None, "unavailable", [f"look {e['look']!r} has no slot"])
+        ids.append(int(look["preset_id"]))
+    if not ids:
+        return Resolved(None, "unavailable", ["a playlist needs at least one look"])
+    end = 0
+    if pl.get("end"):
+        end_look = looks.get(pl["end"])
+        if end_look is None or end_look.get("preset_id") is None:
+            notes.append(f"end look {pl['end']!r} has no slot; the playlist ends where it is")
+        else:
+            end = int(end_look["preset_id"])
+    body = {"ps": ids, "dur": [int(e.get("duration", 100)) for e in pl["entries"]],
+            "transition": [int(e.get("transition", 7)) for e in pl["entries"]],
+            "repeat": int(pl.get("repeat", 0)), "r": bool(pl.get("shuffle", False)), "end": end}
+    return Resolved({"n": pl["name"], "playlist": body}, "ok", notes)
+
+
+def mic_for(look: dict, lists: DeviceLists) -> bool:
+    """The mic rule: a look made for sound (any segment's effect is audio-reactive)
+    switches the mic on; any other look switches it off, so the mic state after a
+    look is always predictable."""
+    for s in look.get("segments", []):
+        fx = lists.effect_id(s["effect"]) if s.get("effect") else s.get("effect_id")
+        if isinstance(fx, int) and fxmeta.parse(lists.meta(fx), effect_id=fx).audio_reactive:
+            return True
+    return False
+
+
 # --- change check --------------------------------------------------------------
 
 def classify(old_meta: str, new_meta: str, segment: dict) -> str:
@@ -208,7 +281,7 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
 
 
 def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
-                 accept_review: bool = False) -> tuple[dict, list[dict]]:
+                 accept_review: bool = False, playlists: list[dict] | None = None) -> tuple[dict, list[dict]]:
     """Merge the library's looks (those with a preset_id) into the device's presets.
 
     Entries the library doesn't manage are kept as they are. Looks that resolve
@@ -229,6 +302,24 @@ def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
             out[str(pid)] = r.preset
         report.append({"look": look["name"], "preset_id": pid, "status": r.status, "notes": r.notes,
                        "written": written})
+    by_name = {lk["name"]: lk for lk in looks}
+    look_slots = {int(lk["preset_id"]) for lk in looks if lk.get("preset_id") is not None}
+    for pl in playlists or []:
+        pid = pl.get("preset_id")
+        if pid is None:
+            continue
+        entry = {"playlist": pl["name"], "preset_id": pid}
+        if int(pid) in look_slots:
+            report.append({**entry, "status": "unavailable", "notes": ["slot already used by a look"], "written": False})
+            continue
+        r = resolve_playlist(pl, by_name)
+        existing = out.get(str(pid))
+        if r.preset is not None and existing is not None and normalized_playlist(existing) == normalized_playlist(r.preset):
+            report.append({**entry, "status": r.status, "notes": r.notes + ["unchanged"], "written": False})
+            continue
+        if r.preset is not None:
+            out[str(pid)] = r.preset
+        report.append({**entry, "status": r.status, "notes": r.notes, "written": r.preset is not None})
     return out, report
 
 
@@ -243,8 +334,10 @@ class LibraryStore:
 
     def load(self) -> dict:
         if not self.path.exists():
-            return {"looks": {}}
-        return json.loads(self.path.read_text(encoding="utf-8"))
+            return {"looks": {}, "playlists": {}}
+        lib = json.loads(self.path.read_text(encoding="utf-8"))
+        lib.setdefault("playlists", {})
+        return lib
 
     def save(self, lib: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -269,6 +362,23 @@ class LibraryStore:
     def delete(self, name: str) -> bool:
         lib = self.load()
         if lib["looks"].pop(name, None) is None:
+            return False
+        self.save(lib)
+        return True
+
+    def playlists(self) -> dict:
+        return self.load()["playlists"]
+
+    def put_playlist(self, pl: dict) -> dict:
+        pl["name"] = check_name(pl["name"])
+        lib = self.load()
+        lib["playlists"][pl["name"]] = pl
+        self.save(lib)
+        return pl
+
+    def delete_playlist(self, name: str) -> bool:
+        lib = self.load()
+        if lib["playlists"].pop(name, None) is None:
             return False
         self.save(lib)
         return True
