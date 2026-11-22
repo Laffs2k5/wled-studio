@@ -38,3 +38,7 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
 - Under the strict CSP, React's `style={{…}}` works (set through the CSSOM), but inline
   `<style>` and `style="…"` in HTML don't.
 - Don't `pkill -f` the dev servers: the pattern matches your own shell. Kill by PID.
+- **Pin commits by SHAs taken from `git rev-parse`, never typed from memory:** the Dockerfile's
+  `BUILDER_COMMIT` once held a mistyped SHA, and the image build failed with "not our ref".
+- The effect preview's compiler shim lives in wled-studio-builder (`preview/`); the Dockerfile's
+  preview stage builds the example from there at `BUILDER_COMMIT`.
