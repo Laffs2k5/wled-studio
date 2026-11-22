@@ -1,7 +1,17 @@
 # syntax=docker/dockerfile:1
 # wled-studio: the web UI (built with Node) served by the Python backend.
 
-FROM node:22.23.5-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS web
+# The effect preview: example effects compiled to WebAssembly (platform-independent output).
+FROM --platform=$BUILDPLATFORM emscripten/emsdk:7.0.1@sha256:73aece2e0ab748487945ad117b79fc4d277e9f656e54fc800a9b1a0a6562715b AS preview
+ARG BUILDER_REPO=https://github.com/Laffs2k5/wled-studio-builder.git
+ARG BUILDER_COMMIT=de3fdf6dbb7f9c9049f21dca2666e4574dfcc98e
+WORKDIR /src
+RUN git init -q builder && git -C builder fetch -q --depth 1 "$BUILDER_REPO" "$BUILDER_COMMIT" \
+ && git -C builder checkout -q FETCH_HEAD
+COPY preview/ ./preview/
+RUN preview/build.sh /out builder/examples/usermods/studio_example_fx
+
+FROM --platform=$BUILDPLATFORM node:22.23.5-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS web
 WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
 # no install scripts: none of the build's packages need them
@@ -21,6 +31,7 @@ COPY backend/pyproject.toml ./backend/
 COPY backend/src ./backend/src
 RUN pip install ./backend && rm -rf ./backend
 COPY --from=web /src/dist /app/static
+COPY --from=preview /out /app/static/preview
 ENV WLEDSTUDIO_STATIC=/app/static \
     WLEDSTUDIO_DATA=/data \
     WLEDSTUDIO_BIND=0.0.0.0 \

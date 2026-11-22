@@ -60,3 +60,5 @@ input.slot { width: 4.5rem; }
 .job ul { list-style: none; padding: 0; }
 pre.log { background: #0b0d10; border: 1px solid var(--line); border-radius: 8px; padding: .75rem; max-height: 22rem; overflow: auto; font-size: .78rem; white-space: pre-wrap; }
 code { background: #0b0d10; padding: .1rem .3rem; border-radius: 4px; }
+.studio { padding: 1rem 1.25rem; max-width: 64rem; }
+canvas.strip { width: 100%; height: 32px; background: #0b0d10; border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0; }

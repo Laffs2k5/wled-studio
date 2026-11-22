@@ -23,7 +23,7 @@ that applies to such an app.
 | SSRF | Device hosts are a name or IP with an optional port, nothing else, and must resolve to private, loopback or link-local addresses (`WLEDSTUDIO_ALLOW_PUBLIC_DEVICES=1` lifts that) |
 | Arbitrary device commands | Live control goes through a whitelisted schema (on, brightness, transition, segment fields, the mic). No config writes, no raw JSON, no PIN in state requests |
 | Secrets | The settings PIN is write-only in the API, stored in a 0600 file per device (or `WLEDSTUDIO_PIN_<DEVICE_ID>`), never logged, and the device is locked again after every write, also on errors |
-| XSS, clickjacking | A strict Content-Security-Policy (`default-src 'self'`, no inline scripts or styles), `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, no referrer; React escapes all output |
+| XSS, clickjacking | A strict Content-Security-Policy (`default-src 'self'`, no inline scripts or styles; `'wasm-unsafe-eval'` so the effect preview's WebAssembly can compile, JavaScript `eval` stays off), `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, no referrer; React escapes all output |
 | Oversized requests | Bodies over 1 MB are refused; request models refuse unknown fields and enforce ranges and lengths |
 | Container | Runs as a non-root user (uid 10001), read-only root filesystem, all capabilities dropped, `no-new-privileges`; base images pinned by digest; no npm install scripts during the build |
 | Exposure | Listens on `127.0.0.1` only in the default compose file |

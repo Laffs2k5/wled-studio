@@ -33,7 +33,7 @@ test("starts a gate build and shows its checks and log", async () => {
       { pins: "q.json", release: "q", target: "other", verified: [] }]),
     "GET /api/firmware/usermods": json(["my_fx", "other_fx"]),
     "GET /api/firmware/jobs": json([]),
-    "POST /api/firmware/jobs": json({ ...job, state: "queued" }, 202),
+    "POST /api/firmware/jobs": json({ ...job, state: "queued", report: undefined }, 202),
     [`GET /api/firmware/jobs/${JID}`]: json(job),
     [`GET /api/firmware/jobs/${JID}/log`]: () => new Response("GATE PASSED", { status: 200 }),
   });
@@ -43,7 +43,7 @@ test("starts a gate build and shows its checks and log", async () => {
   fireEvent.click(await screen.findByLabelText("my_fx"));
   fireEvent.click(build);
   expect(await screen.findByText(/Only your usermods' code was added/)).toBeInTheDocument();
-  expect(screen.getByLabelText("Build log")).toHaveTextContent("GATE PASSED");
+  await waitFor(() => expect(screen.getByLabelText("Build log")).toHaveTextContent("GATE PASSED"));
   const post = calls.find((c) => c.key === "POST /api/firmware/jobs")!;
   expect(JSON.parse(post.body!)).toEqual({ pins: "q.json", target: "board", usermods: ["my_fx"] });
 });

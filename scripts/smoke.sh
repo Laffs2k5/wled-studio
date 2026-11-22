@@ -12,6 +12,7 @@ for i in $(seq 1 30); do curl -fsS "$B/api/health" >/dev/null 2>&1 && break; sle
 curl -fsS "$B/api/health" | grep -q ok || fail "health"
 curl -fsS "$B/" | grep -q '<div id="root">' || fail "web UI not served"
 curl -fsS -D - -o /dev/null "$B/" | grep -qi "content-security-policy: default-src 'self'" || fail "CSP header"
+curl -fsS -D - -o /dev/null "$B/preview/preview.wasm" | grep -qi "content-type: application/wasm" || fail "effect preview not served"
 
 id=$(curl -fsS "${W[@]}" -d "{\"name\":\"Smoke\",\"host\":\"$DEVICE_HOST\"}" "$B/api/devices" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 curl -fsS "$B/api/devices/$id/profile" | python3 -c 'import json,sys; p=json.load(sys.stdin); assert any(e["name"]=="Comet" for e in p["effects"]), p' || fail "profile"

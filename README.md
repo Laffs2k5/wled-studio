@@ -21,6 +21,8 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
 - **Firmware with your effects:** gate builds through
   [wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder). The vendor's stock image is
   rebuilt and checked first, then only your code may differ. Flashing isn't built yet.
+- **Effect studio (first slice):** effect usermods written for WLED, compiled to WebAssembly and
+  animated in the browser with their own controls ([preview/](preview/README.md)).
 - A fake WLED device for tests and a demo mode.
 
 ## Run it

@@ -16,6 +16,10 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   job service (`docker compose --profile firmware`): your usermods from `./effects`, the vendor's
   stock image checked first, then only your code may differ. Flashing from the app isn't built
   (it waits for a spare board and the owner's go).
+- **Effect studio, first slice:** your effect usermods, written for WLED, compiled unchanged to
+  WebAssembly (`preview/`) and animated in the browser with the effect's own controls. The image
+  ships the example effect's preview. Colours and fades are approximate; WLED's built-in effects
+  aren't previewed (the device's live view is their preview).
 - **Packaging:** Dockerfile, `compose.yaml` with a demo profile, CI that builds, tests and publishes
   to ghcr.io.
 
@@ -31,8 +35,12 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 6. **Full change check UI:** a status per look, accept-review flow, preflight against a builder
    manifest.
 7. **Room model:** pixel positions per LED for a room-shaped preview.
-8. **The effect studio:** an effect editor and the browser preview (WebAssembly shim) with DDP
-   streaming. Build jobs through the builder exist already (above).
+8. **The effect studio, next:**
+   - compile *your* effects (./effects) for the preview at runtime: a compile job in the builder
+     image, with Emscripten;
+   - a code editor;
+   - exact colours (WLED's helpers from the user's checkout);
+   - streaming the preview to the strip over DDP.
 9. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; spare board first.
 

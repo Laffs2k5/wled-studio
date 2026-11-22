@@ -11,6 +11,9 @@ def test_security_headers(client):
     r = client.get("/api/health")
     assert "default-src 'self'" in r.headers["content-security-policy"]
     assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    # WebAssembly (the effect preview) may compile; JavaScript eval stays off
+    assert "script-src 'self' 'wasm-unsafe-eval';" in r.headers["content-security-policy"]
+    assert "'unsafe-eval'" not in r.headers["content-security-policy"].replace("'wasm-unsafe-eval'", "")
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["x-frame-options"] == "DENY"
     assert r.headers["referrer-policy"] == "no-referrer"
