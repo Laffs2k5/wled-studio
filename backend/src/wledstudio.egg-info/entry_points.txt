@@ -1,3 +1,0 @@
-[console_scripts]
-wled-studio = wledstudio.__main__:main
-wled-studio-fake-device = wledstudio.fakewled.__main__:main

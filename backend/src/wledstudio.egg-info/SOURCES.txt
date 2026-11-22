@@ -1,8 +1,0 @@
-pyproject.toml
-src/wledstudio/fxmeta.py
-src/wledstudio.egg-info/PKG-INFO
-src/wledstudio.egg-info/SOURCES.txt
-src/wledstudio.egg-info/dependency_links.txt
-src/wledstudio.egg-info/entry_points.txt
-src/wledstudio.egg-info/requires.txt
-src/wledstudio.egg-info/top_level.txt
