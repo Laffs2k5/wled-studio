@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Preview } from "../preview";
 import { EffectStudio } from "./EffectStudio";
 
@@ -27,6 +27,11 @@ function fakeModule() {
   return m;
 }
 
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ enabled: false }), { status: 200 })));
+});
+afterEach(() => vi.unstubAllGlobals());
+
 test("lists the build's own effects with their controls, and sends changes to the preview", async () => {
   const m = fakeModule();
   render(<EffectStudio notify={() => {}} load={async () => new Preview(m as never)} />);
@@ -45,4 +50,27 @@ test("lists the build's own effects with their controls, and sends changes to th
 test("explains a build without a preview", async () => {
   render(<EffectStudio notify={() => {}} load={async () => { throw new Error("404"); }} />);
   expect(await screen.findByText(/has no effect preview/)).toBeInTheDocument();
+});
+
+test("compiles your effects with the builder and previews them", async () => {
+  const JID = "c".repeat(32);
+  let polls = 0;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+    if (key === "GET /api/firmware/status") return reply({ enabled: true });
+    if (key === "GET /api/firmware/usermods") return reply(["my_fx"]);
+    if (key === "POST /api/firmware/previews") return reply({ id: JID, state: "queued" }, 202);
+    if (key === `GET /api/firmware/jobs/${JID}`) return reply({ id: JID, state: polls++ ? "passed" : "running" });
+    return reply({ detail: "no route" }, 404);
+  }));
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const loads: (string | undefined)[] = [];
+  const load = async (url?: string) => { loads.push(url); return new Preview(fakeModule() as never); };
+  render(<EffectStudio notify={() => {}} load={load} />);
+  fireEvent.click(await screen.findByLabelText("my_fx"));
+  fireEvent.click(screen.getByText("Compile and preview"));
+  await vi.advanceTimersByTimeAsync(2500);
+  await waitFor(() => expect(loads).toContain(`/api/firmware/jobs/${JID}/preview/preview.mjs`));
+  vi.useRealTimers();
 });

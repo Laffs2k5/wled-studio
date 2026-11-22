@@ -35,7 +35,10 @@ that applies to such an app.
 2. Add the name you browse to: `WLEDSTUDIO_ALLOWED_HOSTS=localhost,127.0.0.1,studio.lan`.
 3. **Set a token** so not everyone on the LAN can write presets: `WLEDSTUDIO_TOKEN=<a long random
    string>`. API requests then need `Authorization: Bearer <token>`; the web UI asks for it once
-   per browser session (kept in session storage, sent as that header). The health check is exempt.
+   per browser session (kept in session storage, sent as that header). Exempt: the health check, and
+   compiled effect previews (`GET /api/firmware/jobs/<id>/preview/preview.{mjs,wasm}`). A browser
+   can't add a header to a module import; those files are read-only, behind a random 128-bit job id,
+   and contain only your compiled effects.
 
 Don't expose wled-studio to the internet.
 

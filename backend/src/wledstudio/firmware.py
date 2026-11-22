@@ -13,12 +13,20 @@ from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 router = APIRouter(prefix="/api/firmware")
 JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 Name = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
+
+
+PREVIEW_FILES = {"preview.mjs": "text/javascript; charset=utf-8", "preview.wasm": "application/wasm"}
+
+
+class PreviewIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    usermods: list[Name] = Field(min_length=1, max_length=8)
 
 
 class JobIn(BaseModel):
@@ -91,6 +99,20 @@ async def submit(body: JobIn, request: Request):
 @router.get("/jobs/{jid}")
 async def job(jid: str, request: Request):
     return (await _call(request, "GET", f"/jobs/{_job_id(jid)}")).json()
+
+
+@router.post("/previews", status_code=202)
+async def submit_preview(body: PreviewIn, request: Request):
+    """Compile your usermods to WebAssembly for the Effect studio's preview."""
+    return (await _call(request, "POST", "/previews", json=body.model_dump())).json()
+
+
+@router.get("/jobs/{jid}/preview/{name}")
+async def preview_file(jid: str, name: str, request: Request):
+    if name not in PREVIEW_FILES:
+        raise HTTPException(404, "not found")
+    r = await _call(request, "GET", f"/jobs/{_job_id(jid)}/preview/{name}")
+    return Response(r.content, media_type=PREVIEW_FILES[name])
 
 
 @router.get("/jobs/{jid}/log", response_class=PlainTextResponse)

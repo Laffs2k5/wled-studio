@@ -7,8 +7,8 @@
   preflight that this app never grants, and an Origin, if present, that matches
   the Host (CSRF).
 - Optional shared token (WLEDSTUDIO_TOKEN): every /api request (except the
-  health check) then needs "Authorization: Bearer <token>", compared in
-  constant time.
+  health check and compiled preview files, see TOKEN_EXEMPT) then needs
+  "Authorization: Bearer <token>", compared in constant time.
 - Response headers: a strict Content-Security-Policy, no framing, no sniffing,
   no referrer.
 - Request bodies are limited in size.
@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import hmac
+import re
 from urllib.parse import urlsplit
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -25,6 +26,10 @@ from starlette.responses import JSONResponse, Response
 from .config import Settings
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+# Open without the token: the health check, and compiled effect previews. A browser's
+# module import() can't send an Authorization header; the files are read-only, sit
+# behind a random 128-bit job id, and contain only your compiled effects.
+TOKEN_EXEMPT = re.compile(r"^/api/(health|firmware/jobs/[0-9a-f]{32}/preview/preview\.(mjs|wasm))$")
 CSRF_HEADER = "x-wled-studio"
 
 SECURITY_HEADERS = {
@@ -71,7 +76,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             return _deny(413, "request body too large")
 
         if request.url.path.startswith("/api/"):
-            if self.s.token is not None and request.url.path != "/api/health":
+            exempt = request.method == "GET" and TOKEN_EXEMPT.match(request.url.path)
+            if self.s.token is not None and not exempt:
                 auth = request.headers.get("authorization", "")
                 given = auth[7:] if auth.lower().startswith("bearer ") else ""
                 if not hmac.compare_digest(given.encode(), self.s.token.encode()):

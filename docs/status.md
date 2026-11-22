@@ -16,10 +16,14 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   job service (`docker compose --profile firmware`): your usermods from `./effects`, the vendor's
   stock image checked first, then only your code may differ. Flashing from the app isn't built
   (it waits for a spare board and the owner's go).
-- **Effect studio, first slice:** your effect usermods, written for WLED, compiled unchanged to
-  WebAssembly (`preview/`) and animated in the browser with the effect's own controls. The image
-  ships the example effect's preview. Colours and fades are approximate; WLED's built-in effects
-  aren't previewed (the device's live view is their preview).
+- **Effect studio, first slice:** effect usermods written for WLED, compiled unchanged to
+  WebAssembly and animated in the browser with each effect's own controls:
+  - the image ships the example effect's preview;
+  - **"Compile and preview"** compiles your own effects from `./effects` through the builder's job
+    service (`--profile firmware`; Emscripten is installed into its work volume on first use).
+
+  Colours and fades are approximate. WLED's built-in effects aren't previewed; the device's live
+  view is their preview. The compiler shim lives in wled-studio-builder (`preview/`).
 - **Packaging:** Dockerfile, `compose.yaml` with a demo profile, CI that builds, tests and publishes
   to ghcr.io.
 
@@ -38,9 +42,7 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    manifest.
 7. **Room model:** pixel positions per LED for a room-shaped preview.
 8. **The effect studio, next:**
-   - compile *your* effects (./effects) for the preview at runtime: a compile job in the builder
-     image, with Emscripten;
-   - a code editor;
+   - a code editor (today effects are edited as files in `./effects`);
    - exact colours (WLED's helpers from the user's checkout);
    - streaming the preview to the strip over DDP.
 9. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the

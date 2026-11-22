@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useEffect, useRef, useState } from "react";
+import { firmware } from "../api";
 import { Preview } from "../preview";
 import type { Effect, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
@@ -28,16 +29,57 @@ export function EffectStudio({ notify, load = Preview.load }: {
   const [seg, setSeg] = useState<Segment | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const [mine, setMine] = useState<string[] | null>(null);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [compiling, setCompiling] = useState<string | null>(null);
+
+  function use(p: Preview) {
+    setPreview(p);
+    setError(null);
+    const list = p.effects().filter((e) => e.id !== 0);
+    setEffects(list);
+    if (list[0]) choose(p, list[0]);
+  }
 
   useEffect(() => {
-    load(undefined, LENGTH).then((p) => {
-      setPreview(p);
-      const list = p.effects().filter((e) => e.id !== 0);
-      setEffects(list);
-      if (list[0]) choose(p, list[0]);
-    }).catch((e) => { setError(String(e?.message ?? e)); notify("No effect preview in this build", true); });
+    load(undefined, LENGTH).then(use).catch((e) => setError(String(e?.message ?? e)));
+    firmware.status().then((s) => s.enabled ? firmware.usermods().then(setMine) : setMine(null)).catch(() => setMine(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function compile() {
+    try {
+      const job = await firmware.preview(chosen);
+      setCompiling(job.id);
+      for (;;) {
+        const j = await firmware.job(job.id);
+        if (j.state === "passed") break;
+        if (j.state === "failed") throw new Error("compiling failed; see the log in the Firmware view");
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      use(await load(firmware.previewUrl(job.id), LENGTH));
+      notify(`Previewing ${chosen.join(", ")}`);
+    } catch (e) {
+      notify((e as Error).message, true);
+    } finally {
+      setCompiling(null);
+    }
+  }
+
+  const compileBox = mine && mine.length > 0 && (
+    <div className="row">
+      <span className="small">Your effects:</span>
+      {mine.map((u) => (
+        <label key={u} className="small">
+          <input type="checkbox" checked={chosen.includes(u)}
+            onChange={(e) => setChosen(e.target.checked ? [...chosen, u] : chosen.filter((x) => x !== u))} /> {u}
+        </label>
+      ))}
+      <button disabled={!chosen.length || compiling !== null} onClick={compile}>
+        {compiling ? "Compiling…" : "Compile and preview"}
+      </button>
+    </div>
+  );
 
   function choose(p: Preview, e: Effect) {
     p.select(e.id);
@@ -74,7 +116,8 @@ export function EffectStudio({ notify, load = Preview.load }: {
     return (
       <section className="studio">
         <h2>Effect studio</h2>
-        <p>This build has no effect preview ({error}). Previews are compiled with Emscripten; see preview/README.md.</p>
+        <p>This build has no effect preview ({error}). Previews are compiled with Emscripten by wled-studio-builder.</p>
+        {compileBox}
       </section>
     );
   }
@@ -85,6 +128,7 @@ export function EffectStudio({ notify, load = Preview.load }: {
         Your own effects, compiled to WebAssembly and running in the browser. Colours and fades are approximate;
         the logic is the effect's own code.
       </p>
+      {compileBox}
       <canvas ref={canvas} width={960} height={32} className="strip" aria-label="Preview strip" />
       <div className="row">
         <select aria-label="Preview effect" value={effect?.id ?? ""} onChange={(e) => {

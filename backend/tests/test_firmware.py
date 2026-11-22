@@ -31,6 +31,10 @@ def builder(seen):
             return httpx.Response(200, json=[{"id": JID, "state": "passed"}])
         if path == f"/jobs/{JID}":
             return httpx.Response(200, json={"id": JID, "state": "passed", "report": {"passed": True}})
+        if path == "/previews":
+            return httpx.Response(202, json={"id": JID, "kind": "preview", "state": "queued"})
+        if path == f"/jobs/{JID}/preview/preview.wasm":
+            return httpx.Response(200, content=b"\0asm", headers={"content-type": "application/octet-stream"})
         if path == f"/jobs/{JID}/log":
             return httpx.Response(200, text="GATE PASSED")
         return httpx.Response(404, json={"detail": "not found"})
@@ -81,3 +85,23 @@ def test_builder_down(tmp_path):
     s = Settings(data_dir=tmp_path, allowed_hosts=["testserver"], builder_url="http://builder:8090")
     c = TestClient(create_app(s, resolver=private_resolver, builder_transport=httpx.MockTransport(down)))
     assert c.get("/api/firmware/targets").status_code == 502
+
+
+def test_previews(tmp_path):
+    c = client(tmp_path)
+    r = c.post("/api/firmware/previews", json={"usermods": ["my_fx"]}, headers=CSRF)
+    assert r.status_code == 202 and r.json()["kind"] == "preview"
+    assert c.post("/api/firmware/previews", json={"usermods": ["../x"]}, headers=CSRF).status_code == 422
+    w = c.get(f"/api/firmware/jobs/{JID}/preview/preview.wasm")
+    assert w.status_code == 200 and w.content == b"\0asm"
+    assert w.headers["content-type"] == "application/wasm"
+    assert c.get(f"/api/firmware/jobs/{JID}/preview/evil.js").status_code == 404
+
+
+def test_preview_files_open_without_token_but_nothing_else(tmp_path):
+    s = Settings(data_dir=tmp_path, allowed_hosts=["testserver"], builder_url="http://builder:8090", token="t")
+    c = TestClient(create_app(s, resolver=private_resolver, builder_transport=builder([])))
+    assert c.get(f"/api/firmware/jobs/{JID}/preview/preview.wasm").status_code == 200
+    assert c.get(f"/api/firmware/jobs/{JID}").status_code == 401
+    assert c.get(f"/api/firmware/jobs/{JID}/log").status_code == 401
+    assert c.post("/api/firmware/previews", json={"usermods": ["a"]}, headers=CSRF).status_code == 401

@@ -71,6 +71,8 @@ export const firmware = {
   },
   submit: (pins: string, target: string, usermods: string[]) =>
     request<FirmwareJob>("POST", "/api/firmware/jobs", { pins, target, usermods }),
+  preview: (usermods: string[]) => request<FirmwareJob>("POST", "/api/firmware/previews", { usermods }),
+  previewUrl: (id: string) => `/api/firmware/jobs/${encodeURIComponent(id)}/preview/preview.mjs`,
 };
 
 export const api = {
