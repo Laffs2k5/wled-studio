@@ -95,6 +95,7 @@ export interface PushReportItem {
 }
 
 export interface PushResult {
+  palettes?: { palette: string; file: string; id: number }[];
   done: boolean;
   drift: boolean;
   report: PushReportItem[];
@@ -113,3 +114,7 @@ export interface Playlist {
   shuffle: boolean;
   end?: string;
 }
+
+export type PaletteStop = [number, string]; // [position 0-255, "rrggbb"]
+
+export interface Palette { name: string; stops: PaletteStop[] }

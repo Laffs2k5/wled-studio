@@ -90,10 +90,13 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify }: Props) 
             </tbody>
           </table>
           <p className="small">Slots that would change: {plan.changed_ids.length ? plan.changed_ids.join(", ") : "none"}</p>
+          {plan.palettes && plan.palettes.length > 0 && (
+            <p className="small">Palettes to upload: {plan.palettes.map((p) => `${p.palette} (id ${p.id})`).join(", ")}</p>
+          )}
           {plan.drift && <label className="small"><input type="checkbox" checked={adopt} onChange={(e) => setAdopt(e.target.checked)} /> Write anyway (keeps the other changes)</label>}
           {plan.report.some((r) => r.status === "review") && <label className="small"><input type="checkbox" checked={acceptReview} onChange={(e) => setAcceptReview(e.target.checked)} /> Write looks marked “review” too</label>}
           <div className="row">
-            <button className="primary" disabled={busy || plan.changed_ids.length === 0 || (plan.drift && !adopt)}
+            <button className="primary" disabled={busy || (plan.changed_ids.length === 0 && !plan.palettes?.length) || (plan.drift && !adopt)}
               onClick={() => run(() => api.push(deviceId, { dry_run: false, adopt_drift: adopt, accept_review: acceptReview }),
                 (r) => (r.done ? `Written and verified (backup ${r.backup})` : `Not written: ${r.reason}`))
                 .then((r) => r && setPlan(null))}>

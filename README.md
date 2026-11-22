@@ -13,7 +13,7 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
   metadata), palettes, LED count.
 - Live control with a validated subset of WLED's state API.
 - Import presets into a **library keyed by name**, capture the live state as a look, apply a look
-  live.
+  live. **Playlists** of looks and **custom palettes** (a gradient editor) live in the library too.
 - **Push** looks back as one `presets.json`:
   - backup, then a drift check (refuses if someone else changed the presets);
   - upload with the settings PIN, then read back and verify;

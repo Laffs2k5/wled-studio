@@ -57,6 +57,7 @@ class FakeDevice:
     last_pin_check: float = -1e9
     busy: int = 0
     uploads: list = field(default_factory=list)
+    palette_files: dict = field(default_factory=dict)
     audio_enabled: bool = False
 
     def __post_init__(self):
@@ -117,7 +118,8 @@ class FakeDevice:
             "ver": "16.0.1", "vid": 2605010, "name": "Fake WLED", "brand": "WLED", "product": "FakeDevice",
             "release": "Fake", "arch": "esp32", "mac": "000000000000",
             "leds": {"count": self.led_count, "rgbw": True, "maxseg": 32, "maxpwr": 0},
-            "fxcount": len(EFFECTS), "palcount": len(PALETTES), "cpalcount": 0,
+            "fxcount": len(EFFECTS), "palcount": len(PALETTES),
+            "cpalcount": (max(self.palette_files) + 1) if self.palette_files else 0,
             "fs": {"u": 8, "t": 983, "pmt": 0}, "u": {"AudioReactive": ["off" if not self.audio_enabled else "on"]},
             "live": False, "uptime": 1,
         }
@@ -192,6 +194,8 @@ def create_app(device: FakeDevice | None = None, clock=time.monotonic) -> FastAP
         dev.uploads.append(name)
         if name == "presets.json":
             dev.presets = json.loads(content)
+        elif name.startswith("palette") and name.endswith(".json"):
+            dev.palette_files[int(name[len("palette"):-len(".json")])] = json.loads(content)
         return PlainTextResponse("File Uploaded!")
 
     @app.get("/settings/lock")

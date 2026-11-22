@@ -17,7 +17,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .library import DeviceLists, plan_presets
+from .library import CUSTOM_PALETTE_BASE, DeviceLists, assign_palettes, plan_presets
 from .wled import WLEDClient
 
 
@@ -52,6 +52,17 @@ class StateStore:
         p.write_text(text, encoding="utf-8")
         return p
 
+    def palette_manifest(self, device_id: str) -> dict:
+        p = self.dir / f"{device_id}.palettes.json"
+        return json.loads(p.read_text()) if p.exists() else {}
+
+    def record_palettes(self, device_id: str, manifest: dict) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        (self.dir / f"{device_id}.palettes.json").write_text(json.dumps(manifest, indent=1) + "\n")
+
+    def custom_ids(self, device_id: str) -> dict[str, int]:
+        return {n: CUSTOM_PALETTE_BASE - m["index"] for n, m in self.palette_manifest(device_id).items()}
+
     def list_backups(self, device_id: str) -> list[str]:
         d = self.backups / device_id
         return sorted(p.name for p in d.glob("*-presets.json")) if d.exists() else []
@@ -65,6 +76,7 @@ class PushResult:
     changed_ids: list
     backup: str | None = None
     reason: str | None = None
+    palettes: list | None = None
 
 
 def diff_ids(before: dict, after: dict) -> list[str]:
@@ -74,8 +86,11 @@ def diff_ids(before: dict, after: dict) -> list[str]:
 
 async def push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, *,
                dry_run: bool = False, adopt_drift: bool = False, accept_review: bool = False,
-               playlists: list[dict] | None = None) -> PushResult:
-    lists = DeviceLists(await client.effects(), await client.fxdata(), await client.palettes())
+               playlists: list[dict] | None = None, palettes: list[dict] | None = None) -> PushResult:
+    manifest, uploads = assign_palettes(palettes or [], state.palette_manifest(device_id))
+    custom = {n: CUSTOM_PALETTE_BASE - m["index"] for n, m in manifest.items()}
+    lists = DeviceLists(await client.effects(), await client.fxdata(), await client.palettes(), custom)
+    pal_report = [{"palette": u["name"], "file": u["file"], "id": CUSTOM_PALETTE_BASE - u["index"]} for u in uploads]
     current_text = await client.presets_text()
     current = json.loads(current_text or "{}")
     last = state.last_pushed(device_id)
@@ -83,18 +98,24 @@ async def push(client: WLEDClient, device_id: str, looks: list[dict], state: Sta
     planned, report = plan_presets(current, looks, lists, accept_review=accept_review, playlists=playlists)
     changed = diff_ids(current, planned)
     if dry_run:
-        return PushResult(False, drift, report, changed, reason="dry run")
+        return PushResult(False, drift, report, changed, reason="dry run", palettes=pal_report)
     if drift and not adopt_drift:
-        return PushResult(False, True, report, changed,
+        return PushResult(False, True, report, changed, palettes=pal_report,
                           reason="the device's presets changed since the last push; adopt or review first")
-    if not changed:
-        return PushResult(False, drift, report, [], reason="nothing to change")
+    if not changed and not uploads:
+        return PushResult(False, drift, report, [], reason="nothing to change", palettes=[])
     backup = state.backup(device_id, current_text)
     new_text = canonical(planned)
-    await client.upload("presets.json", new_text.encode("utf-8"))
+    # palettes first, so the presets that use them find them; one unlocked session
+    async with client.unlocked():
+        for u in uploads:
+            await client._upload_raw(u["file"], u["content"].encode("utf-8"))
+        state.record_palettes(device_id, manifest)
+        if changed:
+            await client._upload_raw("presets.json", new_text.encode("utf-8"))
     readback = await client.presets_text()
     if json.loads(readback) != planned:
-        return PushResult(False, drift, report, changed, str(backup.name),
+        return PushResult(False, drift, report, changed, str(backup.name), palettes=pal_report,
                           reason="verification failed: the device's presets.json differs from what was written")
     state.record_push(device_id, readback)
-    return PushResult(True, drift, report, changed, str(backup.name))
+    return PushResult(True, drift, report, changed, str(backup.name), palettes=pal_report)

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { DeviceState, Look, Playlist, Profile, Segment } from "../types";
+import type { DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
 import { Looks } from "./Looks";
+import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
 
 interface Props {
@@ -19,13 +20,14 @@ export function DevicePanel({ deviceId, notify }: Props) {
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [palettes, setPalettes] = useState<Palette[]>([]);
   const [segId, setSegId] = useState(0);
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reloadState = useCallback(() => api.state(deviceId).then(setState).catch((e) => notify(e.message, true)), [deviceId, notify]);
-  const reloadLooks = useCallback(() => Promise.all([api.looks(), api.playlists()])
-    .then(([l, p]) => { setLooks(l); setPlaylists(p); }).catch((e) => notify(e.message, true)), [notify]);
+  const reloadLooks = useCallback(() => Promise.all([api.looks(), api.playlists(), api.palettes()])
+    .then(([l, p, c]) => { setLooks(l); setPlaylists(p); setPalettes(c); }).catch((e) => notify(e.message, true)), [notify]);
 
   useEffect(() => {
     setProfile(null);
@@ -110,6 +112,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
       <aside>
         <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify} />
         <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} />
+        <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
       </aside>
     </div>
   );

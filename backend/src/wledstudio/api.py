@@ -113,6 +113,11 @@ class PlaylistIn(Strict):
     end: str | None = Field(default=None, max_length=64)
 
 
+class PaletteIn(Strict):
+    name: str
+    stops: list[list[int | str]] = Field(min_length=2, max_length=18)
+
+
 class PushIn(Strict):
     dry_run: bool = True
     adopt_drift: bool = False
@@ -138,8 +143,9 @@ def make_client(request: Request, dev: Device) -> WLEDClient:
                       transport=request.app.state.transport_for(dev))
 
 
-async def lists_for(client: WLEDClient) -> DeviceLists:
-    return DeviceLists(await client.effects(), await client.fxdata(), await client.palettes())
+async def lists_for(client: WLEDClient, request: Request | None = None, device_id: str | None = None) -> DeviceLists:
+    custom = request.app.state.statestore.custom_ids(device_id) if request is not None and device_id else {}
+    return DeviceLists(await client.effects(), await client.fxdata(), await client.palettes(), custom)
 
 
 def device_errors(e: Exception) -> HTTPException:
@@ -204,7 +210,9 @@ async def profile(device_id: str, request: Request):
         "leds": {k: leds.get(k) for k in ("count", "rgbw", "maxseg", "matrix")},
         "usermods": sorted(k for k in (info.get("u") or {}) if isinstance(k, str) and not k.startswith("<")),
         "effects": fxmeta.parse_all(names, fxdata),
-        "palettes": [{"id": i, "name": n} for i, n in enumerate(pals)],
+        "palettes": [{"id": i, "name": n} for i, n in enumerate(pals)]
+        + [{"id": pid, "name": n, "custom": True}
+           for n, pid in sorted(request.app.state.statestore.custom_ids(dev.id).items(), key=lambda kv: -kv[1])],
         "fingerprint": fingerprint,
     }
 
@@ -247,7 +255,7 @@ async def import_from_device(device_id: str, request: Request, replace: bool = F
     lib: LibraryStore = request.app.state.library
     async with make_client(request, dev) as c:
         try:
-            lists = await lists_for(c)
+            lists = await lists_for(c, request, dev.id)
             presets = json.loads(await c.presets_text() or "{}")
         except (WLEDError, json.JSONDecodeError) as e:
             raise device_errors(e) from None
@@ -322,6 +330,28 @@ def delete_playlist(name: str, request: Request):
         raise HTTPException(404, "no such playlist")
 
 
+@router.get("/palettes")
+def list_palettes(request: Request):
+    return list(request.app.state.library.palettes().values())
+
+
+@router.put("/palettes/{name}")
+def put_palette(name: str, body: PaletteIn, request: Request):
+    pal = body.model_dump()
+    if pal["name"] != name:
+        raise HTTPException(422, "the name in the path and the body differ")
+    try:
+        return request.app.state.library.put_palette(pal)
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@router.delete("/palettes/{name}", status_code=204)
+def delete_palette(name: str, request: Request):
+    if not request.app.state.library.delete_palette(name):
+        raise HTTPException(404, "no such palette")
+
+
 @router.post("/devices/{device_id}/capture/{name}")
 async def capture(device_id: str, name: str, request: Request, preset_id: int | None = None):
     """Save what the device shows now as a look."""
@@ -334,7 +364,7 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
         raise HTTPException(422, "preset_id is 1-250")
     async with make_client(request, dev) as c:
         try:
-            lists = await lists_for(c)
+            lists = await lists_for(c, request, dev.id)
             st = await c.state()
         except WLEDError as e:
             raise device_errors(e) from None
@@ -366,7 +396,7 @@ async def apply_look(device_id: str, name: str, request: Request):
         raise HTTPException(404, "no such look")
     async with make_client(request, dev) as c:
         try:
-            r = resolve_look(look, await lists_for(c), look.get("imported_ids"))
+            r = resolve_look(look, await lists_for(c, request, dev.id), look.get("imported_ids"))
             if r.preset is None:
                 raise HTTPException(409, {"status": r.status, "notes": r.notes})
             payload = {k: v for k, v in r.preset.items() if k != "n"}
@@ -381,10 +411,12 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
     dev = device_or_404(device_id, request)
     looks = list(request.app.state.library.looks().values())
     playlists = list(request.app.state.library.playlists().values())
+    palettes = list(request.app.state.library.palettes().values())
     async with make_client(request, dev) as c:
         try:
             res = await push(c, dev.id, looks, request.app.state.statestore, dry_run=body.dry_run,
-                             adopt_drift=body.adopt_drift, accept_review=body.accept_review, playlists=playlists)
+                             adopt_drift=body.adopt_drift, accept_review=body.accept_review, playlists=playlists,
+                             palettes=palettes)
         except WLEDError as e:
             raise device_errors(e) from None
     return res.__dict__

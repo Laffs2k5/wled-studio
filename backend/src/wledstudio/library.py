@@ -50,12 +50,18 @@ def check_name(name: str) -> str:
     return name
 
 
+CUSTOM_PALETTE_BASE = 200  # WLED 16: custom palette file index i has palette id 200 - i
+MAX_CUSTOM_PALETTES = 129
+
+
 @dataclass
 class DeviceLists:
-    """What one device offers: effect names and metadata, palette names."""
+    """What one device offers: effect names and metadata, palette names, and the custom
+    palettes wled-studio put there (name -> palette id, from the device's manifest)."""
     effects: list[str]
     fxdata: list[str]
     palettes: list[str]
+    custom: dict[str, int] = field(default_factory=dict)
 
     def effect_id(self, name: str) -> int | None:
         try:
@@ -65,10 +71,17 @@ class DeviceLists:
         return None if "RSVD" in name else i
 
     def palette_id(self, name: str) -> int | None:
+        if name in self.custom:
+            return self.custom[name]
         try:
             return self.palettes.index(name)
         except ValueError:
             return None
+
+    def palette_name(self, pid: int) -> str | None:
+        if 0 <= pid < len(self.palettes):
+            return self.palettes[pid]
+        return next((n for n, i in self.custom.items() if i == pid), None)
 
     def meta(self, effect_id: int) -> str:
         return self.fxdata[effect_id] if effect_id < len(self.fxdata) else ""
@@ -87,8 +100,8 @@ def segment_from_state(seg: dict, lists: DeviceLists) -> tuple[dict, str | None]
     elif fx is not None:
         out["effect_id"] = fx
     pal = seg.get("pal")
-    if isinstance(pal, int) and 0 <= pal < len(lists.palettes):
-        out["palette"] = lists.palettes[pal]
+    if isinstance(pal, int) and lists.palette_name(pal) is not None:
+        out["palette"] = lists.palette_name(pal)
     elif pal is not None:
         out["palette_id"] = pal  # a custom palette (ids from 200 down) or unknown
     for k in SEG_SLIDERS + SEG_CHECKS:
@@ -323,6 +336,61 @@ def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
     return out, report
 
 
+# --- custom palettes -----------------------------------------------------------
+
+HEX6 = __import__("re").compile(r"^[0-9a-fA-F]{6}$")
+
+
+def check_palette(pal: dict) -> dict:
+    """A palette: 2-18 stops [position 0-255, "rrggbb"], positions ascending from 0 to 255."""
+    pal["name"] = check_name(pal["name"])
+    stops = pal.get("stops")
+    if not isinstance(stops, list) or not 2 <= len(stops) <= 18:
+        raise LookError("a palette has 2 to 18 stops")
+    last = -1
+    for st in stops:
+        if not (isinstance(st, list) and len(st) == 2 and isinstance(st[0], int) and isinstance(st[1], str)):
+            raise LookError("a stop is [position, \"rrggbb\"]")
+        if not 0 <= st[0] <= 255 or st[0] <= last or not HEX6.match(st[1]):
+            raise LookError("positions are 0-255, ascending; colours are rrggbb")
+        last = st[0]
+    if stops[0][0] != 0 or stops[-1][0] != 255:
+        raise LookError("the first stop is at 0 and the last at 255")
+    pal["stops"] = [[st[0], st[1].lower()] for st in stops]
+    return pal
+
+
+def palette_file(pal: dict) -> str:
+    """WLED's custom palette file: {"palette": [pos, "rrggbb", ...]}."""
+    flat: list = []
+    for pos, hexcol in pal["stops"]:
+        flat += [pos, hexcol]
+    return json.dumps({"palette": flat}, separators=(",", ":"))
+
+
+def assign_palettes(palettes: list[dict], manifest: dict[str, dict]) -> tuple[dict[str, dict], list[dict]]:
+    """Give each library palette a file index on the device, keeping existing ones.
+
+    manifest: name -> {"index": i, "sha": content hash}. Returns the new manifest and the
+    uploads needed (palettes that are new or changed)."""
+    import hashlib
+    used = {m["index"] for n, m in manifest.items() if n in {p["name"] for p in palettes}}
+    out, uploads = {}, []
+    for pal in sorted(palettes, key=lambda p: p["name"]):
+        content = palette_file(pal)
+        sha = hashlib.sha256(content.encode()).hexdigest()
+        cur = manifest.get(pal["name"])
+        if cur is not None:
+            idx = cur["index"]
+        else:
+            idx = next(i for i in range(MAX_CUSTOM_PALETTES) if i not in used)
+            used.add(idx)
+        out[pal["name"]] = {"index": idx, "sha": sha}
+        if cur is None or cur.get("sha") != sha:
+            uploads.append({"name": pal["name"], "index": idx, "file": f"palette{idx}.json", "content": content})
+    return out, uploads
+
+
 # --- storage -------------------------------------------------------------------
 
 class LibraryStore:
@@ -334,9 +402,10 @@ class LibraryStore:
 
     def load(self) -> dict:
         if not self.path.exists():
-            return {"looks": {}, "playlists": {}}
+            return {"looks": {}, "playlists": {}, "palettes": {}}
         lib = json.loads(self.path.read_text(encoding="utf-8"))
         lib.setdefault("playlists", {})
+        lib.setdefault("palettes", {})
         return lib
 
     def save(self, lib: dict) -> None:
@@ -375,6 +444,23 @@ class LibraryStore:
         lib["playlists"][pl["name"]] = pl
         self.save(lib)
         return pl
+
+    def palettes(self) -> dict:
+        return self.load()["palettes"]
+
+    def put_palette(self, pal: dict) -> dict:
+        pal = check_palette(pal)
+        lib = self.load()
+        lib["palettes"][pal["name"]] = pal
+        self.save(lib)
+        return pal
+
+    def delete_palette(self, name: str) -> bool:
+        lib = self.load()
+        if lib["palettes"].pop(name, None) is None:
+            return False
+        self.save(lib)
+        return True
 
     def delete_playlist(self, name: str) -> bool:
         lib = self.load()

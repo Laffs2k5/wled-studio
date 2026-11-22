@@ -35,7 +35,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    on, any other look switches it off.)
 3. ~~Playlists~~ (done 2026-11-23: looks by name, durations, shuffle, an end look; imported from and
    written to the device, unchanged playlists not rewritten).
-4. **Custom palettes** (gradient editor, upload with the PIN).
+4. ~~Custom palettes~~ (done 2026-11-23: a gradient editor; kept by name; uploaded as WLED's
+   `palette<i>.json` with stable file indexes per device, before the presets that use them; WLED
+   reloads them on upload, per its source. Not yet tried on a real device).
 5. **Live preview** from the device's live view (one websocket client per device; the backend owns
    it and fans it out).
 6. **Full change check UI:** a status per look, accept-review flow, preflight against a builder

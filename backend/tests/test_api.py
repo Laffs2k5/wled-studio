@@ -198,3 +198,46 @@ def test_unchanged_playlist_isnt_rewritten(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/import", headers=CSRF)
     r = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
     assert "9" not in r["changed_ids"]
+
+
+def test_custom_palettes(client, dev_id, device):
+    sunset = {"name": "Warm sunset", "stops": [[0, "ff2200"], [128, "ffaa00"], [255, "330066"]]}
+    assert client.put("/api/palettes/Warm%20sunset", json=sunset, headers=CSRF).status_code == 200
+    ice = {"name": "Ice", "stops": [[0, "FFFFFF"], [255, "0044ff"]]}
+    assert client.put("/api/palettes/Ice", json=ice, headers=CSRF).json()["stops"][0] == [0, "ffffff"]
+    for bad in ({"name": "B", "stops": [[0, "ff0000"]]},
+                {"name": "B", "stops": [[10, "ff0000"], [255, "00ff00"]]},
+                {"name": "B", "stops": [[0, "ff0000"], [0, "00ff00"], [255, "0000ff"]]},
+                {"name": "B", "stops": [[0, "red"], [255, "00ff00"]]}):
+        assert client.put("/api/palettes/B", json=bad, headers=CSRF).status_code == 422
+
+    # a look that uses a custom palette by name
+    look = {"name": "Dusk", "preset_id": 4, "segments": [{"start": 0, "stop": 60, "effect": "Comet",
+                                                           "palette": "Warm sunset"}]}
+    client.put("/api/looks/Dusk", json=look, headers=CSRF)
+    dry = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert sorted(p["palette"] for p in dry["palettes"]) == ["Ice", "Warm sunset"]
+    done = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()
+    assert done["done"] is True
+    # files on the device, by index; ids count down from 200
+    assert device.palette_files[0] == {"palette": [0, "ffffff", 255, "0044ff"]}            # Ice (sorted first)
+    assert device.palette_files[1] == {"palette": [0, "ff2200", 128, "ffaa00", 255, "330066"]}
+    assert device.presets["4"]["seg"][0]["pal"] == 199
+
+    # the profile names them; capture maps the id back to the name
+    prof = client.get(f"/api/devices/{dev_id}/profile").json()
+    assert {"id": 199, "name": "Warm sunset", "custom": True} in prof["palettes"]
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 8, "pal": 200}]}, headers=CSRF)
+    cap = client.post(f"/api/devices/{dev_id}/capture/Cold", headers=CSRF).json()
+    assert cap["segments"][0]["palette"] == "Ice"
+
+    # unchanged palettes aren't uploaded again; a changed one is, at the same index
+    device.uploads.clear()
+    client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF)
+    assert not any(u.startswith("palette") for u in device.uploads)
+    client.put("/api/palettes/Ice", json={"name": "Ice", "stops": [[0, "eeeeff"], [255, "0000ff"]]}, headers=CSRF)
+    r = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()
+    assert [p["file"] for p in r["palettes"]] == ["palette0.json"]
+    assert device.palette_files[0]["palette"][1] == "eeeeff"
+    assert client.delete("/api/palettes/Ice", headers=CSRF).status_code == 204
+    assert client.delete("/api/palettes/Ice", headers=CSRF).status_code == 404

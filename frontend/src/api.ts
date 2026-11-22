@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import type { Device, DeviceState, Look, Playlist, Profile, PushResult } from "./types";
+import type { Device, DeviceState, Look, Palette, Playlist, Profile, PushResult } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -89,6 +89,9 @@ export const api = {
       "POST", `/api/devices/${enc(id)}/import`),
   looks: () => request<Look[]>("GET", "/api/looks"),
   deleteLook: (name: string) => request<null>("DELETE", `/api/looks/${enc(name)}`),
+  palettes: () => request<Palette[]>("GET", "/api/palettes"),
+  putPalette: (p: Palette) => request<Palette>("PUT", `/api/palettes/${enc(p.name)}`, p),
+  deletePalette: (name: string) => request<null>("DELETE", `/api/palettes/${enc(name)}`),
   playlists: () => request<Playlist[]>("GET", "/api/playlists"),
   putPlaylist: (p: Playlist) => request<Playlist>("PUT", `/api/playlists/${enc(p.name)}`, p),
   deletePlaylist: (name: string) => request<null>("DELETE", `/api/playlists/${enc(name)}`),
