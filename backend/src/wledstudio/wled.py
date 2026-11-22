@@ -1,0 +1,181 @@
+# SPDX-License-Identifier: EUPL-1.2
+"""An async client for WLED's HTTP JSON API.
+
+- Writes to one device are serialised (one asyncio lock per device): WLED has
+  one global JSON buffer and answers {"error": 3} when it's in use; the client
+  retries those with a short backoff.
+- The settings PIN (needed for /upload) is only held in memory, sent in a
+  request body, never logged, and the device is locked again afterwards, also
+  on errors. WLED ignores a PIN check within 3 s of the previous one, so the
+  client waits out that cooldown before unlocking.
+"""
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import logging
+import time
+from typing import Any
+
+import httpx
+
+log = logging.getLogger(__name__)
+
+PIN_COOLDOWN_S = 3.2
+BUSY_RETRIES = 4
+BUSY_BACKOFF_S = 0.25
+
+
+class WLEDError(Exception):
+    """A device answered with an error or not at all."""
+
+
+class WLEDLocked(WLEDError):
+    """The device refused a protected request (settings PIN missing or wrong)."""
+
+
+_locks: dict[str, asyncio.Lock] = {}
+# when each device last saw a PIN check: WLED ignores a check within 3 s of the
+# previous one, across all clients, so this is tracked per device, not per client
+_last_pin_check: dict[str, float] = {}
+
+
+def device_lock(key: str) -> asyncio.Lock:
+    lock = _locks.get(key)
+    if lock is None:
+        lock = _locks[key] = asyncio.Lock()
+    return lock
+
+
+class WLEDClient:
+    def __init__(self, base_url: str, *, pin: str | None = None, timeout: float = 5.0,
+                 transport: httpx.AsyncBaseTransport | None = None, sleep=asyncio.sleep, clock=time.monotonic):
+        self.base_url = base_url.rstrip("/")
+        self._pin = pin
+        self._http = httpx.AsyncClient(base_url=self.base_url, timeout=timeout, transport=transport,
+                                       follow_redirects=False, headers={"User-Agent": "wled-studio"})
+        self._sleep = sleep
+        self._clock = clock
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        await self.aclose()
+
+    @property
+    def has_pin(self) -> bool:
+        return self._pin is not None
+
+    def __repr__(self) -> str:  # never show the PIN
+        return f"WLEDClient({self.base_url!r}, pin={'set' if self._pin else 'none'})"
+
+    # --- reads ---
+    async def get_json(self, path: str) -> Any:
+        try:
+            r = await self._http.get(path)
+        except httpx.HTTPError as e:
+            raise WLEDError(f"{self.base_url}{path}: {e.__class__.__name__}") from None
+        if r.status_code != 200:
+            raise WLEDError(f"{self.base_url}{path}: HTTP {r.status_code}")
+        try:
+            return r.json()
+        except json.JSONDecodeError:
+            raise WLEDError(f"{self.base_url}{path}: not JSON") from None
+
+    async def info(self) -> dict:
+        return await self.get_json("/json/info")
+
+    async def effects(self) -> list[str]:
+        return await self.get_json("/json/eff")
+
+    async def fxdata(self) -> list[str]:
+        return await self.get_json("/json/fxdata")
+
+    async def palettes(self) -> list[str]:
+        return await self.get_json("/json/pal")
+
+    async def state(self) -> dict:
+        return await self._retry_busy(lambda: self._http.get("/json/state"))
+
+    async def presets_text(self) -> str:
+        try:
+            r = await self._http.get("/presets.json")
+        except httpx.HTTPError as e:
+            raise WLEDError(f"presets.json: {e.__class__.__name__}") from None
+        if r.status_code != 200:
+            raise WLEDError(f"presets.json: HTTP {r.status_code}")
+        return r.text
+
+    # --- writes ---
+    async def _retry_busy(self, send) -> Any:
+        for attempt in range(BUSY_RETRIES + 1):
+            try:
+                r = await send()
+            except httpx.HTTPError as e:
+                raise WLEDError(f"{self.base_url}: {e.__class__.__name__}") from None
+            try:
+                body = r.json()
+            except json.JSONDecodeError:
+                body = None
+            if isinstance(body, dict) and body.get("error") == 3 and attempt < BUSY_RETRIES:
+                await self._sleep(BUSY_BACKOFF_S * (attempt + 1))
+                continue
+            if r.status_code != 200 or (isinstance(body, dict) and "error" in body):
+                raise WLEDError(f"{self.base_url}: HTTP {r.status_code} {body if isinstance(body, dict) else ''}".strip())
+            return body
+        raise WLEDError(f"{self.base_url}: busy")  # pragma: no cover - loop always returns or raises
+
+    async def set_state(self, payload: dict) -> dict:
+        if "pin" in payload:
+            raise ValueError("use unlocked() for the PIN")
+        async with device_lock(self.base_url):
+            return await self._retry_busy(lambda: self._http.post("/json/state", json=payload))
+
+    async def _wait_pin_cooldown(self) -> None:
+        wait = PIN_COOLDOWN_S - (self._clock() - _last_pin_check.get(self.base_url, -1e9))
+        if wait > 0:
+            await self._sleep(wait)
+
+    async def _unlock(self) -> None:
+        await self._wait_pin_cooldown()
+        _last_pin_check[self.base_url] = self._clock()
+        await self._retry_busy(lambda: self._http.post("/json/state", json={"pin": self._pin}))
+
+    async def _lock(self) -> None:
+        try:
+            await self._http.get("/settings/lock")
+        except httpx.HTTPError:
+            log.warning("could not lock %s again", self.base_url)
+
+    @contextlib.asynccontextmanager
+    async def unlocked(self):
+        """Hold the device's write lock with the settings PIN unlocked; always lock again."""
+        async with device_lock(self.base_url):
+            if self._pin is not None:
+                await self._unlock()
+            try:
+                yield
+            finally:
+                if self._pin is not None:
+                    await self._lock()
+
+    async def _upload_raw(self, name: str, content: bytes) -> None:
+        files = {"data": (f"/{name.lstrip('/')}", content, "application/octet-stream")}
+        try:
+            r = await self._http.post("/upload", files=files)
+        except httpx.HTTPError as e:
+            raise WLEDError(f"upload {name}: {e.__class__.__name__}") from None
+        if r.status_code == 401:
+            raise WLEDLocked(f"upload {name}: the device refused it (settings PIN missing or wrong)")
+        if r.status_code != 200:
+            raise WLEDError(f"upload {name}: HTTP {r.status_code}")
+
+    async def upload(self, name: str, content: bytes) -> None:
+        """Upload one file with the device unlocked (if a PIN is set)."""
+        async with self.unlocked():
+            await self._upload_raw(name, content)
