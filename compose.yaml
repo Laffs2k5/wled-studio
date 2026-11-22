@@ -1,0 +1,38 @@
+# docker compose up                  -> http://localhost:8080
+# docker compose --profile demo up   -> also a fake WLED device; add it as host "demo-device:8081"
+services:
+  wled-studio:
+    image: ghcr.io/laffs2k5/wled-studio:${WLEDSTUDIO_TAG:-edge}
+    build: .
+    # localhost only by default; to use it from other machines on your LAN, change
+    # this to "8080:8080" and add the name you browse to to WLEDSTUDIO_ALLOWED_HOSTS
+    # (see docs/security.md)
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      WLEDSTUDIO_ALLOWED_HOSTS: ${WLEDSTUDIO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      WLEDSTUDIO_TOKEN: ${WLEDSTUDIO_TOKEN:-}
+    volumes:
+      - wled-studio-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  demo-device:
+    profiles: [demo]
+    image: ghcr.io/laffs2k5/wled-studio:${WLEDSTUDIO_TAG:-edge}
+    build: .
+    entrypoint: ["wled-studio-fake-device"]
+    environment:
+      FAKE_WLED_HOST: 0.0.0.0
+      FAKE_WLED_PORT: "8081"
+      FAKE_WLED_PIN: ${FAKE_WLED_PIN:-}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  wled-studio-data:
