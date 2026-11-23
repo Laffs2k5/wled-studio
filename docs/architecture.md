@@ -1,5 +1,8 @@
 # Architecture
 
+How the app is put together. For WLED's own building blocks (firmware, segments, layers, presets),
+which the app edits, see [wled-model.md](wled-model.md).
+
 ```mermaid
 flowchart LR
   B["Browser<br/>(React UI)"] -->|"/api, same origin"| S["wled-studio<br/>(FastAPI)"]

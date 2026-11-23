@@ -60,16 +60,29 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
 1. **A real device:** everything that writes (presets, palettes, DDP streaming, editing sessions)
    has run only against the fake device.
-2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
+2. **Segment editing, the rest.** Editable today: bounds, grouping, spacing, offset, reverse,
+   mirror, on, opacity and blend mode, and each segment's effect, controls, palette and colours.
+   Missing, mostly what makes layouts quick to build:
+   - **layer order:** move a segment up or down the stack (WLED draws in id order, so today a
+     layer's place is fixed when it's added);
+   - **duplicate a segment**, or give several the same settings (two walls running the same
+     meter);
+   - **segment names**, edited and kept (capture drops them today);
+   - **show the selected segment's LEDs** on the live view and the room shape;
+   - **pick a range on the room shape** by dragging, besides numbers and walls;
+   - **a look that leaves the layout alone:** one that changes only the segments it names, like
+     WLED presets saved without bounds (captured looks always own the layout today);
+   - **freeze and sound simulation:** kept when imported, not editable yet.
+3. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; a spare board first.
-3. **Preflight:** check the library against a firmware's effect list before it is flashed. This
+4. **Preflight:** check the library against a firmware's effect list before it is flashed. This
    needs the builder to list a built image's effects (a build manifest).
-4. **Named zones** in the room model: named LED ranges inside a wall (a door, a desk, a TV), which
+5. **Named zones** in the room model: named LED ranges inside a wall (a door, a desk, a TV), which
    looks follow as they follow walls.
-5. **Editing a saved look** without showing it on a device. Today: show it, edit live, save again.
-6. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
+6. **Editing a saved look** without showing it on a device. Today: show it, edit live, save again.
+7. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
    instead of the stand-ins.
-7. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
+8. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
 
 ## Open design items
 

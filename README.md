@@ -6,7 +6,9 @@ write them back safely. Later: write your own effects, preview them in the brows
 strip, and build verified firmware with them ([wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder)).
 
 **Status: early work in progress.** See [docs/getting-started.md](docs/getting-started.md) to try it,
-and [docs/status.md](docs/status.md) for what's done and next.
+and [docs/status.md](docs/status.md) for what's done and next. New to WLED's own model (effects,
+segments, layers, presets, playlists)? [docs/wled-model.md](docs/wled-model.md) explains the
+building blocks everything here sits on.
 
 ![The look studio: effects with their own controls, the look library, the write plan](docs/screenshots/look-studio.png)
 
