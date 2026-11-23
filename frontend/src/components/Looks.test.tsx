@@ -77,3 +77,30 @@ test("show a look live; delete asks first", async () => {
   fireEvent.click(screen.getByLabelText("Delete Evening"));
   await waitFor(() => expect(calls.some((c) => c.key === "DELETE /api/looks/Evening")).toBe(true));
 });
+
+test("a look's change-check status shows, with an Accept that takes a new snapshot", async () => {
+  const calls = stubFetch({ "POST /api/devices/desk/accept/Evening": { look: looks[0], status: "ok", notes: [], accepted: [] } });
+  vi.stubGlobal("confirm", vi.fn(() => true));
+  const onChanged = vi.fn();
+  const notify = vi.fn();
+  const checks = [
+    { look: "Evening", status: "review" as const, notes: ["'Comet' changed: Tail (ix) is gone"] },
+    { look: "Loose", status: "ok" as const, notes: [] },
+  ];
+  render(<Looks deviceId="desk" looks={looks} checks={checks} onChanged={onChanged} onApplied={() => {}} notify={notify} />);
+  const badge = screen.getByText("review");
+  expect(badge).toHaveAttribute("title", "'Comet' changed: Tail (ix) is gone");
+  expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(1); // not for ok looks
+  fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+  await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Tail (ix) is gone"));
+  expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/accept/Evening");
+  expect(notify).toHaveBeenCalledWith("Accepted “Evening” (now ok)");
+});
+
+test("an unavailable look can't be accepted", () => {
+  const checks = [{ look: "Evening", status: "unavailable" as const, notes: ["effect 'Comet' isn't on this device"] }];
+  render(<Looks deviceId="desk" looks={looks} checks={checks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
+  expect(screen.getByText("unavailable")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+});

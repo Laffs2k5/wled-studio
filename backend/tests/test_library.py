@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: EUPL-1.2
 import pytest
 
-from wledstudio.library import (DeviceLists, LibraryStore, LookError, check_name, classify, import_presets,
+from wledstudio.library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
+                                classify, compare_meta, import_presets,
                                 mic_for, plan_presets, resolve_look, worst)
 
 LISTS = DeviceLists(effects=["Solid", "Glow", "RSVD", "Comet", "Meter"],
@@ -200,3 +201,48 @@ def test_without_a_room_model_the_saved_leds_are_used():
     look = {"name": "L", "segments": [{"start": 30, "stop": 60, "wall": "L2", "effect": "Glow"}]}
     seg = resolve_look(look, LISTS).preset["seg"][0]
     assert (seg["start"], seg["stop"]) == (30, 60) and "wall" not in seg
+
+
+@pytest.mark.parametrize("old,new,seg,reasons", [
+    ("!,Tail;!;!;1", "!;!;!;1", {"ix": 1}, ["Tail (ix) is gone"]),
+    ("!,Tail;!;!;1", "!;!;!;1", {"sx": 1}, ["Tail (ix) is gone, not set by this look"]),
+    ("!,Tail;!;!;1", "!,Length;!;!;1", {}, ["ix relabelled: Tail -> Length"]),
+    ("!;!;!;1", "!,Fade;!;!;1", {}, ["new control Fade (ix)"]),
+    ("!;!;!;1", "!;!;!;1v", {}, ["now sound-reactive"]),
+    ("!;!;!;1v", "!;!;!;1", {}, ["no longer sound-reactive"]),
+    ("!;!;!;1", "!;!;!;2", {}, ["dimensions changed: 1D -> 2D"]),
+    ("!;!,!;!;1", "!;!;!;1", {}, ["colour slots: 2 -> 1"]),
+    ("!;!;!;1", "!;!;;1", {"palette": "x"}, ["no longer uses a palette"]),
+    ("!;!;!;1;sx=10", "!;!;!;1;sx=20", {}, ["metadata text changed (defaults or labels)"]),
+])
+def test_the_change_check_says_what_changed(old, new, seg, reasons):
+    assert compare_meta(old, new, seg)[1] == reasons
+
+
+def test_review_notes_name_the_change():
+    (look,), _ = import_presets({"1": preset(3)}, LISTS)
+    changed = DeviceLists(LISTS.effects, ["", "", "", "!;!;!;1", ""], LISTS.palettes)
+    r = resolve_look(look, changed, look["imported_ids"])
+    assert r.status == "review" and r.notes == ["'Comet' changed: Tail (ix) is gone"]
+
+
+def test_accepting_takes_a_new_snapshot():
+    (look,), _ = import_presets({"1": preset(3)}, LISTS)
+    moved = DeviceLists(["Solid", "Comet", "Glow"], ["", "!;!;!;1", ""], LISTS.palettes)
+    assert resolve_look(look, moved, look["imported_ids"]).status == "review"
+    accept_snapshot(look, moved)
+    assert look["snapshot"] == {"Comet": "!;!;!;1"} and look["imported_ids"] == {"Comet": 1}
+    assert resolve_look(look, moved, look["imported_ids"]).status == "ok"
+
+
+def test_playlists_take_the_worst_status_of_their_looks():
+    (a,), _ = import_presets({"1": preset(3)}, LISTS)
+    a["name"] = "A"
+    b = {"name": "B", "segments": [{"start": 0, "stop": 60, "effect": "Glow"}]}
+    changed = DeviceLists(LISTS.effects, ["", "!,!;!;!;1", "", "!;!;!;1", ""], LISTS.palettes)
+    pls = [{"name": "P", "entries": [{"look": "A"}, {"look": "B"}]},
+           {"name": "Q", "entries": [{"look": "B"}], "end": "Gone"}]
+    rows = {r.get("look") or "pl:" + r["playlist"]: r for r in check_library([a, b], pls, changed)}
+    assert rows["A"]["status"] == "review" and rows["B"]["status"] == "ok"
+    assert rows["pl:P"]["status"] == "review" and rows["pl:P"]["notes"] == ["'A' is review"]
+    assert rows["pl:Q"]["status"] == "unavailable" and rows["pl:Q"]["notes"] == ["look 'Gone' isn't in the library"]

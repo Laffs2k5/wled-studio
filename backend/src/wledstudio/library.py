@@ -258,22 +258,76 @@ def tag_walls(look: dict, room: dict | None) -> dict:
 
 # --- change check --------------------------------------------------------------
 
-def classify(old_meta: str, new_meta: str, segment: dict) -> str:
+def _dims(d: tuple[int, ...]) -> str:
+    return "/".join(f"{n}D" for n in d) or "unspecified"
+
+
+def compare_meta(old_meta: str, new_meta: str, segment: dict) -> tuple[str, list[str]]:
+    """How an effect's metadata changed since a look was saved, for that look's segment:
+    the status ("ok", "check" or "review") and the reasons, in words."""
     if old_meta == new_meta:
-        return "ok"
+        return "ok", []
     old, new = fxmeta.parse(old_meta), fxmeta.parse(new_meta)
     used = {k for k in SEG_SLIDERS + SEG_CHECKS if k in segment}
-    old_keys = {c.key for c in old.controls}
-    new_keys = {c.key for c in new.controls}
-    if (used & old_keys) - new_keys:
-        return "review"
-    if old.audio != new.audio or old.dimensions != new.dimensions:
-        return "review"
+    old_c = {c.key: c for c in old.controls}
+    new_c = {c.key: c for c in new.controls}
+    review, check = [], []
+    for key in sorted(old_c.keys() - new_c.keys()):
+        (review if key in used else check).append(
+            f"{old_c[key].label} ({key}) is gone" + ("" if key in used else ", not set by this look"))
+    for key in sorted(old_c.keys() & new_c.keys()):
+        if old_c[key].label != new_c[key].label:
+            check.append(f"{key} relabelled: {old_c[key].label} -> {new_c[key].label}")
+    for key in sorted(new_c.keys() - old_c.keys()):
+        check.append(f"new control {new_c[key].label} ({key})")
+    if old.audio != new.audio:
+        review.append("now sound-reactive" if not old.audio else "no longer sound-reactive" if not new.audio
+                      else f"sound input changed: {', '.join(old.audio)} -> {', '.join(new.audio)}")
+    if old.dimensions != new.dimensions:
+        review.append(f"dimensions changed: {_dims(old.dimensions)} -> {_dims(new.dimensions)}")
     if len(new.colours) < len(old.colours):
-        return "review"
+        review.append(f"colour slots: {len(old.colours)} -> {len(new.colours)}")
     if old.palette and not new.palette and "palette" in segment:
-        return "review"
-    return "check"
+        review.append("no longer uses a palette")
+    if review:
+        return "review", review + check
+    return "check", check or ["metadata text changed (defaults or labels)"]
+
+
+def classify(old_meta: str, new_meta: str, segment: dict) -> str:
+    return compare_meta(old_meta, new_meta, segment)[0]
+
+
+def accept_snapshot(look: dict, lists: DeviceLists) -> dict:
+    """Accept the device's current version of each effect the look uses: a new metadata
+    snapshot and id, so the look's status is ok again. Effects the device doesn't have are
+    left alone (the look stays unavailable)."""
+    for s in look.get("segments", []):
+        name = s.get("effect")
+        fx = lists.effect_id(name) if name else None
+        if fx is not None:
+            look.setdefault("snapshot", {})[name] = lists.meta(fx)
+            look.setdefault("imported_ids", {})[name] = fx
+    return look
+
+
+def check_library(looks: list[dict], playlists: list[dict], lists: DeviceLists,
+                  room: dict | None = None) -> list[dict]:
+    """Each look's change-check status on this device; a playlist takes the worst status of
+    the looks it plays (a missing look makes it unavailable)."""
+    out, by_name = [], {}
+    for look in looks:
+        r = resolve_look(look, lists, look.get("imported_ids"), room)
+        by_name[look["name"]] = r.status
+        out.append({"look": look["name"], "status": r.status, "notes": r.notes})
+    for pl in playlists:
+        names = [e["look"] for e in pl.get("entries", [])] + ([pl["end"]] if pl.get("end") else [])
+        missing = [n for n in names if n not in by_name]
+        st = "unavailable" if missing else worst(by_name[n] for n in names)
+        notes = [f"look {n!r} isn't in the library" for n in missing]
+        notes += [f"{n!r} is {by_name[n]}" for n in dict.fromkeys(names) if by_name.get(n, "ok") != "ok"]
+        out.append({"playlist": pl["name"], "status": st, "notes": notes})
+    return out
 
 
 # --- export --------------------------------------------------------------------
@@ -313,12 +367,12 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
                 return Resolved(None, "unavailable", [f"effect {name!r} isn't on this device"])
             out["fx"] = fx
             snap = look.get("snapshot", {}).get(name)
-            st = classify(snap, lists.meta(fx), s) if snap is not None else "ok"
+            st, reasons = compare_meta(snap, lists.meta(fx), s) if snap is not None else ("ok", [])
             if st == "ok" and imported_ids and imported_ids.get(name) not in (None, fx):
                 st = "remapped"
                 notes.append(f"{name!r}: id {imported_ids[name]} -> {fx}")
             if st in ("check", "review"):
-                notes.append(f"{name!r}: metadata changed ({st})")
+                notes.append(f"{name!r} changed: " + "; ".join(reasons))
             statuses.append(st)
         elif "effect_id" in s:
             out["fx"] = s["effect_id"]

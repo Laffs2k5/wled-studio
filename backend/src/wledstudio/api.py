@@ -11,7 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from . import fxmeta, netcheck
 from .devices import Device, DeviceStore
-from .library import (DeviceLists, LibraryStore, LookError, check_name, import_presets, mic_for,
+from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
+                      import_presets, mic_for,
                       playlist_from_preset, resolve_look, segment_from_state, tag_walls)
 from .push import StateStore, fetch_lists, push
 from .wled import WLEDClient, WLEDError, WLEDLocked
@@ -438,6 +439,43 @@ async def apply_look(device_id: str, name: str, request: Request):
         except WLEDError as e:
             raise device_errors(e) from None
     return {"status": r.status, "notes": r.notes}
+
+
+@router.get("/devices/{device_id}/check")
+async def check_looks(device_id: str, request: Request):
+    """Each look's and playlist's change-check status against this device (reads only)."""
+    dev = device_or_404(device_id, request)
+    lib: LibraryStore = request.app.state.library
+    async with make_client(request, dev) as c:
+        try:
+            lists = await lists_for(c, request, dev.id)
+        except WLEDError as e:
+            raise device_errors(e) from None
+    return check_library(list(lib.looks().values()), list(lib.playlists().values()), lists,
+                         room_for(request, dev.id))
+
+
+@router.post("/devices/{device_id}/accept/{name}")
+async def accept_look(device_id: str, name: str, request: Request):
+    """Accept the device's current version of the effects a look uses: a new snapshot,
+    after which the look is ok on this device. Not for unavailable looks."""
+    dev = device_or_404(device_id, request)
+    lib: LibraryStore = request.app.state.library
+    look = lib.looks().get(name)
+    if look is None:
+        raise HTTPException(404, "no such look")
+    async with make_client(request, dev) as c:
+        try:
+            lists = await lists_for(c, request, dev.id)
+        except WLEDError as e:
+            raise device_errors(e) from None
+    room = room_for(request, dev.id)
+    before = resolve_look(look, lists, look.get("imported_ids"), room)
+    if before.status == "unavailable":
+        raise HTTPException(409, {"status": before.status, "notes": before.notes})
+    saved = lib.put(accept_snapshot(look, lists))
+    after = resolve_look(saved, lists, saved.get("imported_ids"), room)
+    return {"look": saved, "status": after.status, "notes": after.notes, "accepted": before.notes}
 
 
 @router.post("/devices/{device_id}/push")

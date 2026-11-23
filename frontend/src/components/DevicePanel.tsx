@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
+import type { CheckItem, DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
 import { walls, type Room } from "../room";
@@ -25,14 +25,18 @@ export function DevicePanel({ deviceId, notify }: Props) {
   const [looks, setLooks] = useState<Look[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [palettes, setPalettes] = useState<Palette[]>([]);
+  const [checks, setChecks] = useState<CheckItem[]>([]);
   const [segId, setSegId] = useState(0);
   const [room, setRoom] = useState<Room | null>(null);
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reloadState = useCallback(() => api.state(deviceId).then(setState).catch((e) => notify(e.message, true)), [deviceId, notify]);
-  const reloadLooks = useCallback(() => Promise.all([api.looks(), api.playlists(), api.palettes()])
-    .then(([l, p, c]) => { setLooks(l); setPlaylists(p); setPalettes(c); }).catch((e) => notify(e.message, true)), [notify]);
+  const reloadLooks = useCallback(() => Promise.all([
+    api.looks(), api.playlists(), api.palettes(),
+    api.check(deviceId).catch(() => [] as CheckItem[]), // the device may be unreachable; the lists still load
+  ]).then(([l, p, c, k]) => { setLooks(l); setPlaylists(p); setPalettes(c); setChecks(k); })
+    .catch((e) => notify(e.message, true)), [deviceId, notify]);
 
   useEffect(() => {
     setProfile(null);
@@ -176,8 +180,8 @@ export function DevicePanel({ deviceId, notify }: Props) {
       </main>
       <aside>
         <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
-          beforeAction={flush} />
-        <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} />
+          beforeAction={flush} checks={checks} />
+        <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks} />
         <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
       </aside>
     </div>

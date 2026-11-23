@@ -53,8 +53,15 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 5. ~~Live view of the device~~ (done 2026-11-23: the device's live view relayed by the backend, one
    device connection shared by all viewers; off by default in the UI, since it takes the device's
    single live-view slot).
-6. **Full change check UI:** a status per look, accept-review flow, preflight against a builder
-   manifest.
+6. **Full change check UI** (mostly done 2026-11-23):
+   - each look and playlist shows its status on the device (`GET …/check`), with the reasons in
+     words: a control the look sets is gone, now sound-reactive, 1D → 2D, fewer colour slots, …;
+     a playlist takes the worst status of its looks;
+   - **Accept** takes the device's version of the look's effects as the new snapshot (not for an
+     unavailable look).
+
+   Still open: a **preflight against a builder manifest**, checking looks against a firmware before
+   it's flashed; it needs the builder to write the built image's effect metadata.
 7. ~~Room model~~ (done 2026-11-23: the strip's shape as walls in LED order, a direction and a
    count each; the live view and the Effect studio's preview are drawn in that shape; and **room-aware
    effects**: the app writes each LED's position into `room_map.h` in an effect's folder, and a

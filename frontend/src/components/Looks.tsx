@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useState } from "react";
 import { api } from "../api";
-import type { Look, PushResult } from "../types";
+import type { CheckItem, Look, PushResult } from "../types";
+import { ACCEPTABLE, StatusBadge } from "./StatusBadge";
 
 interface Props {
   deviceId: string;
@@ -11,9 +12,12 @@ interface Props {
   notify: (msg: string, error?: boolean) => void;
   /** Called (and awaited) before anything that reads or changes the device: flushes held-back live edits. */
   beforeAction?: () => Promise<void>;
+  /** Each look's change-check status on this device. */
+  checks?: CheckItem[];
 }
 
-export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction }: Props) {
+export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [] }: Props) {
+  const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
   const [plan, setPlan] = useState<PushResult | null>(null);
@@ -66,6 +70,14 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               </span>
             )}
             {l.mic !== undefined && <span className="badge" title={l.mic ? "Mic on" : "Mic off"}>{l.mic ? "♪" : "–"}</span>}
+            <StatusBadge item={status.get(l.name)} />
+            {ACCEPTABLE.has(status.get(l.name)?.status ?? "ok") && (
+              <button disabled={busy} title="Take the device's version of this look's effects as the new reference"
+                onClick={() => confirm(`Accept the device's version of the effects in “${l.name}”?\n\n${status.get(l.name)?.notes.join("\n")}`)
+                  && run(() => api.accept(deviceId, l.name), (r) => `Accepted “${l.name}” (now ${r.status})`).then(onChanged)}>
+                Accept
+              </button>
+            )}
             <button disabled={busy} onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” (${r.status})`).then(onApplied)}>
               Show
             </button>

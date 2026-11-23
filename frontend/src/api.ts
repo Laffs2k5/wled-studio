@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import type { Device, DeviceState, Look, Palette, Playlist, Profile, PushResult } from "./types";
+import type { CheckItem, Device, DeviceState, Look, Palette, Playlist, Profile, PushResult } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -113,6 +113,10 @@ export const api = {
     request<Look>("POST", `/api/devices/${enc(id)}/capture/${enc(name)}` + (presetId ? `?preset_id=${presetId}` : "")),
   apply: (id: string, name: string) =>
     request<{ status: string; notes: string[] }>("POST", `/api/devices/${enc(id)}/apply/${enc(name)}`),
+  check: (id: string) => request<CheckItem[]>("GET", `/api/devices/${enc(id)}/check`),
+  accept: (id: string, name: string) =>
+    request<{ look: Look; status: string; notes: string[]; accepted: string[] }>(
+      "POST", `/api/devices/${enc(id)}/accept/${enc(name)}`),
   push: (id: string, opts: { dry_run: boolean; adopt_drift?: boolean; accept_review?: boolean }) =>
     request<PushResult>("POST", `/api/devices/${enc(id)}/push`, opts),
 };

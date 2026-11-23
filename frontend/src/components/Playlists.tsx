@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useState } from "react";
 import { api } from "../api";
-import type { Look, Playlist, PlaylistEntry } from "../types";
+import type { CheckItem, Look, Playlist, PlaylistEntry } from "../types";
+import { StatusBadge } from "./StatusBadge";
 
 interface Props {
   looks: Look[];
   playlists: Playlist[];
   onChanged: () => void;
   notify: (msg: string, error?: boolean) => void;
+  /** Each playlist's change-check status: the worst of its looks'. */
+  checks?: CheckItem[];
 }
 
 /** Playlists: looks in a row, each shown for a while. Written to the device with the looks. */
-export function Playlists({ looks, playlists, onChanged, notify }: Props) {
+export function Playlists({ looks, playlists, onChanged, notify, checks = [] }: Props) {
+  const status = new Map(checks.filter((c) => c.playlist).map((c) => [c.playlist as string, c]));
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
   const [entries, setEntries] = useState<PlaylistEntry[]>([]);
@@ -38,6 +42,7 @@ export function Playlists({ looks, playlists, onChanged, notify }: Props) {
         {playlists.map((p) => (
           <li key={p.name}>
             <span className="name">▶ {p.name}</span>
+            <StatusBadge item={status.get(p.name)} />
             <span className="muted small">{p.entries.length} looks{p.shuffle ? ", shuffled" : ""} · {p.preset_id ? `slot ${p.preset_id}` : "no slot"}</span>
             <button className="danger" aria-label={`Delete playlist ${p.name}`}
               onClick={() => confirm(`Delete playlist “${p.name}”?`) &&

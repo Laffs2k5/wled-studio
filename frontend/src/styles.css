@@ -21,6 +21,9 @@ button.danger { color: var(--bad); }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 .badge { margin-left: .4rem; font-size: .8rem; color: var(--accent); }
+.badge.check-remapped, .badge.check-check { color: var(--muted); }
+.badge.check-review { color: var(--warn); }
+.badge.check-unavailable { color: var(--bad); }
 .warn { color: var(--warn); }
 .device-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 24rem); gap: 1rem; padding: 1rem 1.25rem; }

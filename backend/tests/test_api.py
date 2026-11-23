@@ -147,6 +147,31 @@ def test_looks_on_a_wall_follow_the_room_model(client, dev_id, device):
     assert on_l2["segments"][0]["wall"] == "L2"
 
 
+def test_check_and_accept_after_a_firmware_change(client, dev_id, device, monkeypatch):
+    from wledstudio.fakewled import app as fake
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 8, "ix": 99}]}, headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/Tail?preset_id=3", headers=CSRF)
+    rows = client.get(f"/api/devices/{dev_id}/check").json()
+    assert next(r for r in rows if r.get("look") == "Tail")["status"] == "ok"
+
+    # new firmware: Comet lost its Tail slider, which the look sets
+    effects = list(fake.EFFECTS)
+    effects[8] = ("Comet", "!;!;!;1;sx=128")
+    monkeypatch.setattr(fake, "EFFECTS", effects)
+    row = next(r for r in client.get(f"/api/devices/{dev_id}/check").json() if r.get("look") == "Tail")
+    assert row == {"look": "Tail", "status": "review", "notes": ["'Comet' changed: Tail (ix) is gone"]}
+
+    r = client.post(f"/api/devices/{dev_id}/accept/Tail", headers=CSRF)
+    assert r.status_code == 200 and r.json()["status"] == "ok"
+    assert r.json()["accepted"] == ["'Comet' changed: Tail (ix) is gone"]
+    assert next(r for r in client.get(f"/api/devices/{dev_id}/check").json() if r.get("look") == "Tail")["status"] == "ok"
+    assert client.post(f"/api/devices/{dev_id}/accept/Nope", headers=CSRF).status_code == 404
+
+    # an effect that's gone can't be accepted
+    effects[8] = ("RSVD", "")
+    assert client.post(f"/api/devices/{dev_id}/accept/Tail", headers=CSRF).status_code == 409
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

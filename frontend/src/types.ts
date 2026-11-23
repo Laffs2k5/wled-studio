@@ -96,6 +96,14 @@ export interface PushReportItem {
   written?: boolean;
 }
 
+/** A look's or playlist's change-check status on one device (GET /api/devices/<id>/check). */
+export interface CheckItem {
+  look?: string;
+  playlist?: string;
+  status: PushReportItem["status"];
+  notes: string[];
+}
+
 export interface PushResult {
   palettes?: { palette: string; file: string; id: number }[];
   done: boolean;
