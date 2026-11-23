@@ -122,6 +122,31 @@ def test_showing_a_captured_look_restores_its_segment_layout(client, dev_id, dev
     assert [(s["id"], s["start"], s["stop"]) for s in device.state["seg"]] == [(0, 0, 60)]  # segment 1 deleted
 
 
+def test_looks_on_a_wall_follow_the_room_model(client, dev_id, device):
+    room = {"edges": [{"direction": "right", "pixels": 20, "label": "A"}, {"direction": "down", "pixels": 40, "label": "L2"}]}
+    assert client.put(f"/api/devices/{dev_id}/room", json=room, headers=CSRF).status_code == 200
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "start": 0, "stop": 20},
+                                                               {"id": 1, "start": 20, "stop": 60, "fx": 4}]}, headers=CSRF)
+    look = client.post(f"/api/devices/{dev_id}/capture/Walls?preset_id=5", headers=CSRF).json()
+    assert [s.get("wall") for s in look["segments"]] == ["A", "L2"]
+
+    # the boundary is measured one LED further on: the look follows when shown and written
+    room["edges"][0]["pixels"], room["edges"][1]["pixels"] = 21, 39
+    client.put(f"/api/devices/{dev_id}/room", json=room, headers=CSRF)
+    r = client.post(f"/api/devices/{dev_id}/apply/Walls", headers=CSRF).json()
+    assert "segment 1 follows wall 'L2' to LEDs 21-59" in r["notes"]
+    assert [(s["start"], s["stop"]) for s in device.state["seg"]] == [(0, 21), (21, 60)]
+    dry = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    row = next(x for x in dry["report"] if x.get("look") == "Walls")
+    assert row["written"] and any("follows wall 'A'" in n for n in row["notes"])
+
+    # importing names the walls too
+    device.presets = {"0": {}, "9": {"n": "On L2", "seg": [{"id": 0, "start": 21, "stop": 60, "fx": 8}]}}
+    client.post(f"/api/devices/{dev_id}/import", headers=CSRF)
+    on_l2 = next(lk for lk in client.get("/api/looks").json() if lk["name"] == "On L2")
+    assert on_l2["segments"][0]["wall"] == "L2"
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

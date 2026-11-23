@@ -72,6 +72,8 @@ export interface LookSegment {
   stop: number;
   effect?: string;
   palette?: string;
+  /** The room model's wall this segment covers: its LEDs follow the wall if the model changes. */
+  wall?: string;
   [k: string]: unknown;
 }
 

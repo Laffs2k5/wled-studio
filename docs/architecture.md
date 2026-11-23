@@ -23,6 +23,11 @@ flowchart LR
   with `{"stop":0}` up to the device's limit (`info.leds.maxseg`), and so does the app. Captured
   looks own the layout. Imported ones keep what the device's preset did, so an import followed by a
   write leaves unchanged presets unchanged.
+- **Segments can be named by wall.** When a look is captured or imported, a segment that covers
+  exactly one labelled wall of the device's room model gets that wall's name (`wall`). Showing or
+  writing the look takes the wall's LEDs from the room model at that time, so correcting a boundary
+  in the room model moves every look on that wall, with a note in the write plan. A look on a wall
+  the model no longer has is unavailable. Without a room model the saved LEDs are used.
 - **Writing** replaces `presets.json` as a whole (`push.py`):
   1. back up the current file;
   2. check for drift since the last write;

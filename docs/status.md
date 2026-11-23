@@ -34,9 +34,17 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 ## Next (in order)
 
 1. ~~Token login in the UI~~ (done 2026-11-23).
-2. **Look editing in the library** beyond capture-and-show: per-segment fields, layers and blend
-   modes. (Done 2026-11-23: the **mic per look**, by the rule: a look made for sound switches the mic
-   on, any other look switches it off.)
+2. ~~Look editing: segments, layers and blend modes~~ (done 2026-11-23):
+   - the **mic per look**, by the rule: a look made for sound switches the mic on, any other look
+     switches it off;
+   - **the segment layout, live**: add and remove segments; bounds by LED or by wall; on, reverse,
+     mirror, grouping, spacing, offset; opacity and WLED 16's 17 blend modes;
+   - **looks own their layout** as WLED's presets do: showing one deletes the segments it doesn't
+     use;
+   - **segments named by wall** follow the room model when its boundaries are corrected.
+
+   Still open: editing a saved look without showing it on a device (today: show, edit live, save
+   again).
 3. ~~Playlists~~ (done 2026-11-23: looks by name, durations, shuffle, an end look; imported from and
    written to the device, unchanged playlists not rewritten).
 4. ~~Custom palettes~~ (done 2026-11-23: a gradient editor; kept by name; uploaded as WLED's

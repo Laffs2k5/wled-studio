@@ -60,6 +60,11 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
           <li key={l.name}>
             <span className="name">{l.name}</span>
             <span className="muted small">{l.preset_id ? `slot ${l.preset_id}` : "no slot"}</span>
+            {l.segments.some((s) => s.wall) && (
+              <span className="muted small" title="Follows these walls of the room model">
+                {[...new Set(l.segments.map((s) => s.wall).filter(Boolean))].join(" · ")}
+              </span>
+            )}
             {l.mic !== undefined && <span className="badge" title={l.mic ? "Mic on" : "Mic off"}>{l.mic ? "♪" : "–"}</span>}
             <button disabled={busy} onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” (${r.status})`).then(onApplied)}>
               Show

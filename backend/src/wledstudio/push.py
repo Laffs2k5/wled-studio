@@ -93,7 +93,8 @@ def diff_ids(before: dict, after: dict) -> list[str]:
 
 async def push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, *,
                dry_run: bool = False, adopt_drift: bool = False, accept_review: bool = False,
-               playlists: list[dict] | None = None, palettes: list[dict] | None = None) -> PushResult:
+               playlists: list[dict] | None = None, palettes: list[dict] | None = None,
+               room: dict | None = None) -> PushResult:
     manifest, uploads = assign_palettes(palettes or [], state.palette_manifest(device_id))
     custom = {n: CUSTOM_PALETTE_BASE - m["index"] for n, m in manifest.items()}
     lists = await fetch_lists(client, custom)
@@ -102,7 +103,8 @@ async def push(client: WLEDClient, device_id: str, looks: list[dict], state: Sta
     current = json.loads(current_text or "{}")
     last = state.last_pushed(device_id)
     drift = last is not None and sha256(current_text) != last
-    planned, report = plan_presets(current, looks, lists, accept_review=accept_review, playlists=playlists)
+    planned, report = plan_presets(current, looks, lists, accept_review=accept_review, playlists=playlists,
+                                   room=room)
     changed = diff_ids(current, planned)
     if dry_run:
         return PushResult(False, drift, report, changed, reason="dry run", palettes=pal_report)

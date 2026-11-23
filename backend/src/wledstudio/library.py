@@ -224,6 +224,38 @@ def mic_for(look: dict, lists: DeviceLists) -> bool:
     return False
 
 
+# --- walls ---------------------------------------------------------------------
+
+def wall_ranges(room: dict | None) -> dict[str, tuple[int, int]]:
+    """A room model's labelled edges as LED ranges (stop exclusive); the first of a label wins."""
+    out: dict[str, tuple[int, int]] = {}
+    at = 0
+    for e in (room or {}).get("edges", []):
+        n = int(e.get("pixels", 0))
+        label = e.get("label")
+        if label and label not in out:
+            out[label] = (at, at + n)
+        at += n
+    return out
+
+
+def tag_walls(look: dict, room: dict | None) -> dict:
+    """Name the wall of each segment that covers exactly one labelled wall of the room model.
+
+    The look then follows the wall: if the room model's boundaries are corrected later
+    (measured on the strip, say), every look on that wall moves with it."""
+    by_range: dict[tuple[int, int], str] = {}
+    for label, r in wall_ranges(room).items():
+        by_range.setdefault(r, label)
+    for s in look.get("segments", []):
+        label = by_range.get((s.get("start"), s.get("stop")))
+        if label is not None:
+            s["wall"] = label
+        else:
+            s.pop("wall", None)
+    return look
+
+
 # --- change check --------------------------------------------------------------
 
 def classify(old_meta: str, new_meta: str, segment: dict) -> str:
@@ -253,16 +285,27 @@ class Resolved:
     notes: list[str] = field(default_factory=list)
 
 
-def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = None) -> Resolved:
-    """A look -> a presets.json entry for this device, with its change-check status."""
+def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = None,
+                 room: dict | None = None) -> Resolved:
+    """A look -> a presets.json entry for this device, with its change-check status.
+
+    room: the device's room model; a segment named by wall takes that wall's LEDs from it."""
     notes: list[str] = []
     statuses: list[str] = []
     segs = []
+    walls = wall_ranges(room) if room is not None else None
     for i, s in enumerate(look.get("segments", [])):
         out: dict = {"id": i}
         for k in SEG_PASSTHROUGH + SEG_SLIDERS + SEG_CHECKS:
             if k in s:
                 out[k] = s[k]
+        if s.get("wall") is not None and walls is not None:
+            r = walls.get(s["wall"])
+            if r is None:
+                return Resolved(None, "unavailable", [f"wall {s['wall']!r} isn't in this device's room model"])
+            if (out.get("start"), out.get("stop")) != r:
+                notes.append(f"segment {i} follows wall {s['wall']!r} to LEDs {r[0]}-{r[1] - 1}")
+            out["start"], out["stop"] = r
         name = s.get("effect")
         if name is not None:
             fx = lists.effect_id(name)
@@ -305,7 +348,8 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
 
 
 def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
-                 accept_review: bool = False, playlists: list[dict] | None = None) -> tuple[dict, list[dict]]:
+                 accept_review: bool = False, playlists: list[dict] | None = None,
+                 room: dict | None = None) -> tuple[dict, list[dict]]:
     """Merge the library's looks (those with a preset_id) into the device's presets.
 
     Entries the library doesn't manage are kept as they are. Looks that resolve
@@ -320,7 +364,7 @@ def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
         if not 1 <= int(pid) <= 250:
             report.append({"look": look["name"], "status": "unavailable", "notes": ["preset id out of range"]})
             continue
-        r = resolve_look(look, lists, look.get("imported_ids"))
+        r = resolve_look(look, lists, look.get("imported_ids"), room)
         written = r.preset is not None and (r.status != "review" or accept_review)
         if written:
             out[str(pid)] = r.preset

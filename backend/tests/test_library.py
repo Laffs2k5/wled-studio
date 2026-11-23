@@ -161,3 +161,42 @@ def test_padded_presets_survive_an_import_round_trip():
     assert [lk.get("clear_other_segments") for lk in looks] == [True, None]
     out, _ = plan_presets(device, looks, lists)
     assert out == device  # unchanged: the padding is kept where it was, and not added where it wasn't
+
+
+ROOM = {"edges": [{"direction": "right", "pixels": 20, "label": "A"}, {"direction": "down", "pixels": 10},
+                  {"direction": "left", "pixels": 30, "label": "L2"}, {"direction": "up", "pixels": 5, "label": "A"}]}
+
+
+def test_wall_ranges_are_the_labelled_edges():
+    from wledstudio.library import wall_ranges
+    assert wall_ranges(ROOM) == {"A": (0, 20), "L2": (30, 60)}  # the first "A" wins
+    assert wall_ranges(None) == {}
+
+
+def test_segments_covering_one_wall_are_named_by_it():
+    from wledstudio.library import tag_walls
+    look = {"segments": [{"start": 30, "stop": 60}, {"start": 0, "stop": 25}, {"start": 0, "stop": 20, "wall": "X"}]}
+    tag_walls(look, ROOM)
+    assert [s.get("wall") for s in look["segments"]] == ["L2", None, "A"]
+
+
+def test_a_look_follows_its_wall_when_the_room_model_changes():
+    look = {"name": "L", "segments": [{"start": 30, "stop": 60, "wall": "L2", "effect": "Glow"}]}
+    assert resolve_look(look, LISTS, room=ROOM).notes == []
+    moved = {"edges": [{"direction": "right", "pixels": 21, "label": "A"}, {"direction": "down", "pixels": 10},
+                       {"direction": "left", "pixels": 29, "label": "L2"}]}
+    r = resolve_look(look, LISTS, room=moved)
+    assert (r.preset["seg"][0]["start"], r.preset["seg"][0]["stop"]) == (31, 60)
+    assert r.status == "ok" and r.notes == ["segment 0 follows wall 'L2' to LEDs 31-59"]
+
+
+def test_a_look_on_a_wall_the_room_no_longer_has_is_unavailable():
+    look = {"name": "L", "segments": [{"start": 30, "stop": 60, "wall": "TV", "effect": "Glow"}]}
+    r = resolve_look(look, LISTS, room=ROOM)
+    assert r.preset is None and r.status == "unavailable"
+
+
+def test_without_a_room_model_the_saved_leds_are_used():
+    look = {"name": "L", "segments": [{"start": 30, "stop": 60, "wall": "L2", "effect": "Glow"}]}
+    seg = resolve_look(look, LISTS).preset["seg"][0]
+    assert (seg["start"], seg["stop"]) == (30, 60) and "wall" not in seg

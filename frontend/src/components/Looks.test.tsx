@@ -23,6 +23,13 @@ test("lists looks with their slots", () => {
   expect(screen.getByText("no slot")).toBeInTheDocument();
 });
 
+test("a look on walls names them", () => {
+  const onWalls = [{ name: "Ends", segments: [{ start: 0, stop: 20, wall: "A" }, { start: 20, stop: 60, wall: "L2" },
+    { start: 60, stop: 70, wall: "A" }] }];
+  render(<Looks deviceId="desk" looks={onWalls} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
+  expect(screen.getByTitle("Follows these walls of the room model")).toHaveTextContent("A · L2");
+});
+
 test("import and capture call the API and refresh", async () => {
   const calls = stubFetch({
     "POST /api/devices/desk/import": { imported: ["A"], kept_existing: [], skipped_presets: [] },

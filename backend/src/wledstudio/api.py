@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from . import fxmeta, netcheck
 from .devices import Device, DeviceStore
 from .library import (DeviceLists, LibraryStore, LookError, check_name, import_presets, mic_for,
-                      playlist_from_preset, resolve_look, segment_from_state)
+                      playlist_from_preset, resolve_look, segment_from_state, tag_walls)
 from .push import StateStore, fetch_lists, push
 from .wled import WLEDClient, WLEDError, WLEDLocked
 
@@ -87,6 +87,7 @@ class LookSegment(BaseModel):
     stop: int = Field(ge=0, le=65535)
     effect: str | None = Field(default=None, max_length=64)
     palette: str | None = Field(default=None, max_length=64)
+    wall: str | None = Field(default=None, max_length=32)
 
 
 class LookIn(BaseModel):
@@ -167,6 +168,12 @@ def make_client(request: Request, dev: Device) -> WLEDClient:
 async def lists_for(client: WLEDClient, request: Request | None = None, device_id: str | None = None) -> DeviceLists:
     custom = request.app.state.statestore.custom_ids(device_id) if request is not None and device_id else {}
     return await fetch_lists(client, custom)
+
+
+def room_for(request: Request, device_id: str) -> dict | None:
+    """The device's room model, if one is saved."""
+    p = request.app.state.settings.data_dir / "rooms" / f"{device_id}.json"
+    return json.loads(p.read_text()) if p.exists() else None
 
 
 def device_errors(e: Exception) -> HTTPException:
@@ -281,6 +288,9 @@ async def import_from_device(device_id: str, request: Request, replace: bool = F
         except (WLEDError, json.JSONDecodeError) as e:
             raise device_errors(e) from None
     looks, skipped = import_presets(presets, lists)
+    room = room_for(request, dev.id)
+    for look in looks:
+        tag_walls(look, room)
     data = lib.load()
     name_by_id = {lk["preset_id"]: lk["name"] for lk in looks}
     imported_playlists = []
@@ -403,6 +413,7 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
             look["imported_ids"][fxname] = seg["fx"]
     if preset_id is not None:
         look["preset_id"] = preset_id
+    tag_walls(look, room_for(request, dev.id))
     # the mic rule: on for looks made for sound, off for the rest (the device's current
     # mic state isn't part of the look)
     look["mic"] = mic_for(look, lists)
@@ -418,7 +429,8 @@ async def apply_look(device_id: str, name: str, request: Request):
         raise HTTPException(404, "no such look")
     async with make_client(request, dev) as c:
         try:
-            r = resolve_look(look, await lists_for(c, request, dev.id), look.get("imported_ids"))
+            r = resolve_look(look, await lists_for(c, request, dev.id), look.get("imported_ids"),
+                             room_for(request, dev.id))
             if r.preset is None:
                 raise HTTPException(409, {"status": r.status, "notes": r.notes})
             payload = {k: v for k, v in r.preset.items() if k != "n"}
@@ -438,7 +450,7 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
         try:
             res = await push(c, dev.id, looks, request.app.state.statestore, dry_run=body.dry_run,
                              adopt_drift=body.adopt_drift, accept_review=body.accept_review, playlists=playlists,
-                             palettes=palettes)
+                             palettes=palettes, room=room_for(request, dev.id))
         except WLEDError as e:
             raise device_errors(e) from None
     return res.__dict__
@@ -447,8 +459,7 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
 @router.get("/devices/{device_id}/room")
 def get_room(device_id: str, request: Request):
     device_or_404(device_id, request)
-    p = request.app.state.settings.data_dir / "rooms" / f"{device_id}.json"
-    return json.loads(p.read_text()) if p.exists() else None
+    return room_for(request, device_id)
 
 
 @router.put("/devices/{device_id}/room")
