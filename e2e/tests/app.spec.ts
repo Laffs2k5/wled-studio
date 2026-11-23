@@ -48,6 +48,18 @@ test("look studio: add the device, live control, save a look and write it", asyn
   const presets = await (await request.get(`/api/devices/${id}/presets`)).json();
   expect(presets["7"].n).toBe("E2E look");
 
+  // pick a sound-reactive effect and save straight away: the look must get that effect
+  // (and the mic rule: on), not the one before (the live change is held back briefly)
+  await page.getByRole("option", { name: /Spectrum Bars/ }).click();
+  await page.getByLabel("Look name").fill("E2E loud");
+  await page.getByLabel("Preset slot").fill("8");
+  await page.getByRole("button", { name: "Save current" }).click();
+  await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E loud")).toBeVisible();
+  const looks = await (await request.get("/api/looks")).json();
+  const loud = looks.find((l: { name: string }) => l.name === "E2E loud");
+  expect(loud.segments[0].effect).toBe("Spectrum Bars");
+  expect(loud.mic).toBe(true);
+
   expect(problems).toEqual([]);
 });
 

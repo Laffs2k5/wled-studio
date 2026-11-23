@@ -43,13 +43,33 @@ export function DevicePanel({ deviceId, notify }: Props) {
 
   const segment = state?.seg.find((s) => s.id === segId) ?? state?.seg[0];
 
+  const pendingSeg = useRef<number>(0);
+
+  // send any held-back live change now (before saving or showing a look reads the device)
+  async function flush() {
+    if (!timer.current) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+    const p = pending.current;
+    pending.current = {};
+    if (Object.keys(p).length) {
+      try {
+        await api.setState(deviceId, { seg: [{ id: pendingSeg.current, ...p }] });
+      } catch (e) {
+        notify((e as Error).message, true);
+      }
+    }
+  }
+
   // live editing: show the change at once, send it to the device shortly after (coalesced)
   function change(patch: Partial<Segment>) {
     if (!state || !segment) return;
     setState({ ...state, seg: state.seg.map((s) => (s.id === segment.id ? { ...s, ...patch } : s)) });
     pending.current = { ...pending.current, ...patch };
+    pendingSeg.current = segment.id;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      timer.current = null;
       const p = pending.current;
       pending.current = {};
       api.setState(deviceId, { seg: [{ id: segment.id, ...p }] }).catch((e) => {
@@ -116,7 +136,8 @@ export function DevicePanel({ deviceId, notify }: Props) {
         <RoomEditor deviceId={deviceId} ledCount={profile.leds.count} onSaved={setRoom} notify={notify} />
       </main>
       <aside>
-        <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify} />
+        <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
+          beforeAction={flush} />
         <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} />
         <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
       </aside>

@@ -37,6 +37,7 @@ test("shows the device's effect with its own controls, and sends live changes", 
     "GET /api/palettes": () => [],
     "GET /api/devices/desk/room": () => null,
     "POST /api/devices/desk/state": () => state,
+    "POST /api/devices/desk/capture/Quick?preset_id=5": () => ({ name: "Quick", segments: [] }),
   });
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();
@@ -74,4 +75,28 @@ test("asks for the token when the backend wants one, then sends it", async () =>
   expect(await screen.findByText("Add a WLED device to start.")).toBeInTheDocument();
   expect(authorised).toBe(true);
   expect(sessionStorage.getItem("wledstudio.token")).toBe("tok-123");
+});
+
+test("a live change still held back is sent before a look is saved", async () => {
+  const calls = backend({
+    "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
+    "GET /api/devices/desk/profile": () => profile,
+    "GET /api/devices/desk/state": () => state,
+    "GET /api/looks": () => [],
+    "GET /api/playlists": () => [],
+    "GET /api/palettes": () => [],
+    "GET /api/devices/desk/room": () => null,
+    "POST /api/devices/desk/state": () => state,
+    "POST /api/devices/desk/capture/Quick?preset_id=5": () => ({ name: "Quick", segments: [] }),
+  });
+  render(<App />);
+  fireEvent.change(await screen.findByLabelText("Tail"), { target: { value: "77" } });
+  fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Quick" } });
+  fireEvent.change(screen.getByLabelText("Preset slot"), { target: { value: "5" } });
+  fireEvent.click(screen.getByText("Save current"));   // at once, inside the 120 ms hold-back
+  await waitFor(() => expect(calls.some((c) => c.url.includes("/capture/"))).toBe(true));
+  const order = calls.filter((c) => c.init?.method === "POST").map((c) => c.url);
+  expect(order[0]).toBe("/api/devices/desk/state");
+  expect(order[1]).toBe("/api/devices/desk/capture/Quick?preset_id=5");
+  expect(JSON.parse(String(calls.find((c) => c.init?.method === "POST")!.init!.body))).toEqual({ seg: [{ id: 0, ix: 77 }] });
 });

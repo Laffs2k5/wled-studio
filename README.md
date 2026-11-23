@@ -7,6 +7,12 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
 
 **Status: early work in progress.** See [docs/status.md](docs/status.md).
 
+![The look studio: effects with their own controls, the look library, the write plan](docs/screenshots/look-studio.png)
+
+![The Effect studio: an effect usermod compiled to WebAssembly, running in the browser](docs/screenshots/effect-studio.png)
+
+*Screenshots against the built-in fake device (`docker compose --profile demo up`).*
+
 ## What works so far
 
 - Add devices; read what each offers: effects with **their own controls** (from WLED's effect

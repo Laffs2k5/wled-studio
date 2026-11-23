@@ -9,9 +9,11 @@ interface Props {
   onChanged: () => void;
   onApplied: () => void;
   notify: (msg: string, error?: boolean) => void;
+  /** Called (and awaited) before anything that reads or changes the device: flushes held-back live edits. */
+  beforeAction?: () => Promise<void>;
 }
 
-export function Looks({ deviceId, looks, onChanged, onApplied, notify }: Props) {
+export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction }: Props) {
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
   const [plan, setPlan] = useState<PushResult | null>(null);
@@ -22,6 +24,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify }: Props) 
   async function run<T>(f: () => Promise<T>, ok?: (v: T) => string) {
     setBusy(true);
     try {
+      await beforeAction?.();
       const v = await f();
       if (ok) notify(ok(v));
       return v;
