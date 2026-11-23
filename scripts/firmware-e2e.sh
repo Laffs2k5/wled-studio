@@ -63,17 +63,20 @@ curl -fsS "$B/api/firmware/jobs/$gid" | python3 -c 'import json,sys; r=json.load
 
 echo "== preflight: a look on the demo device, checked against the gate's image"
 did=$(curl -fsS "${W[@]}" -d "{\"name\":\"e2e\",\"host\":\"${DEMO_DEVICE:-demo-device:8081}\"}" "$B/api/devices" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -fsS "${W[@]}" -d '{"seg":[{"id":0,"fx":0}]}' "$B/api/devices/$did/state" > /dev/null
+curl -fsS "${W[@]}" -X POST "$B/api/devices/$did/capture/E2E%20solid" > /dev/null
 curl -fsS "${W[@]}" -d '{"seg":[{"id":0,"fx":8}]}' "$B/api/devices/$did/state" > /dev/null
-curl -fsS "${W[@]}" -X POST "$B/api/devices/$did/capture/E2E%20preflight" > /dev/null
-# The look stores the demo device's "Comet" by name; the image has WLED's real Comet, whose
-# metadata differs from the demo device's made-up one, so the look is found but flagged.
+curl -fsS "${W[@]}" -X POST "$B/api/devices/$did/capture/E2E%20comet" > /dev/null
+# The demo device makes up its effects: its "Solid" is WLED's too, its "Comet" isn't (WLED's
+# comet is called Lighthouse). So against the real image one look is ok, the other unavailable.
 curl -fsS "$B/api/firmware/jobs/$gid/preflight?device=$did" | python3 -c '
 import json, sys
 r = json.load(sys.stdin)
+rows = {x.get("look"): x for x in r["rows"]}
 print(json.dumps({"effects": r["effects"], "counts": r["counts"]}))
-row = next(x for x in r["rows"] if x.get("look") == "E2E preflight")
-print("preflight:", row["status"], row["notes"])
+print("solid:", rows["E2E solid"]["status"], "| comet:", rows["E2E comet"]["status"], rows["E2E comet"]["notes"])
 assert r["effects"] > 200, r["effects"]
-assert row["status"] in ("check", "review"), row
+assert rows["E2E solid"]["status"] == "ok", rows["E2E solid"]
+assert rows["E2E comet"]["status"] == "unavailable" and rows["E2E comet"]["changes"], rows["E2E comet"]
 '
 echo "firmware end-to-end passed"
