@@ -26,7 +26,10 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
 
 - Backend: `cd backend && python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/pytest --cov`.
 - Frontend: `cd frontend && npm ci --ignore-scripts && npm test && npm run build`.
-- End to end: `docker compose --profile demo up -d --build && scripts/smoke.sh`.
+- End to end: `docker compose --profile demo up -d --build && scripts/smoke.sh`, then the browser
+  tests: `cd e2e && npm ci && npx playwright install chromium && npx playwright test`
+  (`WLEDSTUDIO_URL`, `DEVICE_HOST` point them elsewhere). They catch what component tests can't:
+  the CSP, WebAssembly loading, real requests.
 - CI keeps coverage at 85 % or more on both sides.
 
 ## Gotchas
@@ -34,6 +37,8 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
 - WLED ignores a settings-PIN check within 3 s of the previous one, **across all clients**, so
   the cooldown is tracked per device (`wled._last_pin_check`), not per client.
 - WLED has one JSON buffer; a busy device answers `{"error": 3}`. The client retries.
+- `<output>` elements have the ARIA role `status`; in Playwright, target the toast as `.toast`, not
+  `getByRole("status")`.
 - The SPA route answers GET only: `curl -I` (HEAD) gets 405. Use `curl -D - -o /dev/null`.
 - Under the strict CSP, React's `style={{…}}` works (set through the CSSOM), but inline
   `<style>` and `style="…"` in HTML don't.
