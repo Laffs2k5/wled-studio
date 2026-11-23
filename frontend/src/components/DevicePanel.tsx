@@ -4,7 +4,9 @@ import { api } from "../api";
 import type { DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
+import type { Room } from "../room";
 import { LiveStrip } from "./LiveStrip";
+import { RoomEditor } from "./RoomEditor";
 import { Looks } from "./Looks";
 import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
@@ -23,6 +25,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [palettes, setPalettes] = useState<Palette[]>([]);
   const [segId, setSegId] = useState(0);
+  const [room, setRoom] = useState<Room | null>(null);
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -74,7 +77,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
           onSelect={(fx) => change({ fx })} />
       </aside>
       <main>
-        <LiveStrip deviceId={deviceId} />
+        <LiveStrip deviceId={deviceId} room={room} />
         <div className="master row">
           <label><input type="checkbox" checked={state.on} onChange={(e) => master({ on: e.target.checked })} /> On</label>
           <label className="slider grow">
@@ -110,6 +113,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
         <p className="muted small">
           {String(profile.info.product ?? "")} · WLED {String(profile.info.ver ?? "")} · {profile.leds.count} LEDs
         </p>
+        <RoomEditor deviceId={deviceId} ledCount={profile.leds.count} onSaved={setRoom} notify={notify} />
       </main>
       <aside>
         <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify} />

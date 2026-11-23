@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -116,6 +116,24 @@ class PlaylistIn(Strict):
 class PaletteIn(Strict):
     name: str
     stops: list[list[int | str]] = Field(min_length=2, max_length=18)
+
+
+class RoomEdge(Strict):
+    direction: Literal["up", "right", "down", "left"]
+    pixels: int = Field(ge=1, le=4096)
+    label: str | None = Field(default=None, max_length=32)
+
+
+class RoomIn(Strict):
+    """The strip's shape: edges in LED index order, from the first LED."""
+    edges: list[RoomEdge] = Field(min_length=1, max_length=64)
+
+    @field_validator("edges")
+    @classmethod
+    def total(cls, v):
+        if sum(e.pixels for e in v) > 4096:
+            raise ValueError("at most 4096 LEDs in a room model")
+        return v
 
 
 class PushIn(Strict):
@@ -420,6 +438,29 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
         except WLEDError as e:
             raise device_errors(e) from None
     return res.__dict__
+
+
+@router.get("/devices/{device_id}/room")
+def get_room(device_id: str, request: Request):
+    device_or_404(device_id, request)
+    p = request.app.state.settings.data_dir / "rooms" / f"{device_id}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+@router.put("/devices/{device_id}/room")
+def put_room(device_id: str, body: RoomIn, request: Request):
+    device_or_404(device_id, request)
+    d = request.app.state.settings.data_dir / "rooms"
+    d.mkdir(parents=True, exist_ok=True)
+    room = body.model_dump(exclude_none=True)
+    (d / f"{device_id}.json").write_text(json.dumps(room, indent=1) + "\n")
+    return room
+
+
+@router.delete("/devices/{device_id}/room", status_code=204)
+def delete_room(device_id: str, request: Request):
+    device_or_404(device_id, request)
+    (request.app.state.settings.data_dir / "rooms" / f"{device_id}.json").unlink(missing_ok=True)
 
 
 @router.get("/devices/{device_id}/backups")

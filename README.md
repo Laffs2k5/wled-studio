@@ -12,7 +12,7 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
 - Add devices; read what each offers: effects with **their own controls** (from WLED's effect
   metadata), palettes, LED count.
 - Live control with a validated subset of WLED's state API, and a **live view** of what the strip
-  shows.
+  shows, drawn in the **room's shape** once you describe it (walls in LED order).
 - Import presets into a **library keyed by name**, capture the live state as a look, apply a look
   live. **Playlists** of looks and **custom palettes** (a gradient editor) live in the library too.
 - **Push** looks back as one `presets.json`:

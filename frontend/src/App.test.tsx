@@ -35,6 +35,7 @@ test("shows the device's effect with its own controls, and sends live changes", 
     "GET /api/looks": () => [{ name: "Evening", preset_id: 3, segments: [] }],
     "GET /api/playlists": () => [],
     "GET /api/palettes": () => [],
+    "GET /api/devices/desk/room": () => null,
     "POST /api/devices/desk/state": () => state,
   });
   render(<App />);

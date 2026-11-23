@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useEffect, useRef, useState } from "react";
 import { token } from "../api";
+import { drawPixels, type Room } from "../room";
 
 /** Parse WLED's live-view frame: 'L', version 1, then R, G, B per LED. */
 export function parseLiveFrame(buf: ArrayBuffer): Uint8Array | null {
@@ -10,7 +11,7 @@ export function parseLiveFrame(buf: ArrayBuffer): Uint8Array | null {
 }
 
 /** What the strip shows right now (the device's live view, relayed by the backend). */
-export function LiveStrip({ deviceId }: { deviceId: string }) {
+export function LiveStrip({ deviceId, room = null }: { deviceId: string; room?: Room | null }) {
   const [on, setOn] = useState(false);
   const [status, setStatus] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -29,23 +30,17 @@ export function LiveStrip({ deviceId }: { deviceId: string }) {
       const c = canvas.current;
       const ctx = c?.getContext("2d");
       if (!rgb || !c || !ctx) return;
-      const n = rgb.length / 3, w = c.width / n;
-      ctx.fillStyle = "#0b0d10";
-      ctx.fillRect(0, 0, c.width, c.height);
-      for (let i = 0; i < n; i++) {
-        ctx.fillStyle = `rgb(${rgb[i * 3]},${rgb[i * 3 + 1]},${rgb[i * 3 + 2]})`;
-        ctx.fillRect(i * w, 4, Math.max(1, w - 1), c.height - 8);
-      }
+      drawPixels(ctx, c.width, c.height, rgb, room);
     };
     return () => ws.close();
-  }, [on, deviceId]);
+  }, [on, deviceId, room]);
 
   return (
     <div className="live-strip">
       <label className="small" title="Uses the device's single live-view slot (WLED's own Peek stops meanwhile)">
         <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Live view of the strip
       </label>
-      {on && <canvas ref={canvas} width={960} height={20} className="strip" aria-label="Live view" />}
+      {on && <canvas ref={canvas} width={960} height={room ? 360 : 20} className={room ? "room" : "strip"} aria-label="Live view" />}
       {on && status && <span className="muted small"> {status}</span>}
     </div>
   );

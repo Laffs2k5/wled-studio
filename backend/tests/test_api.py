@@ -241,3 +241,18 @@ def test_custom_palettes(client, dev_id, device):
     assert device.palette_files[0]["palette"][1] == "eeeeff"
     assert client.delete("/api/palettes/Ice", headers=CSRF).status_code == 204
     assert client.delete("/api/palettes/Ice", headers=CSRF).status_code == 404
+
+
+def test_room_model(client, dev_id):
+    assert client.get(f"/api/devices/{dev_id}/room").json() is None
+    room = {"edges": [{"direction": "right", "pixels": 40, "label": "A"}, {"direction": "down", "pixels": 84},
+                      {"direction": "left", "pixels": 41}, {"direction": "up", "pixels": 85}]}
+    assert client.put(f"/api/devices/{dev_id}/room", json=room, headers=CSRF).status_code == 200
+    assert client.get(f"/api/devices/{dev_id}/room").json() == room
+    for bad in ({"edges": []}, {"edges": [{"direction": "north", "pixels": 3}]},
+                {"edges": [{"direction": "up", "pixels": 0}]}, {"edges": [{"direction": "up", "pixels": 4000}] * 2},
+                {"edges": [{"direction": "up", "pixels": 3, "x": 1}]}):
+        assert client.put(f"/api/devices/{dev_id}/room", json=bad, headers=CSRF).status_code == 422
+    assert client.delete(f"/api/devices/{dev_id}/room", headers=CSRF).status_code == 204
+    assert client.get(f"/api/devices/{dev_id}/room").json() is None
+    assert client.get("/api/devices/nope/room").status_code == 404
