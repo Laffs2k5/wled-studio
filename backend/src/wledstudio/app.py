@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__, netcheck
 from .api import router
 from .effects import router as effects_router
+from .stream import router as stream_router
 from .firmware import router as firmware_router
 from .config import Settings
 from .devices import DeviceStore
@@ -20,8 +21,15 @@ from .push import StateStore
 from .security import SecurityMiddleware
 
 
+def default_ddp_target(dev) -> tuple[str, int]:
+    """DDP goes to the device's host (without the HTTP port), UDP port 4048."""
+    from .ddp import DDP_PORT
+    host, _ = netcheck.split_host(dev.host)
+    return host, DDP_PORT
+
+
 def create_app(settings: Settings | None = None, transport_for=None, resolver=netcheck.resolve,
-               builder_transport=None) -> FastAPI:
+               builder_transport=None, ddp_target_for=default_ddp_target) -> FastAPI:
     """transport_for(device) -> an httpx transport, or None for real HTTP (tests inject fakes)."""
     s = settings or Settings()
     s.data_dir.mkdir(parents=True, exist_ok=True)
@@ -34,10 +42,12 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.state.transport_for = transport_for or (lambda dev: None)
     app.state.resolver = resolver
     app.state.builder_transport = builder_transport
+    app.state.ddp_target_for = ddp_target_for
     app.add_middleware(SecurityMiddleware, settings=s)
     app.include_router(router)
     app.include_router(firmware_router)
     app.include_router(effects_router)
+    app.include_router(stream_router)
 
     static = s.static_dir
     if static is not None and (static / "index.html").exists():

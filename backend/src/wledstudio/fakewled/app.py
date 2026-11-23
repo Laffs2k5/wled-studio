@@ -88,6 +88,8 @@ class FakeDevice:
         for k in ("on", "bri", "transition"):
             if k in body:
                 self.state[k] = body[k]
+        if body.get("live") is False:
+            self.state["live"] = False
         if "bri" in body and "on" not in body:
             self.state["on"] = body["bri"] > 0
         if isinstance(body.get("AudioReactive"), dict) and "enabled" in body["AudioReactive"]:

@@ -40,6 +40,11 @@ export class Preview {
 
   select(id: number) { return this.m._preview_select(id); }
 
+  /** Change the strip length (e.g. to a device's LED count). */
+  resize(length: number) { this.m._preview_setup(length); }
+
+  length() { return this.m._preview_length(); }
+
   /** Apply a segment patch (the same shape the live controls produce). */
   set(patch: Partial<Segment>) {
     for (const [k, v] of Object.entries(patch)) {
@@ -57,4 +62,17 @@ export class Preview {
     const ptr = this.m._preview_frame(now) >>> 2;
     return this.m.HEAPU32.slice(ptr, ptr + this.m._preview_length());
   }
+}
+
+/** Pixels (0xWWRRGGBB) -> a stream message: 4 (RGBW), then R, G, B, W per pixel. */
+export function frameMessage(px: Uint32Array): Uint8Array {
+  const out = new Uint8Array(1 + px.length * 4);
+  out[0] = 4;
+  px.forEach((c, i) => {
+    out[1 + i * 4] = (c >> 16) & 255;
+    out[2 + i * 4] = (c >> 8) & 255;
+    out[3 + i * 4] = c & 255;
+    out[4 + i * 4] = (c >>> 24) & 255;
+  });
+  return out;
 }

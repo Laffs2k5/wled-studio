@@ -13,7 +13,7 @@ function fakeModule() {
   const heap = new Uint32Array(64);
   const m = {
     sets,
-    _preview_setup: () => {},
+    _preview_setup: (n: number) => { void n; },
     _preview_effect_count: () => names.length,
     _preview_effect_name: (id: number) => str(names[id] ?? ""),
     _preview_effect_metadata: (id: number) => str(metas[id] ?? ""),
@@ -30,6 +30,7 @@ function fakeModule() {
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/api/effects"
     ? new Response(JSON.stringify({ detail: "off" }), { status: 503 })
+    : url === "/api/devices" ? new Response("[]", { status: 200 })
     : new Response(JSON.stringify({ enabled: false }), { status: 200 })));
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -75,4 +76,41 @@ test("compiles your effects with the builder and previews them", async () => {
   await vi.advanceTimersByTimeAsync(2500);
   await waitFor(() => expect(loads).toContain(`/api/firmware/jobs/${JID}/preview/preview.mjs`));
   vi.useRealTimers();
+});
+
+test("frame messages are RGBW with a channel byte", async () => {
+  const { frameMessage } = await import("../preview");
+  expect(Array.from(frameMessage(new Uint32Array([0x04ff8000, 0x00000001])))).toEqual([4, 255, 128, 0, 4, 0, 0, 1, 0]);
+});
+
+test("streams to a device: sizes the preview to its LEDs and opens the stream with the token", async () => {
+  const sockets: { url: string; protocols: string[] }[] = [];
+  class FakeSocket {
+    readyState = 0; bufferedAmount = 0; binaryType = ""; onopen: (() => void) | null = null; onclose: (() => void) | null = null;
+    constructor(public url: string, public protocols: string[]) { sockets.push({ url, protocols }); setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 0); }
+    send() {}
+    close() { this.onclose?.(); }
+  }
+  vi.stubGlobal("WebSocket", FakeSocket);
+  sessionStorage.setItem("wledstudio.token", "tok");
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+    if (url === "/api/devices") return reply([{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }]);
+    if (url === "/api/devices/desk/profile") return reply({ device: { id: "desk", name: "Desk" }, leds: { count: 250 } });
+    if (url === "/api/effects") return reply({ detail: "off" }, 503);
+    return reply({ enabled: false });
+  }));
+  const m = fakeModule();
+  const setups: number[] = [];
+  m._preview_setup = (n: number) => { setups.push(n); };
+  render(<EffectStudio notify={() => {}} load={async () => new Preview(m as never)} />);
+  fireEvent.change(await screen.findByLabelText("Stream device"), { target: { value: "desk" } });
+  fireEvent.click(screen.getByText("Stream to the strip"));
+  expect(await screen.findByText("Stop streaming")).toBeInTheDocument();
+  expect(setups).toContain(250);
+  expect(sockets[0].url).toMatch(/\/api\/devices\/desk\/stream$/);
+  expect(sockets[0].protocols).toEqual(["wledstudio", "bearer.tok"]);
+  fireEvent.click(screen.getByText("Stop streaming"));
+  expect(await screen.findByText("Stream to the strip")).toBeInTheDocument();
+  sessionStorage.clear();
 });

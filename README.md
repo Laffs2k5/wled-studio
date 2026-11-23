@@ -24,7 +24,8 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
 - **Effect studio:**
   - write or edit effect usermods in the browser (new ones start from a template with a fixed
     effect id);
-  - compile them to WebAssembly and watch them on a strip, with their own controls;
+  - compile them to WebAssembly and watch them on a strip, with their own controls, and **stream
+    the preview to the real strip** (DDP) before any firmware is built;
   - then build them into firmware through the gate.
 - A fake WLED device for tests and a demo mode.
 

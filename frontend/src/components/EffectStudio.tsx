@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useEffect, useRef, useState } from "react";
-import { firmware } from "../api";
-import { Preview } from "../preview";
+import { api, firmware, token } from "../api";
+import { frameMessage, Preview } from "../preview";
+import type { Device } from "../types";
 import { CodeEditor } from "./CodeEditor";
 import type { Effect, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
@@ -33,6 +34,39 @@ export function EffectStudio({ notify, load = Preview.load }: {
   const [mine, setMine] = useState<string[] | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
   const [compiling, setCompiling] = useState<string | null>(null);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [target, setTarget] = useState("");
+  const socket = useRef<WebSocket | null>(null);
+  const [streaming, setStreaming] = useState(false);
+
+  useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
+  useEffect(() => () => socket.current?.close(), []);
+
+  async function toggleStream() {
+    if (socket.current) {
+      socket.current.close();
+      socket.current = null;
+      setStreaming(false);
+      return;
+    }
+    if (!preview || !target) return;
+    try {
+      const prof = await api.profile(target);
+      preview.resize(prof.leds.count);
+      if (effect) preview.select(effect.id);
+      if (seg) preview.set(seg);
+      const t = token.get();
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://${location.host}/api/devices/${encodeURIComponent(target)}/stream`,
+        t ? ["wledstudio", `bearer.${t}`] : ["wledstudio"]);
+      ws.binaryType = "arraybuffer";
+      ws.onclose = () => { socket.current = null; setStreaming(false); };
+      ws.onopen = () => { setStreaming(true); notify(`Streaming to ${prof.device.name}`); };
+      socket.current = ws;
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
 
   function use(p: Preview) {
     setPreview(p);
@@ -99,6 +133,8 @@ export function EffectStudio({ notify, load = Preview.load }: {
     const start = performance.now();
     const draw = () => {
       const px = preview.frame(Math.floor(performance.now() - start));
+      const ws = socket.current;
+      if (ws && ws.readyState === 1 && ws.bufferedAmount < 64 * 1024) ws.send(frameMessage(px));
       const w = canvas.current!.width / px.length;
       ctx.fillStyle = "#0b0d10";
       ctx.fillRect(0, 0, canvas.current!.width, canvas.current!.height);
@@ -131,6 +167,18 @@ export function EffectStudio({ notify, load = Preview.load }: {
       </p>
       {compileBox}
       <canvas ref={canvas} width={960} height={32} className="strip" aria-label="Preview strip" />
+      {devices.length > 0 && (
+        <div className="row">
+          <select aria-label="Stream device" value={target} disabled={streaming} onChange={(e) => setTarget(e.target.value)}>
+            <option value="">Stream to a device…</option>
+            {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <button className={streaming ? "primary" : ""} disabled={!target} onClick={toggleStream}>
+            {streaming ? "Stop streaming" : "Stream to the strip"}
+          </button>
+          <span className="muted small">The strip shows the preview live (DDP); its own effect is back a few seconds after you stop.</span>
+        </div>
+      )}
       <div className="row">
         <select aria-label="Preview effect" value={effect?.id ?? ""} onChange={(e) => {
           const next = effects.find((x) => x.id === Number(e.target.value));
