@@ -233,7 +233,7 @@ def mic_for(look: dict, lists: DeviceLists) -> bool:
     return False
 
 
-# --- walls ---------------------------------------------------------------------
+# --- walls and zones ---------------------------------------------------------------
 
 def wall_ranges(room: dict | None) -> dict[str, tuple[int, int]]:
     """A room model's labelled edges as LED ranges (stop exclusive); the first of a label wins."""
@@ -248,21 +248,34 @@ def wall_ranges(room: dict | None) -> dict[str, tuple[int, int]]:
     return out
 
 
-def tag_walls(look: dict, room: dict | None) -> dict:
-    """Name the wall of each segment that covers exactly one labelled wall of the room model.
+def zone_ranges(room: dict | None) -> dict[str, tuple[int, int]]:
+    """A room model's named zones (a door, a desk: LED ranges inside or across walls)."""
+    return {z["label"]: (int(z["start"]), int(z["stop"])) for z in (room or {}).get("zones", [])}
 
-    The look then follows the wall: if the room model's boundaries are corrected later
-    (measured on the strip, say), every look on that wall moves with it."""
-    by_range: dict[tuple[int, int], str] = {}
+
+def tag_areas(look: dict, room: dict | None) -> dict:
+    """Name the wall or zone that each segment covers exactly (a wall first, then a zone).
+
+    The look then follows it: if the room model's boundaries are corrected later (measured on
+    the strip, say), every look on that wall or zone moves with it."""
+    walls: dict[tuple[int, int], str] = {}
     for label, r in wall_ranges(room).items():
-        by_range.setdefault(r, label)
+        walls.setdefault(r, label)
+    zones: dict[tuple[int, int], str] = {}
+    for label, r in zone_ranges(room).items():
+        zones.setdefault(r, label)
     for s in look.get("segments", []):
-        label = by_range.get((s.get("start"), s.get("stop")))
-        if label is not None:
-            s["wall"] = label
-        else:
-            s.pop("wall", None)
+        s.pop("wall", None)
+        s.pop("zone", None)
+        r = (s.get("start"), s.get("stop"))
+        if r in walls:
+            s["wall"] = walls[r]
+        elif r in zones:
+            s["zone"] = zones[r]
     return look
+
+
+tag_walls = tag_areas  # the earlier name
 
 
 # --- change check --------------------------------------------------------------
@@ -356,18 +369,20 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
     notes: list[str] = []
     statuses: list[str] = []
     segs = []
-    walls = wall_ranges(room) if room is not None else None
+    areas = ({"wall": wall_ranges(room), "zone": zone_ranges(room)} if room is not None else None)
     for i, s in enumerate(look.get("segments", [])):
         out: dict = {"id": i} if "id" in s else {}  # positions: padding after them must line up
         for k in SEG_PASSTHROUGH + SEG_SLIDERS + SEG_CHECKS:
             if k in s:
                 out[k] = s[k]
-        if s.get("wall") is not None and walls is not None:
-            r = walls.get(s["wall"])
+        for kind in ("wall", "zone"):
+            if s.get(kind) is None or areas is None:
+                continue
+            r = areas[kind].get(s[kind])
             if r is None:
-                return Resolved(None, "unavailable", [f"wall {s['wall']!r} isn't in this device's room model"])
+                return Resolved(None, "unavailable", [f"{kind} {s[kind]!r} isn't in this device's room model"])
             if (out.get("start"), out.get("stop")) != r:
-                notes.append(f"segment {i} follows wall {s['wall']!r} to LEDs {r[0]}-{r[1] - 1}")
+                notes.append(f"segment {i} follows {kind} {s[kind]!r} to LEDs {r[0]}-{r[1] - 1}")
             out["start"], out["stop"] = r
         name = s.get("effect")
         if name is not None:

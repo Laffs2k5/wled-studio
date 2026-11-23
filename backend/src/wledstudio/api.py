@@ -7,15 +7,15 @@ import json
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from . import fxmeta, netcheck
 from .devices import Device, DeviceStore
 from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
                       import_presets, mic_for,
-                      playlist_from_preset, resolve_look, segment_from_state, tag_walls)
+                      playlist_from_preset, resolve_look, segment_from_state, tag_areas)
 from .push import StateStore, fetch_lists, push
-from .session import Sessions, restore_payload
+from .session import SEG_RESTORE, Sessions, restore_payload
 from .wled import WLEDClient, WLEDError, WLEDLocked
 
 router = APIRouter(prefix="/api")
@@ -58,6 +58,9 @@ class SegmentState(Strict):
     col: list[list[Byte]] | None = Field(default=None, max_length=3)
     rev: bool | None = None
     mi: bool | None = None
+    n: str | None = Field(default=None, max_length=32, pattern=r"^[^\x00-\x1f]*$")
+    frz: bool | None = None
+    si: int | None = Field(default=None, ge=0, le=3)
     grp: int | None = Field(default=None, ge=1, le=255)
     spc: int | None = Field(default=None, ge=0, le=255)
     of: int | None = Field(default=None, ge=0, le=65535)
@@ -90,6 +93,7 @@ class LookSegment(BaseModel):
     effect: str | None = Field(default=None, max_length=64)
     palette: str | None = Field(default=None, max_length=64)
     wall: str | None = Field(default=None, max_length=32)
+    zone: str | None = Field(default=None, max_length=32)
 
 
 class LookIn(BaseModel):
@@ -130,9 +134,17 @@ class RoomEdge(Strict):
     label: str | None = Field(default=None, max_length=32)
 
 
+class RoomZone(Strict):
+    """A named LED range (stop exclusive): a door, a desk; looks follow it like a wall."""
+    label: str = Field(min_length=1, max_length=32)
+    start: int = Field(ge=0, le=4095)
+    stop: int = Field(ge=1, le=4096)
+
+
 class RoomIn(Strict):
-    """The strip's shape: edges in LED index order, from the first LED."""
+    """The strip's shape: edges in LED index order, from the first LED; and named zones."""
     edges: list[RoomEdge] = Field(min_length=1, max_length=64)
+    zones: list[RoomZone] = Field(default_factory=list, max_length=64)
 
     @field_validator("edges")
     @classmethod
@@ -140,6 +152,19 @@ class RoomIn(Strict):
         if sum(e.pixels for e in v) > 4096:
             raise ValueError("at most 4096 LEDs in a room model")
         return v
+
+    @model_validator(mode="after")
+    def zones_fit(self):
+        total = sum(e.pixels for e in self.edges)
+        walls = {e.label for e in self.edges if e.label}
+        seen: set[str] = set()
+        for z in self.zones:
+            if not z.start < z.stop <= total:
+                raise ValueError(f"zone {z.label!r}: start < stop <= {total} (the room's LEDs)")
+            if z.label in walls or z.label in seen:
+                raise ValueError(f"zone {z.label!r}: names must differ from each other and from the walls")
+            seen.add(z.label)
+        return self
 
 
 class PushIn(Strict):
@@ -269,6 +294,61 @@ async def set_state(device_id: str, body: LiveState, request: Request):
             raise device_errors(e) from None
 
 
+# where a segment sits; left out of a look that leaves the layout alone
+LAYOUT_KEYS = ("start", "stop", "startY", "stopY", "grp", "spc", "of")
+
+
+async def _segments(c: WLEDClient) -> list[dict]:
+    st = await c.state()
+    return sorted((s for s in st.get("seg", []) if isinstance(s, dict)), key=lambda s: s["id"])
+
+
+def _settings(seg: dict) -> dict:
+    """A segment's settings, without its id: what moving or duplicating it carries over."""
+    return {k: seg[k] for k in SEG_RESTORE if k in seg and k != "id"}
+
+
+@router.post("/devices/{device_id}/segments/{seg_id}/move")
+async def move_segment(device_id: str, seg_id: int, request: Request, direction: Literal["up", "down"] = "up"):
+    """Move a segment one place up (drawn later, over more) or down the stack. WLED draws
+    segments in id order, so this swaps the two segments' settings; returns the new id."""
+    dev = device_or_404(device_id, request)
+    async with make_client(request, dev) as c:
+        try:
+            segs = await _segments(c)
+            ids = [s["id"] for s in segs]
+            if seg_id not in ids:
+                raise HTTPException(404, "no such segment")
+            k = ids.index(seg_id) + (1 if direction == "up" else -1)
+            if not 0 <= k < len(segs):
+                raise HTTPException(409, f"already at the {'top' if direction == 'up' else 'bottom'}")
+            a, b = segs[ids.index(seg_id)], segs[k]
+            await c.set_state({"seg": [{"id": a["id"], **_settings(b)}, {"id": b["id"], **_settings(a)}]})
+        except WLEDError as e:
+            raise device_errors(e) from None
+    return {"id": b["id"]}
+
+
+@router.post("/devices/{device_id}/segments/{seg_id}/duplicate")
+async def duplicate_segment(device_id: str, seg_id: int, request: Request):
+    """A copy of a segment, on top of the stack; returns its id."""
+    dev = device_or_404(device_id, request)
+    async with make_client(request, dev) as c:
+        try:
+            info = await c.info()
+            segs = await _segments(c)
+            src = next((s for s in segs if s["id"] == seg_id), None)
+            if src is None:
+                raise HTTPException(404, "no such segment")
+            new_id = segs[-1]["id"] + 1  # above every visible segment (WLED appends or reuses that slot)
+            if new_id >= int((info.get("leds") or {}).get("maxseg") or 32):
+                raise HTTPException(409, "the device has no room for another segment")
+            await c.set_state({"seg": [{"id": new_id, **_settings(src)}]})
+        except WLEDError as e:
+            raise device_errors(e) from None
+    return {"id": new_id}
+
+
 def session_info(s) -> dict:
     return {"active": s is not None, "started": s.started if s is not None else None}
 
@@ -335,7 +415,7 @@ async def import_from_device(device_id: str, request: Request, replace: bool = F
     looks, skipped = import_presets(presets, lists)
     room = room_for(request, dev.id)
     for look in looks:
-        tag_walls(look, room)
+        tag_areas(look, room)
     data = lib.load()
     name_by_id = {lk["preset_id"]: lk["name"] for lk in looks}
     imported_playlists = []
@@ -429,8 +509,13 @@ def delete_palette(name: str, request: Request):
 
 
 @router.post("/devices/{device_id}/capture/{name}")
-async def capture(device_id: str, name: str, request: Request, preset_id: int | None = None):
-    """Save what the device shows now as a look."""
+async def capture(device_id: str, name: str, request: Request, preset_id: int | None = None,
+                  layout: bool = True):
+    """Save what the device shows now as a look.
+
+    layout=True (the default): the look owns the layout; showing it deletes other segments.
+    layout=False: only effects, colours and settings are kept, without bounds, so the look
+    applies to whatever segments the device has then (as WLED presets saved without bounds)."""
     dev = device_or_404(device_id, request)
     try:
         name = check_name(name)
@@ -445,20 +530,23 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
         except WLEDError as e:
             raise device_errors(e) from None
     # what the device shows is its whole layout, so the look deletes other segments when shown
-    look: dict = {"name": name, "segments": [], "snapshot": {}, "imported_ids": {}, "clear_other_segments": True}
+    look: dict = {"name": name, "segments": [], "snapshot": {}, "imported_ids": {}, "clear_other_segments": layout}
     for k in ("on", "bri", "transition", "bs", "mainseg"):  # as WLED's own preset save
         if k in st:
             look[k] = st[k]
     for seg in st.get("seg", []):
         s, fxname = segment_from_state(seg, lists)
-        s.pop("n", None)
+        if not layout:
+            for k in LAYOUT_KEYS:
+                s.pop(k, None)
         look["segments"].append(s)
         if fxname is not None:
             look["snapshot"][fxname] = lists.meta(seg["fx"])
             look["imported_ids"][fxname] = seg["fx"]
     if preset_id is not None:
         look["preset_id"] = preset_id
-    tag_walls(look, room_for(request, dev.id))
+    if layout:
+        tag_areas(look, room_for(request, dev.id))
     # the mic rule: on for looks made for sound, off for the rest (the device's current
     # mic state isn't part of the look)
     look["mic"] = mic_for(look, lists)
@@ -550,6 +638,8 @@ def put_room(device_id: str, body: RoomIn, request: Request):
     d = request.app.state.settings.data_dir / "rooms"
     d.mkdir(parents=True, exist_ok=True)
     room = body.model_dump(exclude_none=True)
+    if not room.get("zones"):
+        room.pop("zones", None)  # stored as before when there are none
     (d / f"{device_id}.json").write_text(json.dumps(room, indent=1) + "\n")
     return room
 

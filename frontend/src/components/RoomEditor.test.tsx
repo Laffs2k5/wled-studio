@@ -34,3 +34,26 @@ test("loads an existing shape", async () => {
   await waitFor(() => expect(onSaved).toHaveBeenCalledWith({ edges: [{ direction: "left", pixels: 5 }] }));
   expect(screen.getByText("Room shape (1 walls)")).toBeInTheDocument();
 });
+
+test("zones are edited and saved with the shape", async () => {
+  const calls: { key: string; body?: string }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ key: `${init?.method ?? "GET"} ${url}`, body: init?.body as string });
+    if ((init?.method ?? "GET") === "GET") {
+      return new Response(JSON.stringify({ edges: [{ direction: "right", pixels: 20, label: "A" }],
+        zones: [{ label: "Door", start: 2, stop: 6 }] }), { status: 200 });
+    }
+    return new Response(init?.body as string, { status: 200 });
+  }));
+  render(<RoomEditor deviceId="desk" ledCount={20} onSaved={() => {}} notify={() => {}} />);
+  fireEvent.click(screen.getByText(/Room shape/));
+  expect(await screen.findByDisplayValue("Door")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Zone 1 stop"), { target: { value: "7" } });
+  fireEvent.click(screen.getByText("Add zone"));
+  fireEvent.change(screen.getByLabelText("Zone 2 name"), { target: { value: "Desk" } });
+  fireEvent.click(screen.getByLabelText("Remove zone 2"));
+  fireEvent.click(screen.getByText("Save shape"));
+  await waitFor(() => expect(calls.some((c) => c.key === "PUT /api/devices/desk/room")).toBe(true));
+  const put = calls.find((c) => c.key === "PUT /api/devices/desk/room")!;
+  expect(JSON.parse(put.body!).zones).toEqual([{ label: "Door", start: 2, stop: 7 }]);
+});

@@ -269,3 +269,24 @@ def test_only_preset_fields_reach_a_preset():
             "segments": [{"start": 0, "stop": 60, "effect": "Glow", "rb": True, "pin": "1", "cct": 10}]}
     p = resolve_look(look, LISTS).preset
     assert p == {"n": "L", "bs": 2, "seg": [{"start": 0, "stop": 60, "fx": 1, "cct": 10}]}
+
+
+ZONED = {"edges": [{"direction": "right", "pixels": 40, "label": "A"}, {"direction": "down", "pixels": 60, "label": "L"}],
+         "zones": [{"label": "Door", "start": 50, "stop": 62}, {"label": "Whole A", "start": 0, "stop": 40}]}
+
+
+def test_segments_on_a_zone_are_named_by_it_walls_first():
+    from wledstudio.library import tag_areas
+    look = {"segments": [{"start": 50, "stop": 62}, {"start": 0, "stop": 40}, {"start": 1, "stop": 2, "zone": "x"}]}
+    tag_areas(look, ZONED)
+    assert [(s.get("wall"), s.get("zone")) for s in look["segments"]] == [(None, "Door"), ("A", None), (None, None)]
+
+
+def test_a_look_follows_its_zone_or_is_unavailable_without_it():
+    look = {"name": "L", "segments": [{"start": 50, "stop": 62, "zone": "Door", "effect": "Glow"}]}
+    moved = {**ZONED, "zones": [{"label": "Door", "start": 52, "stop": 63}]}
+    r = resolve_look(look, LISTS, room=moved)
+    assert (r.preset["seg"][0]["start"], r.preset["seg"][0]["stop"]) == (52, 63)
+    assert r.notes == ["segment 0 follows zone 'Door' to LEDs 52-62"]
+    gone = {**ZONED, "zones": []}
+    assert resolve_look(look, LISTS, room=gone).status == "unavailable"

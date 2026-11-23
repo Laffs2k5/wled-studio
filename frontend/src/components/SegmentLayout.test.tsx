@@ -48,20 +48,20 @@ test("an unusable number is put back, and an unchanged one isn't sent", () => {
 
 test("picking a wall sets both bounds at once; a matching segment shows its wall", () => {
   const onChange = setup();
-  expect(screen.getByLabelText("Wall")).toHaveValue("-1");
-  fireEvent.change(screen.getByLabelText("Wall"), { target: { value: "1" } });
+  expect(screen.getByLabelText("Wall or zone")).toHaveValue("-1");
+  fireEvent.change(screen.getByLabelText("Wall or zone"), { target: { value: "1" } });
   expect(onChange).toHaveBeenLastCalledWith({ start: 30, stop: 60 });
 });
 
 test("a segment on a wall says so", () => {
   setup({ start: 30, stop: 60 });
-  expect(screen.getByLabelText("Wall")).toHaveValue("1");
+  expect(screen.getByLabelText("Wall or zone")).toHaveValue("1");
   expect(screen.getByText("L2")).toBeInTheDocument();
 });
 
 test("no wall picker without a room model", () => {
   setup({}, null);
-  expect(screen.queryByLabelText("Wall")).toBeNull();
+  expect(screen.queryByLabelText("Wall or zone")).toBeNull();
 });
 
 test("flags, grouping, opacity and blend mode are segment patches", () => {
@@ -92,4 +92,34 @@ test("WLED 16's 17 blend modes, and a newer firmware's unknown mode is kept", ()
   setup({ bm: 20 });
   expect(screen.getByLabelText("Blend mode")).toHaveValue("20");
   expect(screen.getByText(/mode 20/)).toBeInTheDocument();
+});
+
+test("zones are offered after the walls", () => {
+  const onChange = vi.fn();
+  render(<SegmentLayout segment={seg} ledCount={60} onChange={onChange}
+    room={{ ...room, zones: [{ label: "Door", start: 32, stop: 40 }] }} />);
+  const pick = screen.getByLabelText("Wall or zone");
+  expect(screen.getByRole("group", { name: "Zones" })).toBeInTheDocument();
+  fireEvent.change(pick, { target: { value: "2" } });
+  expect(onChange).toHaveBeenLastCalledWith({ start: 32, stop: 40 });
+});
+
+test("name, freeze and, for sound effects, the sound simulation", () => {
+  const onChange = setup();
+  const name = screen.getByLabelText("Name");
+  fireEvent.change(name, { target: { value: "Over the door" } });
+  fireEvent.blur(name);
+  expect(onChange).toHaveBeenLastCalledWith({ n: "Over the door" });
+  fireEvent.click(screen.getByLabelText("Freeze segment"));
+  expect(onChange).toHaveBeenLastCalledWith({ frz: true });
+  expect(screen.queryByLabelText("Sound simulation")).toBeNull();
+});
+
+test("the sound simulation shows for a sound effect", () => {
+  const onChange = vi.fn();
+  render(<SegmentLayout segment={{ ...seg, si: 1 }} ledCount={60} room={null} audio onChange={onChange} />);
+  const si = screen.getByLabelText("Sound simulation");
+  expect(si).toHaveValue("1");
+  fireEvent.change(si, { target: { value: "3" } });
+  expect(onChange).toHaveBeenLastCalledWith({ si: 3 });
 });

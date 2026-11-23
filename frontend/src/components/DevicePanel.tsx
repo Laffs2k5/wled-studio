@@ -4,10 +4,11 @@ import { api } from "../api";
 import type { CheckItem, DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
-import { walls, type Room } from "../room";
+import { areas, type Room } from "../room";
 import { LiveStrip } from "./LiveStrip";
 import { RoomEditor } from "./RoomEditor";
 import { SegmentLayout } from "./SegmentLayout";
+import { SegmentMap } from "./SegmentMap";
 import { SessionBar } from "./SessionBar";
 import { Looks } from "./Looks";
 import { Palettes } from "./Palettes";
@@ -116,6 +117,18 @@ export function DevicePanel({ deviceId, notify }: Props) {
     }
   }
 
+  // a segment's place in the stack (WLED draws in id order), or a copy of it on top
+  async function restack(f: () => Promise<{ id: number }>) {
+    await flush();
+    try {
+      const r = await f();
+      setSegId(r.id);
+      await reloadState();
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
   function master(patch: { on?: boolean; bri?: number }) {
     if (!state) return;
     setState({ ...state, ...patch });
@@ -126,7 +139,9 @@ export function DevicePanel({ deviceId, notify }: Props) {
   const effect = profile.effects.find((e) => e.id === segment.fx) ?? profile.effects[0];
   const hasMatrix = Boolean(profile.leds.matrix && profile.leds.matrix.h > 1);
   const mic = profile.usermods.includes("AudioReactive");
-  const wallOf = (s: Segment) => (room ? walls(room).find((w) => w.start === s.start && w.stop === s.stop)?.label : undefined);
+  const wallOf = (s: Segment) => areas(room).find((w) => w.start === s.start && w.stop === s.stop)?.label;
+  const ids = state.seg.map((s) => s.id);
+  const place = ids.indexOf(segment.id);
 
   return (
     <div className="device-panel">
@@ -158,7 +173,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
           {state.seg.map((s) => (
             <button key={s.id} className={s.id === segment.id ? "primary" : ""} aria-pressed={s.id === segment.id}
               onClick={() => setSegId(s.id)}>
-              Segment {s.id} ({wallOf(s) ?? `${s.start}–${s.stop - 1}`})
+              Segment {s.id}{s.n ? ` · ${String(s.n)}` : ""} ({wallOf(s) ?? `${s.start}–${s.stop - 1}`})
             </button>
           ))}
           {state.seg.length < (profile.leds.maxseg || 1) && (
@@ -168,7 +183,21 @@ export function DevicePanel({ deviceId, notify }: Props) {
             <button className="danger" onClick={() => removeSegment(segment.id)}>Remove segment {segment.id}</button>
           )}
         </div>
-        <SegmentLayout segment={segment} ledCount={profile.leds.count} room={room} onChange={change} />
+        <div className="row">
+          <button disabled={place >= ids.length - 1} title="Draw it later, over the segment above"
+            onClick={() => restack(() => api.moveSegment(deviceId, segment.id, "up"))}>Raise</button>
+          <button disabled={place <= 0} title="Draw it earlier, under the segment below"
+            onClick={() => restack(() => api.moveSegment(deviceId, segment.id, "down"))}>Lower</button>
+          {state.seg.length < (profile.leds.maxseg || 1) && (
+            <button title="A copy of this segment, on top" onClick={() => restack(() => api.duplicateSegment(deviceId, segment.id))}>
+              Duplicate
+            </button>
+          )}
+        </div>
+        <SegmentMap ledCount={profile.leds.count} room={room} segments={state.seg} selected={segment.id}
+          onSelect={setSegId} onPick={(start, stop) => change({ start, stop })} />
+        <SegmentLayout segment={segment} ledCount={profile.leds.count} room={room} onChange={change}
+          audio={effect.audio.length > 0} />
         <h2>
           {effect.name}
           {effect.audio.length > 0 && <span className="badge" title="Sound-reactive">♪</span>}

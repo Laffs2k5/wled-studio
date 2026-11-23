@@ -44,3 +44,36 @@ test("draws along the room's shape", async () => {
   expect(px[3].y).toBeGreaterThan(px[2].y);      // then down the side
   expect(px[2].x).toBeCloseTo(px[3].x);
 });
+
+test("LED positions, the LED under a point, the topmost segment there, walls and zones", async () => {
+  const { areas, ledAt, ledPositions, segmentAt } = await import("./room");
+  const strip = ledPositions(4, 40, 10, null);
+  expect(strip.map((p) => p.x)).toEqual([5, 15, 25, 35]);
+  expect(ledAt(strip, 27, 3)).toBe(2);
+  expect(ledAt([], 1, 1)).toBe(-1);
+  const room = { edges: [{ direction: "right" as const, pixels: 3, label: "A" }, { direction: "down" as const, pixels: 2 }],
+    zones: [{ label: "Door", start: 3, stop: 5 }] };
+  expect(ledPositions(5, 100, 100, room)).toHaveLength(5);
+  expect(segmentAt([{ id: 0, start: 0, stop: 5 }, { id: 2, start: 1, stop: 2 }], 1)?.id).toBe(2);
+  expect(segmentAt([{ id: 0, start: 0, stop: 5 }], 9)).toBeUndefined();
+  expect(areas(room)).toEqual([{ kind: "wall", label: "A", start: 0, stop: 3 }, { kind: "zone", label: "Door", start: 3, stop: 5 }]);
+  expect(areas(null)).toEqual([]);
+});
+
+test("the map colours the selected segment, others and a drag", async () => {
+  const { drawMap } = await import("./room");
+  const { ctx, rects } = fakeCtx();
+  const pos = [0, 1, 2, 3].map((i) => ({ x: i * 10 + 5, y: 5, size: 9 }));
+  drawMap(ctx, 40, 10, pos, [{ id: 0, start: 0, stop: 2 }, { id: 1, start: 2, stop: 3 }], 1, null, true);
+  expect(rects.slice(1).map((r) => r.fill)).toEqual(["#4a505a", "#4a505a", "#6ea8ff", "#22262e"]);
+  const again = fakeCtx();
+  drawMap(again.ctx, 40, 10, pos, [], null, [3, 2], false);
+  expect(again.rects.slice(1).map((r) => r.fill)).toEqual(["#22262e", "#22262e", "#ffb347", "#ffb347"]);
+});
+
+test("a room narrower than the canvas is drawn in the middle", async () => {
+  const { ledPositions } = await import("./room");
+  const tall = { edges: [{ direction: "down" as const, pixels: 10 }, { direction: "right" as const, pixels: 2 }] };
+  const xs = ledPositions(12, 400, 100, tall).map((p) => p.x);
+  expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(200, 0);
+});

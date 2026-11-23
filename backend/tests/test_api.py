@@ -202,6 +202,61 @@ def test_an_editing_session_can_keep_the_edits(client, dev_id, device):
     assert device.state["seg"][0]["fx"] == 5
 
 
+def test_room_zones_are_checked(client, dev_id):
+    edges = [{"direction": "right", "pixels": 40, "label": "A"}, {"direction": "down", "pixels": 20}]
+    ok = client.put(f"/api/devices/{dev_id}/room", json={"edges": edges, "zones": [{"label": "Door", "start": 41, "stop": 50}]},
+                    headers=CSRF)
+    assert ok.status_code == 200 and ok.json()["zones"] == [{"label": "Door", "start": 41, "stop": 50}]
+    for bad in ([{"label": "Door", "start": 50, "stop": 61}],                                   # past the room's 60 LEDs
+                [{"label": "Door", "start": 9, "stop": 9}],                                     # empty
+                [{"label": "A", "start": 1, "stop": 2}],                                        # a wall's name
+                [{"label": "D", "start": 1, "stop": 2}, {"label": "D", "start": 3, "stop": 4}]):  # twice
+        r = client.put(f"/api/devices/{dev_id}/room", json={"edges": edges, "zones": bad}, headers=CSRF)
+        assert r.status_code == 422, bad
+
+
+def test_capture_keeps_names_and_can_leave_the_layout_alone(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "start": 0, "stop": 30, "n": "Left", "fx": 2},
+                                                               {"id": 1, "start": 30, "stop": 60, "fx": 4, "si": 2}]},
+                headers=CSRF)
+    owned = client.post(f"/api/devices/{dev_id}/capture/Owned", headers=CSRF).json()
+    assert owned["segments"][0]["n"] == "Left" and owned["segments"][1]["si"] == 2
+    loose = client.post(f"/api/devices/{dev_id}/capture/Loose?layout=false", headers=CSRF).json()
+    assert loose["clear_other_segments"] is False
+    assert all("start" not in s and "stop" not in s for s in loose["segments"])
+    # shown on a three-segment layout, it changes the first two and leaves the layout as it is
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "start": 0, "stop": 10, "fx": 0},
+                                                               {"id": 1, "start": 10, "stop": 20, "fx": 0},
+                                                               {"id": 2, "start": 20, "stop": 60, "fx": 8}]}, headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/apply/Loose", headers=CSRF)
+    assert [(s["start"], s["stop"], s["fx"]) for s in device.state["seg"]] == [(0, 10, 2), (10, 20, 4), (20, 60, 8)]
+
+
+def test_segments_move_up_and_down_the_stack_and_duplicate(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "start": 0, "stop": 60, "fx": 1},
+                                                               {"id": 1, "start": 5, "stop": 15, "fx": 4, "bm": 2, "n": "Top"}]},
+                headers=CSRF)
+    base = f"/api/devices/{dev_id}/segments"
+    assert client.post(f"{base}/1/move?direction=up", headers=CSRF).status_code == 409  # already on top
+    r = client.post(f"{base}/1/move?direction=down", headers=CSRF)
+    assert r.json() == {"id": 0}
+    assert [(s["id"], s["start"], s["fx"], s["bm"], s["n"]) for s in device.state["seg"]] == [
+        (0, 5, 4, 2, "Top"), (1, 0, 1, 0, "")]
+    d = client.post(f"{base}/0/duplicate", headers=CSRF)
+    assert d.json() == {"id": 2}
+    assert {k: device.state["seg"][2][k] for k in ("start", "stop", "fx", "bm", "n")} == {
+        "start": 5, "stop": 15, "fx": 4, "bm": 2, "n": "Top"}
+    assert client.post(f"{base}/9/duplicate", headers=CSRF).status_code == 404
+    assert client.post(f"{base}/9/move", headers=CSRF).status_code == 404
+
+
+def test_segment_names_and_flags_are_checked(client, dev_id):
+    ok = {"seg": [{"id": 0, "n": "Door", "frz": True, "si": 3}]}
+    assert client.post(f"/api/devices/{dev_id}/state", json=ok, headers=CSRF).status_code == 200
+    for bad in ({"seg": [{"id": 0, "n": "x" * 33}]}, {"seg": [{"id": 0, "n": "a\nb"}]}, {"seg": [{"id": 0, "si": 4}]}):
+        assert client.post(f"/api/devices/{dev_id}/state", json=bad, headers=CSRF).status_code == 422, bad
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

@@ -23,6 +23,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [plan, setPlan] = useState<PushResult | null>(null);
   const [adopt, setAdopt] = useState(false);
   const [acceptReview, setAcceptReview] = useState(false);
+  const [keepLayout, setKeepLayout] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function run<T>(f: () => Promise<T>, ok?: (v: T) => string) {
@@ -50,7 +51,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       </div>
       <form className="row" onSubmit={(e) => {
         e.preventDefault();
-        run(() => api.capture(deviceId, name, slot ? Number(slot) : undefined), (l) => `Saved “${l.name}”`)
+        run(() => api.capture(deviceId, name, slot ? Number(slot) : undefined, keepLayout), (l) => `Saved “${l.name}”`)
           .then(() => { setName(""); onChanged(); });
       }}>
         <input placeholder="Name" value={name} maxLength={32} required aria-label="Look name"
@@ -58,6 +59,9 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
         <input placeholder="Slot" value={slot} inputMode="numeric" pattern="[0-9]*" aria-label="Preset slot"
           className="slot" onChange={(e) => setSlot(e.target.value)} />
         <button disabled={busy || !name.trim()}>Save current</button>
+        <label className="small" title="Save effects and colours only: showing the look then leaves the segments as they are">
+          <input type="checkbox" checked={keepLayout} onChange={(e) => setKeepLayout(e.target.checked)} /> Without the layout
+        </label>
       </form>
       <ul className="look-list">
         {looks.map((l) => (

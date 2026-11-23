@@ -46,7 +46,7 @@ def _segment(sid: int, start: int, stop: int) -> dict:
     return {"id": sid, "start": start, "stop": stop, "on": True, "bri": 255, "fx": 0, "sx": 128,
             "ix": 128, "c1": 128, "c2": 128, "c3": 16, "o1": False, "o2": False, "o3": False,
             "pal": 0, "col": [[255, 160, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], "rev": False,
-            "mi": False, "grp": 1, "spc": 0, "of": 0, "frz": False, "bm": 0, "n": ""}
+            "mi": False, "grp": 1, "spc": 0, "of": 0, "frz": False, "si": 0, "bm": 0, "n": ""}
 
 
 @dataclass

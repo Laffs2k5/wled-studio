@@ -104,3 +104,14 @@ test("an unavailable look can't be accepted", () => {
   expect(screen.getByText("unavailable")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
 });
+
+test("a look can be saved without the layout", async () => {
+  const calls = stubFetch({ "POST /api/devices/desk/capture/": { name: "Colours", segments: [] } });
+  const onChanged = vi.fn();
+  render(<Looks deviceId="desk" looks={[]} onChanged={onChanged} onApplied={() => {}} notify={() => {}} />);
+  fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Colours" } });
+  fireEvent.click(screen.getByLabelText("Without the layout"));
+  fireEvent.click(screen.getByText("Save current"));
+  await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/capture/Colours?layout=false");
+});

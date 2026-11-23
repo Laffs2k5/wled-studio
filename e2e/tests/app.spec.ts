@@ -134,6 +134,51 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
   expect(problems).toEqual([]);
 });
 
+test("segments: duplicate, restack, name, and drag on the map", async ({ page, request }) => {
+  const problems = watchCsp(page);
+  await page.goto("/");
+  const name = `E2E stack ${Date.now() % 100000}`;
+  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  await page.getByLabel("Device name").fill(name);
+  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
+  const devices = await (await request.get("/api/devices")).json();
+  const id = devices.find((d: { name: string }) => d.name === name).id;
+  const segs = async () => (await (await request.get(`/api/devices/${id}/state`)).json()).seg as
+    { id: number; start: number; stop: number; fx: number; n: string }[];
+  const reset = [{ id: 0, start: 0, stop: 60, fx: 0, bm: 0, n: "" }, { id: 1, start: 10, stop: 20, fx: 4, bm: 0, n: "" },
+    ...Array.from({ length: 30 }, (_, i) => ({ id: i + 2, stop: 0 }))];
+  await request.post(`/api/devices/${id}/state`, { data: { seg: reset }, headers: { "X-WLED-Studio": "1" } });
+  await page.reload();
+  await page.getByLabel("Device").selectOption(id);
+  await page.getByRole("button", { name: /^Segment 1 / }).click();
+
+  // a copy on top, then lowered under segment 1
+  await page.getByRole("button", { name: "Duplicate" }).click();
+  await expect(page.getByRole("button", { name: /^Segment 2 / })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Lower" }).click();
+  await expect(page.getByRole("button", { name: /^Segment 1 / })).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(async () => (await segs()).map((s) => [s.start, s.stop, s.fx])).toEqual([[0, 60, 0], [10, 20, 4], [10, 20, 4]]);
+
+  // a name, then new LEDs by dragging on the map (a straight strip: 16 px per LED)
+  await page.getByText("Layout and layer").click();
+  await page.getByLabel("Name", { exact: true }).fill("Copy");
+  await page.getByLabel("Name", { exact: true }).press("Enter");
+  const map = page.getByLabel(/Segment map/);
+  const box = (await map.boundingBox())!;
+  const x = (led: number) => box.x + (led + 0.5) * box.width / 60;
+  await page.mouse.move(x(40), box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x(45), box.y + box.height / 2, { steps: 5 });
+  await page.mouse.move(x(49), box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => { const s = (await segs())[1]; return [s.start, s.stop, s.n]; }).toEqual([40, 50, "Copy"]);
+  await expect(page.getByRole("button", { name: /^Segment 1 · Copy/ })).toBeVisible();
+
+  expect(problems).toEqual([]);
+});
+
 test("effect studio: the WebAssembly preview loads and runs under the CSP", async ({ page }) => {
   const problems = watchCsp(page);
   await page.goto("/");

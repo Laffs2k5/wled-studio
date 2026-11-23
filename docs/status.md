@@ -15,8 +15,15 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 - **The segment layout, live:** add and remove segments; bounds by LED or by wall; on, reverse,
   mirror, grouping, spacing, offset; opacity and WLED 16's 17 blend modes. **Looks own their
   layout** as WLED's presets do: showing one deletes the segments it doesn't use.
-- **The room model:** the strip's shape as walls in LED order. The live view and the effect
-  preview are drawn in it. **Segments named by wall** follow it when its boundaries are corrected.
+- **Segment editing comforts:** raise and lower a segment in the stack (WLED draws in id order);
+  duplicate one on top; names; freeze; sound simulation for sound effects; a **segment map** that
+  shows where every segment is, selects one with a click and sets its LEDs by dragging; and looks
+  saved **without the layout**, which change only the segments they name, like WLED presets saved
+  without bounds.
+- **The room model:** the strip's shape as walls in LED order, and **named zones** (a door, a desk:
+  LED ranges) that looks follow like walls. The live view and the effect
+  preview are drawn in it. **Segments named by wall or zone** follow it when its boundaries are
+  corrected.
   **Room-aware effects** get each LED's position in `room_map.h`.
 - **The mic per look,** by a rule: a look made for sound switches the mic on, any other look
   switches it off.
@@ -60,29 +67,14 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
 1. **A real device:** everything that writes (presets, palettes, DDP streaming, editing sessions)
    has run only against the fake device.
-2. **Segment editing, the rest.** Editable today: bounds, grouping, spacing, offset, reverse,
-   mirror, on, opacity and blend mode, and each segment's effect, controls, palette and colours.
-   Missing, mostly what makes layouts quick to build:
-   - **layer order:** move a segment up or down the stack (WLED draws in id order, so today a
-     layer's place is fixed when it's added);
-   - **duplicate a segment**, or give several the same settings (two walls running the same
-     meter);
-   - **segment names**, edited and kept (capture drops them today);
-   - **show the selected segment's LEDs** on the live view and the room shape;
-   - **pick a range on the room shape** by dragging, besides numbers and walls;
-   - **a look that leaves the layout alone:** one that changes only the segments it names, like
-     WLED presets saved without bounds (captured looks always own the layout today);
-   - **freeze and sound simulation:** kept when imported, not editable yet.
-3. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
+2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; a spare board first.
-4. **Preflight:** check the library against a firmware's effect list before it is flashed. This
+3. **Preflight:** check the library against a firmware's effect list before it is flashed. This
    needs the builder to list a built image's effects (a build manifest).
-5. **Named zones** in the room model: named LED ranges inside a wall (a door, a desk, a TV), which
-   looks follow as they follow walls.
-6. **Editing a saved look** without showing it on a device. Today: show it, edit live, save again.
-7. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
+4. **Editing a saved look** without showing it on a device. Today: show it, edit live, save again.
+5. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
    instead of the stand-ins.
-8. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
+6. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
 
 ## Decided design
 

@@ -109,8 +109,14 @@ export const api = {
   playlists: () => request<Playlist[]>("GET", "/api/playlists"),
   putPlaylist: (p: Playlist) => request<Playlist>("PUT", `/api/playlists/${enc(p.name)}`, p),
   deletePlaylist: (name: string) => request<null>("DELETE", `/api/playlists/${enc(name)}`),
-  capture: (id: string, name: string, presetId?: number) =>
-    request<Look>("POST", `/api/devices/${enc(id)}/capture/${enc(name)}` + (presetId ? `?preset_id=${presetId}` : "")),
+  capture: (id: string, name: string, presetId?: number, keepLayout = false) => {
+    const q = [presetId ? `preset_id=${presetId}` : "", keepLayout ? "layout=false" : ""].filter(Boolean).join("&");
+    return request<Look>("POST", `/api/devices/${enc(id)}/capture/${enc(name)}` + (q ? `?${q}` : ""));
+  },
+  moveSegment: (id: string, seg: number, direction: "up" | "down") =>
+    request<{ id: number }>("POST", `/api/devices/${enc(id)}/segments/${seg}/move?direction=${direction}`),
+  duplicateSegment: (id: string, seg: number) =>
+    request<{ id: number }>("POST", `/api/devices/${enc(id)}/segments/${seg}/duplicate`),
   apply: (id: string, name: string) =>
     request<{ status: string; notes: string[] }>("POST", `/api/devices/${enc(id)}/apply/${enc(name)}`),
   check: (id: string) => request<CheckItem[]>("GET", `/api/devices/${enc(id)}/check`),

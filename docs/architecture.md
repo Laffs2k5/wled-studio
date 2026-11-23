@@ -30,11 +30,14 @@ flowchart LR
   segment set, sound simulation, 1D→2D mapping, …), and an `id` only where the preset had one. So a
   preset saved in WLED's own UI, or written by a script, survives an import and a write byte for
   byte, apart from what was edited.
-- **Segments can be named by wall.** When a look is captured or imported, a segment that covers
-  exactly one labelled wall of the device's room model gets that wall's name (`wall`). Showing or
-  writing the look takes the wall's LEDs from the room model at that time, so correcting a boundary
-  in the room model moves every look on that wall, with a note in the write plan. A look on a wall
-  the model no longer has is unavailable. Without a room model the saved LEDs are used.
+- **Segments can be named by wall or zone.** The room model has walls (its labelled edges) and
+  zones (named LED ranges: a door, a desk). When a look is captured or imported, a segment that
+  covers exactly one wall gets that wall's name (`wall`), or else one zone's name (`zone`). Showing
+  or writing the look takes the LEDs from the room model at that time, so correcting a boundary
+  there moves every look on that wall or zone, with a note in the write plan. A look on a wall or
+  zone the model no longer has is unavailable. Without a room model the saved LEDs are used.
+- **A look saved without the layout** (`layout=false` on capture) keeps no bounds and doesn't own
+  the layout: shown, it changes only the segments it names, by position.
 - **Writing** replaces `presets.json` as a whole (`push.py`):
   1. back up the current file;
   2. check for drift since the last write;
