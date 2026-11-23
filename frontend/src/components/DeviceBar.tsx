@@ -16,6 +16,9 @@ export function DeviceBar({ devices, current, onSelect, onChanged, notify }: Pro
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [pin, setPin] = useState("");
+  const [pinFor, setPinFor] = useState<string | null>(null);
+  const [newPin, setNewPin] = useState("");
+  const cur = devices.find((d) => d.id === current);
 
   return (
     <div className="device-bar">
@@ -25,6 +28,27 @@ export function DeviceBar({ devices, current, onSelect, onChanged, notify }: Pro
             <option key={d.id} value={d.id}>{d.name} ({d.host})</option>
           ))}
         </select>
+      )}
+      {cur && (
+        <button title="The device's settings PIN, needed to write presets and palettes"
+          onClick={() => { setPinFor(pinFor ? null : cur.id); setNewPin(""); }}>
+          {cur.has_pin ? "PIN ✓" : "PIN"}
+        </button>
+      )}
+      {pinFor && (
+        <form className="row" onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            await api.setPin(pinFor, newPin || null);
+            notify(newPin ? "PIN saved" : "PIN removed");
+            setPinFor(null); setNewPin("");
+            onChanged();
+          } catch (err) { notify((err as Error).message, true); }
+        }}>
+          <input type="password" value={newPin} autoComplete="off" maxLength={16} aria-label="New settings PIN"
+            placeholder="PIN (empty removes it)" onChange={(e) => setNewPin(e.target.value)} />
+          <button className="primary">Save PIN</button>
+        </form>
       )}
       <button onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "Add device"}</button>
       {adding && (
