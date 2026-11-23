@@ -1,0 +1,35 @@
+name: firmware-e2e
+
+# The firmware profile end to end: the builder's egress allowlist, then a real
+# preview job and a real gate build through the app. Slow (Emscripten install and
+# two firmware builds), so not on every push.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 3 * * 2"
+  push:
+    branches: [main]
+    paths: ["compose.yaml", "proxy/**", "scripts/firmware-e2e.sh", ".github/workflows/firmware-e2e.yml"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      WLEDSTUDIO_BUILDER_URL: http://builder:8090
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Start (published images)
+        run: docker compose --profile firmware up -d --no-build
+      - name: Network policy, preview job, gate build
+        run: scripts/firmware-e2e.sh
+      - name: Logs
+        if: always()
+        run: docker compose --profile firmware logs --no-color | tail -n 300

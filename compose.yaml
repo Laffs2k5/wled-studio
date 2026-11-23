@@ -17,6 +17,7 @@ services:
       WLEDSTUDIO_TOKEN: ${WLEDSTUDIO_TOKEN:-}
       WLEDSTUDIO_BUILDER_URL: ${WLEDSTUDIO_BUILDER_URL:-}
       WLEDSTUDIO_EFFECTS_DIR: /effects
+    networks: [default, builder-net]
     volumes:
       - wled-studio-data:/data
       # your effect usermods, edited in the Effect studio (the app runs as uid 10001:
@@ -46,8 +47,17 @@ services:
     profiles: [firmware]
     image: ghcr.io/laffs2k5/wled-studio-builder:${BUILDER_TAG:-edge}
     entrypoint: ["/home/builder/venv/bin/python", "/home/builder/studio-src/studio/service.py"]
-    # no ports: only wled-studio reaches it, on the compose network. It needs outbound
-    # HTTPS to GitHub, the PlatformIO registry and npm for builds.
+    # no ports, and no internet of its own: it sits on an internal network that only
+    # wled-studio and the egress proxy share, and fetches sources through the proxy's
+    # allowlist (proxy/squid.conf)
+    networks: [builder-net]
+    environment:
+      HTTP_PROXY: http://egress:3128
+      HTTPS_PROXY: http://egress:3128
+      http_proxy: http://egress:3128
+      https_proxy: http://egress:3128
+      NO_PROXY: localhost,127.0.0.1
+      PLATFORMIO_SETTING_ENABLE_TELEMETRY: "no"
     volumes:
       - builder-work:/work
       - builder-out:/out
@@ -55,6 +65,23 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+
+  egress:
+    profiles: [firmware]
+    image: ubuntu/squid@sha256:6a097f68bae708cedbabd6188d68c7e2e7a38cedd05a176e1cc0ba29e3bbe029
+    networks: [builder-net, egress-net]
+    volumes:
+      - ./proxy/squid.conf:/etc/squid/squid.conf:ro
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]   # squid starts as root and drops to its own user
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+networks:
+  default:
+  builder-net:
+    internal: true
+  egress-net:
 
 volumes:
   wled-studio-data:

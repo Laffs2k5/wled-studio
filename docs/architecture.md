@@ -5,7 +5,9 @@ flowchart LR
   B["Browser<br/>(React UI)"] -->|"/api, same origin"| S["wled-studio<br/>(FastAPI)"]
   S -->|"JSON API, /upload with PIN"| W["WLED devices"]
   S --> D[("data volume:<br/>devices, library,<br/>backups, PINs")]
-  S -.->|"later: build jobs"| BLD["wled-studio-builder<br/>(firmware)"]
+  S -->|"build and preview jobs"| BLD["wled-studio-builder<br/>(job service)"]
+  BLD -->|"only via the allowlist"| P["egress proxy"]
+  P --> I["GitHub, PlatformIO,<br/>PyPI, npm, Emscripten"]
 ```
 
 - **One container** serves the built UI and the API. State lives in a data volume:
