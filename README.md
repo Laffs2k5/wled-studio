@@ -5,7 +5,8 @@ effect setting, playlists and palettes on a proper screen, keep them in a librar
 write them back safely. Later: write your own effects, preview them in the browser and on the
 strip, and build verified firmware with them ([wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder)).
 
-**Status: early work in progress.** See [docs/status.md](docs/status.md).
+**Status: early work in progress.** See [docs/getting-started.md](docs/getting-started.md) to try it,
+and [docs/status.md](docs/status.md) for what's done and next.
 
 ![The look studio: effects with their own controls, the look library, the write plan](docs/screenshots/look-studio.png)
 
