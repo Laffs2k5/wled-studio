@@ -72,8 +72,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
 ## Next (in order)
 
-1. **A real device:** everything that writes (presets, palettes, DDP streaming, editing sessions)
-   has run only against the fake device.
+1. **A real device:** presets, the change check, live control, segment layouts, editing sessions
+   and the look editor ran against a real WLED 16 controller on 2026-11-23 (one bug found and
+   fixed: the editor saved display defaults). Not yet: custom palette uploads and DDP streaming.
 2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; a spare board first.
 3. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
