@@ -551,6 +551,26 @@ class LibraryStore:
         tmp.write_text(json.dumps(lib, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         os.replace(tmp, self.path)
 
+    def rename_look(self, old: str, new: str) -> dict:
+        """Rename a look, and every playlist's reference to it, in one save."""
+        new = check_name(new)
+        lib = self.load()
+        if old not in lib["looks"]:
+            raise KeyError(old)
+        if new != old and new in lib["looks"]:
+            raise LookError(f"a look named {new!r} exists already")
+        look = lib["looks"].pop(old)
+        look["name"] = new
+        lib["looks"][new] = look
+        for pl in lib["playlists"].values():
+            for e in pl.get("entries", []):
+                if e.get("look") == old:
+                    e["look"] = new
+            if pl.get("end") == old:
+                pl["end"] = new
+        self.save(lib)
+        return look
+
     def looks(self) -> dict:
         return self.load()["looks"]
 

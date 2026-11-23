@@ -122,3 +122,18 @@ test("Edit opens a look in the editor", () => {
   fireEvent.click(screen.getByLabelText("Edit Evening"));
   expect(onEdit).toHaveBeenCalledWith("Evening");
 });
+
+test("rename a look, and see which playlists use it", async () => {
+  const calls = stubFetch({ "POST /api/looks/Evening/rename": { name: "Dusk", segments: [] } });
+  vi.stubGlobal("prompt", vi.fn(() => "Dusk"));
+  const onChanged = vi.fn();
+  const notify = vi.fn();
+  render(<Looks deviceId="desk" looks={looks} onChanged={onChanged} onApplied={() => {}} notify={notify}
+    playlists={[{ name: "Mix", entries: [{ look: "Evening", duration: 100, transition: 7 }], repeat: 0, shuffle: false }]} />);
+  expect(screen.getByTitle("In Mix")).toHaveTextContent("▶1");
+  fireEvent.click(screen.getByLabelText("Rename Evening"));
+  await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  const call = calls.find((c) => c.key === "POST /api/looks/Evening/rename")!;
+  expect(JSON.parse(call.body!)).toEqual({ to: "Dusk" });
+  expect(notify).toHaveBeenCalledWith("Renamed to “Dusk”");
+});

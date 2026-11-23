@@ -481,6 +481,22 @@ def put_look(name: str, body: LookIn, request: Request):
         raise HTTPException(422, str(e)) from None
 
 
+class RenameIn(Strict):
+    to: str = Field(min_length=1, max_length=64)
+
+
+@router.post("/looks/{name}/rename")
+def rename_look(name: str, body: RenameIn, request: Request):
+    """Rename a look; playlists that use it follow. Its slot is unchanged, so the next write
+    gives the preset the new name."""
+    try:
+        return request.app.state.library.rename_look(name, body.to)
+    except KeyError:
+        raise HTTPException(404, "no such look") from None
+    except LookError as e:
+        raise HTTPException(409 if "exists" in str(e) else 422, str(e)) from None
+
+
 @router.delete("/looks/{name}", status_code=204)
 def delete_look(name: str, request: Request):
     if not request.app.state.library.delete(name):

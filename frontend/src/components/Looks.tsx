@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useState } from "react";
 import { api } from "../api";
-import type { CheckItem, Look, PushResult } from "../types";
+import type { CheckItem, Look, Playlist, PushResult } from "../types";
 import { ACCEPTABLE, StatusBadge } from "./StatusBadge";
 
 interface Props {
@@ -16,9 +16,12 @@ interface Props {
   checks?: CheckItem[];
   /** Open a look in the editor (edited in the library, not on the strip). */
   onEdit?: (name: string) => void;
+  /** To show where each look is used. */
+  playlists?: Playlist[];
 }
 
-export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit }: Props) {
+export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [] }: Props) {
+  const usedIn = (name: string) => playlists.filter((p) => p.entries.some((e) => e.look === name) || p.end === name).map((p) => p.name);
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
@@ -76,6 +79,9 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               </span>
             )}
             {l.mic !== undefined && <span className="badge" title={l.mic ? "Mic on" : "Mic off"}>{l.mic ? "♪" : "–"}</span>}
+            {usedIn(l.name).length > 0 && (
+              <span className="badge" title={`In ${usedIn(l.name).join(", ")}`}>▶{usedIn(l.name).length}</span>
+            )}
             <StatusBadge item={status.get(l.name)} />
             {ACCEPTABLE.has(status.get(l.name)?.status ?? "ok") && (
               <button disabled={busy} title="Take the device's version of this look's effects as the new reference"
@@ -91,6 +97,11 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               <button disabled={busy} aria-label={`Edit ${l.name}`} title="Edit it in the library, without showing it"
                 onClick={() => onEdit(l.name)}>Edit</button>
             )}
+            <button disabled={busy} aria-label={`Rename ${l.name}`} title="Rename; playlists that use it follow"
+              onClick={() => {
+                const to = prompt(`New name for “${l.name}”`, l.name)?.trim();
+                if (to && to !== l.name) run(() => api.renameLook(l.name, to), (r) => `Renamed to “${r.name}”`).then(onChanged);
+              }}>✎</button>
             <button disabled={busy} className="danger" aria-label={`Delete ${l.name}`}
               onClick={() => confirm(`Delete “${l.name}” from the library?`) && run(() => api.deleteLook(l.name)).then(onChanged)}>
               ×

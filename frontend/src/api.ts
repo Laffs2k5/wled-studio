@@ -115,6 +115,7 @@ export const api = {
       "POST", `/api/devices/${enc(id)}/import`),
   looks: () => request<Look[]>("GET", "/api/looks"),
   deleteLook: (name: string) => request<null>("DELETE", `/api/looks/${enc(name)}`),
+  renameLook: (name: string, to: string) => request<Look>("POST", `/api/looks/${enc(name)}/rename`, { to }),
   palettes: () => request<Palette[]>("GET", "/api/palettes"),
   putPalette: (p: Palette) => request<Palette>("PUT", `/api/palettes/${enc(p.name)}`, p),
   deletePalette: (name: string) => request<null>("DELETE", `/api/palettes/${enc(name)}`),

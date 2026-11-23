@@ -224,7 +224,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
       </main>
       <aside>
         <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
-          beforeAction={flush} checks={checks} onEdit={setEditing} />
+          beforeAction={flush} checks={checks} onEdit={setEditing} playlists={playlists} />
         <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks} />
         <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
       </aside>

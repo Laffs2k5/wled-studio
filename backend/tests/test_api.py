@@ -309,6 +309,22 @@ def test_a_look_without_the_layout_is_edited_without_bounds(client, dev_id, devi
     assert saved["mic"] is True  # a sound effect now: the mic rule
 
 
+def test_renaming_a_look_carries_through_to_playlists(client, dev_id):
+    client.post(f"/api/devices/{dev_id}/capture/Calm?preset_id=4", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/Loud?preset_id=5", headers=CSRF)
+    client.put("/api/playlists/Mix", json={"name": "Mix", "entries": [{"look": "Calm"}, {"look": "Loud"}], "end": "Calm"},
+               headers=CSRF)
+    r = client.post("/api/looks/Calm/rename", json={"to": "Quiet"}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["name"] == "Quiet" and r.json()["preset_id"] == 4
+    names = [lk["name"] for lk in client.get("/api/looks").json()]
+    assert "Quiet" in names and "Calm" not in names
+    mix = client.get("/api/playlists").json()[0]
+    assert [e["look"] for e in mix["entries"]] == ["Quiet", "Loud"] and mix["end"] == "Quiet"
+    assert client.post("/api/looks/Quiet/rename", json={"to": "Loud"}, headers=CSRF).status_code == 409
+    assert client.post("/api/looks/Nope/rename", json={"to": "X"}, headers=CSRF).status_code == 404
+    assert client.post("/api/looks/Quiet/rename", json={"to": "x" * 40}, headers=CSRF).status_code == 422
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

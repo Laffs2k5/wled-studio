@@ -78,7 +78,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    way back; a spare board first.
 3. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
    instead of the stand-ins.
-4. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
+4. **Bulk tools** for the library: folders, reorder, copying between devices. (Renaming, with
+   playlists following, and where a look is used: done 2026-11-23.)
 
 ## Decided design
 
