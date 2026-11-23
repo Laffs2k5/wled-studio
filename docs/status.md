@@ -72,7 +72,14 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
    Also done 2026-11-23: **streaming the preview to the strip** (DDP, "live on the wall before
    flashing"). Tested end to end against a UDP listener, not yet on a real device.
-9. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
+9. **Editing sessions** (done 2026-11-23, the app's part): "Start editing session" remembers what
+   the device shows; "Done" puts it back (segments, effects, brightness, the mic; segments added
+   meanwhile deleted; a running playlist started again), "Keep my changes" leaves the edits. One
+   session per device, shared by everyone using the app, in memory.
+
+   Still open: **telling Home Assistant** that someone is editing, so automations and the remote
+   hold off (to be designed with the HA side).
+10. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; spare board first.
 
 ## Waiting on

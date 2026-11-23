@@ -8,6 +8,7 @@ import { walls, type Room } from "../room";
 import { LiveStrip } from "./LiveStrip";
 import { RoomEditor } from "./RoomEditor";
 import { SegmentLayout } from "./SegmentLayout";
+import { SessionBar } from "./SessionBar";
 import { Looks } from "./Looks";
 import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
@@ -135,6 +136,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
       </aside>
       <main>
         <LiveStrip deviceId={deviceId} room={room} />
+        <SessionBar deviceId={deviceId} notify={notify} beforeAction={flush} onRestored={reloadState} />
         <div className="master row">
           <label><input type="checkbox" checked={state.on} onChange={(e) => master({ on: e.target.checked })} /> On</label>
           <label className="slider grow">

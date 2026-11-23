@@ -51,6 +51,7 @@ input.slot { width: 4.5rem; }
 .segment-layout summary { cursor: pointer; }
 .segment-layout > label:not(.slider) { display: flex; gap: .6rem; align-items: center; }
 label.num { display: flex; gap: .4rem; align-items: center; }
+.session.active { border: 1px solid var(--warn); border-radius: 8px; padding: .3rem .6rem; }
 label.num input { width: 5rem; }
 .plan table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .plan td, .plan th { text-align: left; padding: .2rem .3rem; border-bottom: 1px solid var(--line); }

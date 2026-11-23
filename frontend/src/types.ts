@@ -96,6 +96,9 @@ export interface PushReportItem {
   written?: boolean;
 }
 
+/** An editing session on a device: its state when editing started is put back at the end. */
+export interface EditingSession { active: boolean; started: number | null }
+
 /** A look's or playlist's change-check status on one device (GET /api/devices/<id>/check). */
 export interface CheckItem {
   look?: string;

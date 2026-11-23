@@ -15,6 +15,7 @@ from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, che
                       import_presets, mic_for,
                       playlist_from_preset, resolve_look, segment_from_state, tag_walls)
 from .push import StateStore, fetch_lists, push
+from .session import Sessions, restore_payload
 from .wled import WLEDClient, WLEDError, WLEDLocked
 
 router = APIRouter(prefix="/api")
@@ -266,6 +267,49 @@ async def set_state(device_id: str, body: LiveState, request: Request):
             return await c.state()
         except WLEDError as e:
             raise device_errors(e) from None
+
+
+def session_info(s) -> dict:
+    return {"active": s is not None, "started": s.started if s is not None else None}
+
+
+@router.get("/devices/{device_id}/session")
+def get_session(device_id: str, request: Request):
+    device_or_404(device_id, request)
+    return session_info(request.app.state.sessions.get(device_id))
+
+
+@router.post("/devices/{device_id}/session")
+async def start_session(device_id: str, request: Request):
+    """Start editing: remember the device's state, to put it back when editing ends."""
+    dev = device_or_404(device_id, request)
+    sessions: Sessions = request.app.state.sessions
+    if sessions.get(dev.id) is not None:
+        raise HTTPException(409, "an editing session is already running on this device")
+    async with make_client(request, dev) as c:
+        try:
+            snapshot = await c.state()
+        except WLEDError as e:
+            raise device_errors(e) from None
+    return session_info(sessions.start(dev.id, snapshot))
+
+
+@router.delete("/devices/{device_id}/session")
+async def end_session(device_id: str, request: Request, restore: bool = True):
+    """End editing; with restore (the default), put the device back as it was at the start."""
+    dev = device_or_404(device_id, request)
+    sessions: Sessions = request.app.state.sessions
+    s = sessions.get(dev.id)
+    if s is None:
+        raise HTTPException(404, "no editing session on this device")
+    if restore:
+        async with make_client(request, dev) as c:
+            try:
+                await c.set_state(restore_payload(s.snapshot, await c.state()))
+            except WLEDError as e:
+                raise device_errors(e) from None  # the session stays, so it can be tried again
+    sessions.end(dev.id)
+    return {"restored": restore}
 
 
 @router.get("/devices/{device_id}/presets")

@@ -172,6 +172,36 @@ def test_check_and_accept_after_a_firmware_change(client, dev_id, device, monkey
     assert client.post(f"/api/devices/{dev_id}/accept/Tail", headers=CSRF).status_code == 409
 
 
+def test_an_editing_session_puts_the_device_back(client, dev_id, device):
+    base = f"/api/devices/{dev_id}/session"
+    assert client.get(base).json() == {"active": False, "started": None}
+    client.post(f"/api/devices/{dev_id}/state", json={"bri": 77, "seg": [{"id": 0, "fx": 2, "sx": 33}]}, headers=CSRF)
+    before = [(s["id"], s["start"], s["stop"], s["fx"], s["sx"]) for s in device.state["seg"]]
+
+    started = client.post(base, headers=CSRF)
+    assert started.status_code == 200 and started.json()["active"] is True
+    assert client.post(base, headers=CSRF).status_code == 409  # one at a time
+    # edit: another effect, a new segment on top, dimmer
+    client.post(f"/api/devices/{dev_id}/state", json={"bri": 10, "seg": [{"id": 0, "fx": 8, "sx": 200},
+                                                                          {"id": 1, "start": 10, "stop": 20, "fx": 4}]},
+                headers=CSRF)
+    assert len(device.state["seg"]) == 2
+
+    assert client.delete(base, headers=CSRF).json() == {"restored": True}
+    assert [(s["id"], s["start"], s["stop"], s["fx"], s["sx"]) for s in device.state["seg"]] == before
+    assert device.state["bri"] == 77
+    assert client.get(base).json()["active"] is False
+    assert client.delete(base, headers=CSRF).status_code == 404
+
+
+def test_an_editing_session_can_keep_the_edits(client, dev_id, device):
+    base = f"/api/devices/{dev_id}/session"
+    client.post(base, headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 5}]}, headers=CSRF)
+    assert client.delete(f"{base}?restore=false", headers=CSRF).json() == {"restored": False}
+    assert device.state["seg"][0]["fx"] == 5
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

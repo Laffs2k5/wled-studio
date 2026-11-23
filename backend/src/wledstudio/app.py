@@ -21,6 +21,7 @@ from .devices import DeviceStore
 from .library import LibraryStore
 from .push import StateStore
 from .security import SecurityMiddleware
+from .session import Sessions
 
 
 def default_ddp_target(dev) -> tuple[str, int]:
@@ -47,6 +48,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.state.ddp_target_for = ddp_target_for
     app.state.live_url_for = live_url_for
     app.state.live_hubs = {}
+    app.state.sessions = Sessions()
     app.add_middleware(SecurityMiddleware, settings=s)
     app.include_router(router)
     app.include_router(firmware_router)
