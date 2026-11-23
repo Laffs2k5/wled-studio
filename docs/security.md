@@ -30,7 +30,7 @@ that applies to such an app.
 | Firmware builder's network | In the `firmware` profile the builder has no internet of its own: it sits on an internal network shared only with the app and an egress proxy (squid), which allows only GitHub, the PlatformIO registry, PyPI, npm and Emscripten's downloads (`proxy/squid.conf`). The `firmware-e2e` workflow checks that direct egress is blocked and that other hosts are refused |
 | Container | Runs as a non-root user (uid 10001), read-only root filesystem, all capabilities dropped, `no-new-privileges`; base images pinned by digest; no npm install scripts during the build |
 | Exposure | Listens on `127.0.0.1` only in the default compose file |
-| Supply chain | Python and npm dependencies pinned (npm by lockfile); `npm audit` in CI; GitHub Actions pinned by commit |
+| Supply chain | Python dependencies locked by version and file hash (`pip --require-hashes`), npm by its lockfile's integrity hashes; base images by digest; `npm audit` in CI; GitHub Actions pinned by commit |
 
 ## Using it from other machines
 

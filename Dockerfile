@@ -26,9 +26,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
  && mkdir /data && chown app:app /data
 WORKDIR /app
+# dependencies pinned by version and file hash (backend/requirements.txt, generated with
+# uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes)
+COPY backend/requirements.txt ./backend/
+RUN pip install --require-hashes -r ./backend/requirements.txt
 COPY backend/pyproject.toml ./backend/
 COPY backend/src ./backend/src
-RUN pip install ./backend && rm -rf ./backend
+RUN pip install --no-deps ./backend && rm -rf ./backend
 COPY --from=web /src/dist /app/static
 COPY --from=preview /out /app/static/preview
 ENV WLEDSTUDIO_STATIC=/app/static \
