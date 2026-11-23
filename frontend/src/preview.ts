@@ -12,11 +12,14 @@ interface PreviewModule {
   _preview_set(key: number, value: number): void;
   _preview_length(): number;
   _preview_frame(now: number): number;
+  /** The preview's "mic": a volume 0-255, or < 0 for none (sound effects then simulate). Builds
+   * before 2026-11-23 don't have it. */
+  _preview_audio?(level: number): void;
   UTF8ToString(ptr: number): string;
   HEAPU32: Uint32Array;
 }
 
-export const KEYS: Record<string, number> = { sx: 0, ix: 1, c1: 2, c2: 3, c3: 4, o1: 5, o2: 6, o3: 7, pal: 8 };
+export const KEYS: Record<string, number> = { sx: 0, ix: 1, c1: 2, c2: 3, c3: 4, o1: 5, o2: 6, o3: 7, pal: 8, si: 12 };
 
 export class Preview {
   constructor(private m: PreviewModule) {}
@@ -57,6 +60,12 @@ export class Preview {
       }
     }
   }
+
+  /** Whether this build can be fed sound (preview_audio). */
+  hasSound() { return typeof this.m._preview_audio === "function"; }
+
+  /** Feed sound to sound effects: a level 0-255, or null for WLED's simulated beat. */
+  sound(level: number | null) { this.m._preview_audio?.(level === null ? -1 : level); }
 
   frame(now: number): Uint32Array {
     const ptr = this.m._preview_frame(now) >>> 2;

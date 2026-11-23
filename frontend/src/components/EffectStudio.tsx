@@ -6,6 +6,7 @@ import { frameMessage, Preview } from "../preview";
 import type { Device } from "../types";
 import { CodeEditor } from "./CodeEditor";
 import type { Effect, Segment } from "../types";
+import { SOUND_SIMULATIONS } from "./SegmentLayout";
 import { EffectControls } from "./EffectControls";
 
 const LENGTH = 60;
@@ -39,6 +40,10 @@ export function EffectStudio({ notify, load = Preview.load }: {
   const [target, setTarget] = useState("");
   const socket = useRef<WebSocket | null>(null);
   const [streaming, setStreaming] = useState(false);
+  // sound for sound effects in the preview: null = WLED's simulated beat, else a level 0-255.
+  // A newly loaded preview starts with the simulation.
+  const [level, setLevel] = useState<number | null>(null);
+  useEffect(() => { setLevel(null); }, [preview]);
   const [room, setRoom] = useState<Room | null>(null);
 
   // a chosen device's room shape (and LED count) shapes the preview
@@ -206,6 +211,36 @@ export function EffectStudio({ notify, load = Preview.load }: {
       {effect && seg && (
         <EffectControls effect={effect} segment={seg} palettes={[{ id: 0, name: "Colours" }, { id: 1, name: "Rainbow" }]} rgbw
           onChange={(patch) => { preview?.set(patch); setSeg({ ...seg, ...patch }); }} />
+      )}
+      {effect && seg && effect.audio.length > 0 && preview?.hasSound() && (
+        <div className="row sound">
+          <label title="WLED's sound simulation, as when the mic is off">
+            <input type="checkbox" checked={level === null} aria-label="Simulated beat" onChange={(e) => {
+              const next = e.target.checked ? null : 128;
+              setLevel(next);
+              preview.sound(next);
+            }} /> Simulated beat
+          </label>
+          {level === null ? (
+            <select aria-label="Sound simulation" value={Number(seg.si ?? 0)} onChange={(e) => {
+              const si = Number(e.target.value);
+              preview.set({ si });
+              setSeg({ ...seg, si });
+            }}>
+              {SOUND_SIMULATIONS.map((n, i) => <option key={i} value={i}>{n}</option>)}
+            </select>
+          ) : (
+            <label className="slider grow">
+              <span>Sound level</span>
+              <input type="range" min={0} max={255} value={level} aria-label="Sound level" onChange={(e) => {
+                const v = Number(e.target.value);
+                setLevel(v);
+                preview.sound(v);
+              }} />
+              <output>{level}</output>
+            </label>
+          )}
+        </div>
       )}
       <CodeEditor notify={notify} onSaved={(folder) => {
         if (mine && !mine.includes(folder)) setMine([...mine, folder]);

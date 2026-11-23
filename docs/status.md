@@ -46,7 +46,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   device.
 
 ### Effect studio and firmware
-- **Effect studio:** a code editor for `./effects`; new effects from a template with a fixed effect
+- **Effect studio:** sound for sound effects in the preview (WLED's simulated beat with its four
+  styles, or a fixed sound level, through the builder's `preview_audio`); a code editor for `./effects`; new effects from a template with a fixed effect
   id; compiled unchanged to WebAssembly through the builder's job service and animated in the
   browser with each effect's own controls; the preview **streamed to the strip** (DDP).
 - **Firmware builds from the app:** gate jobs on wled-studio-builder's job service. The vendor's

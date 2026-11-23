@@ -116,3 +116,35 @@ test("streams to a device: sizes the preview to its LEDs and opens the stream wi
   expect(await screen.findByText("Stream to the strip")).toBeInTheDocument();
   sessionStorage.clear();
 });
+
+test("a sound effect gets the simulated beat or a fixed sound level", async () => {
+  const strings: string[] = [];
+  const str = (s: string) => { strings.push(s); return strings.length - 1; };
+  const names = ["Solid", "Meter"], metas = ["", "Gain;!;!;1v"];
+  const sets: [number, number][] = [], audio: number[] = [];
+  const m = {
+    _preview_setup: () => {}, _preview_effect_count: () => names.length,
+    _preview_effect_name: (id: number) => str(names[id]), _preview_effect_metadata: (id: number) => str(metas[id]),
+    _preview_select: (id: number) => id, _preview_set: (k: number, v: number) => { sets.push([k, v]); },
+    _preview_length: () => 4, _preview_frame: () => 0, _preview_audio: (l: number) => { audio.push(l); },
+    UTF8ToString: (p: number) => strings[p], HEAPU32: new Uint32Array(64),
+  };
+  render(<EffectStudio notify={() => {}} load={async () => new Preview(m as never)} />);
+  const beat = await screen.findByLabelText("Simulated beat");
+  expect(beat).toBeChecked();
+  fireEvent.change(screen.getByLabelText("Sound simulation"), { target: { value: "1" } });
+  expect(sets).toContainEqual([12, 1]);                      // WLED's sound simulation setting
+  fireEvent.click(beat);                                      // off: a fixed level
+  expect(audio.at(-1)).toBe(128);
+  fireEvent.change(screen.getByLabelText("Sound level"), { target: { value: "200" } });
+  expect(audio.at(-1)).toBe(200);
+  fireEvent.click(screen.getByLabelText("Simulated beat"));  // back to the simulation
+  expect(audio.at(-1)).toBe(-1);
+});
+
+test("no sound controls for a build without preview_audio", async () => {
+  const m = fakeModule();
+  render(<EffectStudio notify={() => {}} load={async () => new Preview(m as never)} />);
+  await screen.findByLabelText("Preview effect");
+  expect(screen.queryByLabelText("Simulated beat")).toBeNull();
+});
