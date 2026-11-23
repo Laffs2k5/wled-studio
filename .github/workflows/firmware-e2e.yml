@@ -9,7 +9,8 @@ on:
     - cron: "41 3 * * 2"
   push:
     branches: [main]
-    paths: ["compose.yaml", "proxy/**", "scripts/firmware-e2e.sh", ".github/workflows/firmware-e2e.yml"]
+    paths: ["compose.yaml", "proxy/**", "scripts/firmware-e2e.sh", ".github/workflows/firmware-e2e.yml",
+            "backend/src/wledstudio/firmware.py"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,6 +18,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read   # to wait for this commit's ci run
 
 jobs:
   e2e:
@@ -26,6 +28,22 @@ jobs:
       WLEDSTUDIO_BUILDER_URL: http://builder:8090
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # This runs the published app image, which this commit's ci run publishes: wait for it,
+      # or the test pulls the previous image (a race seen 2026-11-23).
+      - name: Wait for this commit's ci
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 90); do
+            c=$(gh run list -R "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" --workflow ci --json status,conclusion -q '.[0] | "\(.status) \(.conclusion)"')
+            case "$c" in
+              "completed success") echo "ci passed"; exit 0 ;;
+              "completed "*) echo "ci: $c"; exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "ci didn't finish in 30 minutes"; exit 1
       - name: Start (published images)
         run: docker compose --profile firmware --profile demo up -d --no-build
       - name: Network policy, preview job, gate build
