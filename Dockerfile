@@ -4,7 +4,7 @@
 # The effect preview: example effects compiled to WebAssembly (platform-independent output).
 FROM --platform=$BUILDPLATFORM emscripten/emsdk:7.0.1@sha256:73aece2e0ab748487945ad117b79fc4d277e9f656e54fc800a9b1a0a6562715b AS preview
 ARG BUILDER_REPO=https://github.com/Laffs2k5/wled-studio-builder.git
-ARG BUILDER_COMMIT=36e360c3d77792504f7c762240ff0a9023b46cd2
+ARG BUILDER_COMMIT=eeb79f5c161d53725d6186524593a33e59a4866d
 WORKDIR /src
 RUN git init -q builder && git -C builder fetch -q --depth 1 "$BUILDER_REPO" "$BUILDER_COMMIT" \
  && git -C builder checkout -q FETCH_HEAD
