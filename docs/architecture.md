@@ -23,6 +23,10 @@ flowchart LR
   with `{"stop":0}` up to the device's limit (`info.leds.maxseg`), and so does the app. Captured
   looks own the layout. Imported ones keep what the device's preset did, so an import followed by a
   write leaves unchanged presets unchanged.
+- **A look keeps every field WLED saves in a preset** (blending style, quick-load label, CCT,
+  segment set, sound simulation, 1D→2D mapping, …), and an `id` only where the preset had one. So a
+  preset saved in WLED's own UI, or written by a script, survives an import and a write byte for
+  byte, apart from what was edited.
 - **Segments can be named by wall.** When a look is captured or imported, a segment that covers
   exactly one labelled wall of the device's room model gets that wall's name (`wall`). Showing or
   writing the look takes the wall's LEDs from the room model at that time, so correcting a boundary

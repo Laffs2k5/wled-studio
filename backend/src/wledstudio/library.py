@@ -26,7 +26,14 @@ from . import fxmeta
 
 SEG_SLIDERS = ("sx", "ix", "c1", "c2", "c3")
 SEG_CHECKS = ("o1", "o2", "o3")
-SEG_PASSTHROUGH = ("start", "stop", "on", "bri", "col", "rev", "mi", "bm", "grp", "spc", "of", "frz", "n")
+# The segment fields WLED writes into a preset (json.cpp serializeSegment, forPreset), less fx
+# and pal, which a look stores by name, and the sliders and checks above. A look keeps all of
+# them, so a preset WLED saved survives import and write unchanged; nothing else reaches a
+# preset (a look sent to the API can't smuggle in, say, "rb" for a reboot).
+SEG_PASSTHROUGH = ("start", "stop", "startY", "stopY", "grp", "spc", "of", "on", "frz", "bri", "cct", "set",
+                   "lc", "n", "col", "sel", "rev", "mi", "rY", "mY", "tp", "si", "m12", "bm")
+# ... and at the top of a preset (json.cpp serializeState; "ql" from presets.cpp)
+PRESET_PASSTHROUGH = ("on", "bri", "transition", "bs", "mainseg", "ql")
 MAX_NAME_BYTES = 32  # WLED preset names
 STATUS_ORDER = ["ok", "remapped", "check", "review", "unavailable"]
 
@@ -94,6 +101,8 @@ class DeviceLists:
 def segment_from_state(seg: dict, lists: DeviceLists) -> tuple[dict, str | None]:
     """A WLED segment (state or preset) -> a look segment; returns (segment, effect name)."""
     out: dict = {k: seg[k] for k in SEG_PASSTHROUGH if k in seg}
+    if "id" in seg:
+        out["id"] = seg["id"]  # written back only if it was there (an array entry's id is its position)
     fx = seg.get("fx")
     name = None
     if isinstance(fx, int) and 0 <= fx < len(lists.effects):
@@ -119,7 +128,7 @@ def look_from_preset(pid: str, preset: dict, lists: DeviceLists) -> dict | None:
     segs = preset["seg"] if isinstance(preset["seg"], list) else [preset["seg"]]
     look: dict = {"name": preset.get("n") or f"Preset {pid}", "preset_id": int(pid), "segments": [],
                   "snapshot": {}, "imported_ids": {}}
-    for k in ("on", "bri", "transition", "mainseg"):
+    for k in PRESET_PASSTHROUGH:
         if k in preset:
             look[k] = preset[k]
     ar = preset.get("AudioReactive")
@@ -349,7 +358,7 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
     segs = []
     walls = wall_ranges(room) if room is not None else None
     for i, s in enumerate(look.get("segments", [])):
-        out: dict = {"id": i}
+        out: dict = {"id": i} if "id" in s else {}  # positions: padding after them must line up
         for k in SEG_PASSTHROUGH + SEG_SLIDERS + SEG_CHECKS:
             if k in s:
                 out[k] = s[k]
@@ -393,7 +402,7 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
             and all("start" in s and "stop" in s for s in segs)):
         segs += [{"stop": 0} for _ in range(len(segs), lists.max_segments)]
     preset: dict = {"n": look["name"], "seg": segs}
-    for k in ("on", "bri", "transition", "mainseg"):
+    for k in PRESET_PASSTHROUGH:
         if k in look:
             preset[k] = look[k]
     if look.get("mic") is not None:

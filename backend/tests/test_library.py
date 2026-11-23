@@ -246,3 +246,26 @@ def test_playlists_take_the_worst_status_of_their_looks():
     assert rows["A"]["status"] == "review" and rows["B"]["status"] == "ok"
     assert rows["pl:P"]["status"] == "review" and rows["pl:P"]["notes"] == ["'A' is review"]
     assert rows["pl:Q"]["status"] == "unavailable" and rows["pl:Q"]["notes"] == ["look 'Gone' isn't in the library"]
+
+
+def test_presets_saved_by_wled_survive_an_import_round_trip():
+    # shaped like WLED 16's own preset save: "bs" at the top, every segment field, padding
+    wled_saved = {"n": "Saved in WLED", "on": True, "bri": 128, "transition": 7, "bs": 0, "mainseg": 0, "ql": "W",
+                  "seg": [{"id": 0, "start": 0, "stop": 60, "grp": 1, "spc": 0, "of": 0, "on": True, "frz": False,
+                           "bri": 255, "cct": 127, "set": 0, "lc": 9, "n": "", "col": [[255, 160, 0, 0], [0, 0, 0, 0],
+                           [0, 0, 0, 0]], "fx": 3, "sx": 128, "ix": 128, "pal": 1, "c1": 128, "c2": 128, "c3": 16,
+                           "sel": True, "rev": False, "mi": False, "o1": False, "o2": False, "o3": False, "si": 0,
+                           "m12": 0, "bm": 0}] + [{"stop": 0}] * 3}
+    no_ids = {"n": "Written by a script", "on": True, "bri": 200, "seg": [{"fx": 1, "sx": 50, "pal": 2}]}
+    lists = DeviceLists(LISTS.effects, LISTS.fxdata, LISTS.palettes, max_segments=4)
+    device = {"0": {}, "1": wled_saved, "2": no_ids}
+    looks, _ = import_presets(device, lists)
+    out, _ = plan_presets(device, looks, lists)
+    assert out == device
+
+
+def test_only_preset_fields_reach_a_preset():
+    look = {"name": "L", "rb": True, "nl": {"on": True}, "bs": 2,
+            "segments": [{"start": 0, "stop": 60, "effect": "Glow", "rb": True, "pin": "1", "cct": 10}]}
+    p = resolve_look(look, LISTS).preset
+    assert p == {"n": "L", "bs": 2, "seg": [{"start": 0, "stop": 60, "fx": 1, "cct": 10}]}

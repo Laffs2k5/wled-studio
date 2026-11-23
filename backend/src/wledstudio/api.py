@@ -402,7 +402,7 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
             raise device_errors(e) from None
     # what the device shows is its whole layout, so the look deletes other segments when shown
     look: dict = {"name": name, "segments": [], "snapshot": {}, "imported_ids": {}, "clear_other_segments": True}
-    for k in ("on", "bri", "transition"):
+    for k in ("on", "bri", "transition", "bs", "mainseg"):  # as WLED's own preset save
         if k in st:
             look[k] = st[k]
     for seg in st.get("seg", []):
