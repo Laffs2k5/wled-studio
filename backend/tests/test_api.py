@@ -100,6 +100,20 @@ def test_import_capture_apply_push(client, dev_id, device):
     assert len(client.get(f"/api/devices/{dev_id}/backups").json()) == 1
 
 
+def test_showing_a_captured_look_restores_its_segment_layout(client, dev_id, device):
+    two = {"seg": [{"id": 0, "start": 0, "stop": 30}, {"id": 1, "start": 30, "stop": 60, "fx": 4}]}
+    client.post(f"/api/devices/{dev_id}/state", json=two, headers=CSRF)
+    assert client.post(f"/api/devices/{dev_id}/capture/Two", headers=CSRF).status_code == 200
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 1, "stop": 0}, {"id": 0, "stop": 60}]},
+                headers=CSRF)
+    assert client.post(f"/api/devices/{dev_id}/capture/One", headers=CSRF).status_code == 200
+
+    client.post(f"/api/devices/{dev_id}/apply/Two", headers=CSRF)
+    assert [(s["id"], s["start"], s["stop"], s["fx"]) for s in device.state["seg"]] == [(0, 0, 30, 0), (1, 30, 60, 4)]
+    client.post(f"/api/devices/{dev_id}/apply/One", headers=CSRF)
+    assert [(s["id"], s["start"], s["stop"]) for s in device.state["seg"]] == [(0, 0, 60)]  # segment 1 deleted
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

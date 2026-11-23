@@ -46,7 +46,7 @@ def _segment(sid: int, start: int, stop: int) -> dict:
     return {"id": sid, "start": start, "stop": stop, "on": True, "bri": 255, "fx": 0, "sx": 128,
             "ix": 128, "c1": 128, "c2": 128, "c3": 16, "o1": False, "o2": False, "o3": False,
             "pal": 0, "col": [[255, 160, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], "rev": False,
-            "mi": False, "frz": False, "bm": 0, "n": ""}
+            "mi": False, "grp": 1, "spc": 0, "of": 0, "frz": False, "bm": 0, "n": ""}
 
 
 @dataclass
@@ -100,18 +100,23 @@ class FakeDevice:
         segs = body.get("seg")
         if isinstance(segs, dict):
             segs = [segs]
+            default_ids = [self.state.get("mainseg", 0)]
+        elif isinstance(segs, list):
+            default_ids = list(range(len(segs)))  # WLED: an array entry without "id" is its position
         if isinstance(segs, list):
-            for s in segs:
+            for s, default_id in zip(segs, default_ids):
                 if not isinstance(s, dict):
                     continue
-                sid = int(s.get("id", self.state.get("mainseg", 0)))
+                sid = int(s.get("id", default_id))
                 cur = next((x for x in self.state["seg"] if x["id"] == sid), None)
+                if s.get("stop") == 0:
+                    if cur is not None:
+                        self.state["seg"].remove(cur)
+                    continue
                 if cur is None:
                     cur = _segment(sid, s.get("start", 0), s.get("stop", self.led_count))
                     self.state["seg"].append(cur)
-                if s.get("stop") == 0:
-                    self.state["seg"].remove(cur)
-                    continue
+                    self.state["seg"].sort(key=lambda x: x["id"])
                 for k, v in s.items():
                     if k != "id" and k in cur:
                         cur[k] = v

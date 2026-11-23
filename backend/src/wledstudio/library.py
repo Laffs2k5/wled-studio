@@ -57,11 +57,13 @@ MAX_CUSTOM_PALETTES = 129
 @dataclass
 class DeviceLists:
     """What one device offers: effect names and metadata, palette names, and the custom
-    palettes wled-studio put there (name -> palette id, from the device's manifest)."""
+    palettes wled-studio put there (name -> palette id, from the device's manifest).
+    max_segments is the device's segment limit (info.leds.maxseg), if known."""
     effects: list[str]
     fxdata: list[str]
     palettes: list[str]
     custom: dict[str, int] = field(default_factory=dict)
+    max_segments: int | None = None
 
     def effect_id(self, name: str) -> int | None:
         try:
@@ -123,6 +125,8 @@ def look_from_preset(pid: str, preset: dict, lists: DeviceLists) -> dict | None:
     ar = preset.get("AudioReactive")
     if isinstance(ar, dict) and "enabled" in ar:
         look["mic"] = bool(ar["enabled"])
+    if any(isinstance(s, dict) and s.get("stop") == 0 for s in segs):
+        look["clear_other_segments"] = True  # saved with segment bounds: keep deleting the rest
     for seg in segs:
         if not isinstance(seg, dict) or seg.get("stop") == 0:
             continue
@@ -284,6 +288,13 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
         elif "palette_id" in s:
             out["pal"] = s["palette_id"]
         segs.append(out)
+    # A look that owns the layout deletes the device's other segments, as WLED's own presets
+    # saved with segment bounds do (serializeState pads to the segment limit), so a look with
+    # fewer segments doesn't leave the previous look's extra ones running. WLED reads the
+    # array by position, so {"stop": 0} needs no id.
+    if (look.get("clear_other_segments") and segs and lists.max_segments
+            and all("start" in s and "stop" in s for s in segs)):
+        segs += [{"stop": 0} for _ in range(len(segs), lists.max_segments)]
     preset: dict = {"n": look["name"], "seg": segs}
     for k in ("on", "bri", "transition", "mainseg"):
         if k in look:

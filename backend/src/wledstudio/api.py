@@ -13,7 +13,7 @@ from . import fxmeta, netcheck
 from .devices import Device, DeviceStore
 from .library import (DeviceLists, LibraryStore, LookError, check_name, import_presets, mic_for,
                       playlist_from_preset, resolve_look, segment_from_state)
-from .push import StateStore, push
+from .push import StateStore, fetch_lists, push
 from .wled import WLEDClient, WLEDError, WLEDLocked
 
 router = APIRouter(prefix="/api")
@@ -163,7 +163,7 @@ def make_client(request: Request, dev: Device) -> WLEDClient:
 
 async def lists_for(client: WLEDClient, request: Request | None = None, device_id: str | None = None) -> DeviceLists:
     custom = request.app.state.statestore.custom_ids(device_id) if request is not None and device_id else {}
-    return DeviceLists(await client.effects(), await client.fxdata(), await client.palettes(), custom)
+    return await fetch_lists(client, custom)
 
 
 def device_errors(e: Exception) -> HTTPException:
@@ -386,7 +386,8 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
             st = await c.state()
         except WLEDError as e:
             raise device_errors(e) from None
-    look: dict = {"name": name, "segments": [], "snapshot": {}, "imported_ids": {}}
+    # what the device shows is its whole layout, so the look deletes other segments when shown
+    look: dict = {"name": name, "segments": [], "snapshot": {}, "imported_ids": {}, "clear_other_segments": True}
     for k in ("on", "bri", "transition"):
         if k in st:
             look[k] = st[k]

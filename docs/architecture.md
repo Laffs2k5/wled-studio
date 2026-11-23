@@ -18,6 +18,11 @@ flowchart LR
   stored with effect and palette *names* and a snapshot of each effect's metadata, and resolved to
   the device's ids when written (see `backend/src/wledstudio/library.py` for the change-check
   statuses).
+- **A look can own the segment layout** (`clear_other_segments`): showing it deletes the device's
+  other segments, as WLED's own presets saved with segment bounds do. They pad the segment list
+  with `{"stop":0}` up to the device's limit (`info.leds.maxseg`), and so does the app. Captured
+  looks own the layout. Imported ones keep what the device's preset did, so an import followed by a
+  write leaves unchanged presets unchanged.
 - **Writing** replaces `presets.json` as a whole (`push.py`):
   1. back up the current file;
   2. check for drift since the last write;

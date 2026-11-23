@@ -79,6 +79,13 @@ class PushResult:
     palettes: list | None = None
 
 
+async def fetch_lists(client: WLEDClient, custom: dict[str, int] | None = None) -> DeviceLists:
+    """What the device offers, for resolving looks against it."""
+    maxseg = ((await client.info()).get("leds") or {}).get("maxseg")
+    return DeviceLists(await client.effects(), await client.fxdata(), await client.palettes(), custom or {},
+                       max_segments=maxseg if isinstance(maxseg, int) and 0 < maxseg <= 255 else None)
+
+
 def diff_ids(before: dict, after: dict) -> list[str]:
     keys = set(before) | set(after)
     return sorted((k for k in keys if before.get(k) != after.get(k)), key=lambda k: int(k) if k.isdigit() else -1)
@@ -89,7 +96,7 @@ async def push(client: WLEDClient, device_id: str, looks: list[dict], state: Sta
                playlists: list[dict] | None = None, palettes: list[dict] | None = None) -> PushResult:
     manifest, uploads = assign_palettes(palettes or [], state.palette_manifest(device_id))
     custom = {n: CUSTOM_PALETTE_BASE - m["index"] for n, m in manifest.items()}
-    lists = DeviceLists(await client.effects(), await client.fxdata(), await client.palettes(), custom)
+    lists = await fetch_lists(client, custom)
     pal_report = [{"palette": u["name"], "file": u["file"], "id": CUSTOM_PALETTE_BASE - u["index"]} for u in uploads]
     current_text = await client.presets_text()
     current = json.loads(current_text or "{}")

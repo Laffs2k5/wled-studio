@@ -124,3 +124,40 @@ def test_mic_rule():
     assert mic_for({"segments": [{"effect_id": 4}]}, LISTS) is True
     assert mic_for({"segments": [{"effect": "Gone"}]}, LISTS) is False
     assert mic_for({"segments": []}, LISTS) is False
+
+
+def test_a_look_that_owns_the_layout_deletes_other_segments():
+    lists = DeviceLists(LISTS.effects, LISTS.fxdata, LISTS.palettes, max_segments=4)
+    look = {"name": "L", "clear_other_segments": True,
+            "segments": [{"start": 0, "stop": 30, "effect": "Glow"}, {"start": 30, "stop": 60, "effect": "Comet"}]}
+    segs = resolve_look(look, lists).preset["seg"]
+    assert [s.get("fx") for s in segs[:2]] == [1, 3]
+    assert segs[2:] == [{"stop": 0}, {"stop": 0}]  # by position, as WLED pads its own presets
+
+
+@pytest.mark.parametrize("change", [
+    {"clear_other_segments": False},                                   # the look doesn't own the layout
+    {"segments": [{"effect": "Glow"}]},                                # no bounds: applies to the current layout
+])
+def test_no_padding_unless_the_look_owns_bounded_segments(change):
+    lists = DeviceLists(LISTS.effects, LISTS.fxdata, LISTS.palettes, max_segments=4)
+    look = {"name": "L", "clear_other_segments": True, "segments": [{"start": 0, "stop": 60, "effect": "Glow"}]}
+    look.update(change)
+    assert len(resolve_look(look, lists).preset["seg"]) == 1
+
+
+def test_no_padding_when_the_segment_limit_is_unknown():
+    look = {"name": "L", "clear_other_segments": True, "segments": [{"start": 0, "stop": 60, "effect": "Glow"}]}
+    assert len(resolve_look(look, LISTS).preset["seg"]) == 1
+
+
+def test_padded_presets_survive_an_import_round_trip():
+    lists = DeviceLists(LISTS.effects, LISTS.fxdata, LISTS.palettes, max_segments=4)
+    padded = preset(3, 1)
+    padded["seg"] += [{"stop": 0}] * 3
+    plain = preset(1)
+    device = {"0": {}, "1": padded, "2": plain}
+    looks, _ = import_presets(device, lists)
+    assert [lk.get("clear_other_segments") for lk in looks] == [True, None]
+    out, _ = plan_presets(device, looks, lists)
+    assert out == device  # unchanged: the padding is kept where it was, and not added where it wasn't
