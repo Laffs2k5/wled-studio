@@ -84,13 +84,14 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    instead of the stand-ins.
 8. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
 
-## Open design items
+## Decided design
 
-- **Telling a home-automation system that someone is editing,** so its automations and remotes
-  hold off during a session: a flag it can read, and what holds off.
-- **Preset banks driven by a remote:** an optional in-tree module first, with a plugin API later?
-- **Access control once the app can flash:** the bearer token today. A reverse proxy with client
-  certificates (mTLS) is the recommendation before flashing from the app is enabled.
+- **Preset banks for a remote stay outside the app:** the home-automation system switches banks; the
+  app builds the looks and writes them to the bank slots. A grid view of those slots may come later.
+- **Editing sessions and home automation:** the user flags "editing" in the home-automation system
+  by hand; the app holds no token for it.
+- **Access:** on the LAN with the bearer token; a reverse proxy with client certificates (mTLS)
+  before flashing from the app is enabled; never exposed to the internet.
 
 ## Waiting on
 
