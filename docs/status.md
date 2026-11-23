@@ -20,6 +20,10 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   shows where every segment is, selects one with a click and sets its LEDs by dragging; and looks
   saved **without the layout**, which change only the segments they name, like WLED presets saved
   without bounds.
+- **Editing a saved look without showing it:** "Edit" in the look list opens the stored look as
+  this device's segments, with the same tools as live editing and an effect picker; saving goes
+  through the same path as capture, and nothing is sent to the strip. An imported look saved
+  unchanged keeps its preset unchanged.
 - **The room model:** the strip's shape as walls in LED order, and **named zones** (a door, a desk:
   LED ranges) that looks follow like walls. The live view and the effect
   preview are drawn in it. **Segments named by wall or zone** follow it when its boundaries are
@@ -71,10 +75,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    way back; a spare board first.
 3. **Preflight:** check the library against a firmware's effect list before it is flashed. This
    needs the builder to list a built image's effects (a build manifest).
-4. **Editing a saved look** without showing it on a device. Today: show it, edit live, save again.
-5. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
+4. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
    instead of the stand-ins.
-6. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
+5. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
 
 ## Decided design
 

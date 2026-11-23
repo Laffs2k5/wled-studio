@@ -179,6 +179,40 @@ test("segments: duplicate, restack, name, and drag on the map", async ({ page, r
   expect(problems).toEqual([]);
 });
 
+test("a saved look is edited in the library, not on the strip", async ({ page, request }) => {
+  const problems = watchCsp(page);
+  await page.goto("/");
+  const name = `E2E edit ${Date.now() % 100000}`;
+  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  await page.getByLabel("Device name").fill(name);
+  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
+  const devices = await (await request.get("/api/devices")).json();
+  const id = devices.find((d: { name: string }) => d.name === name).id;
+  const state = async () => JSON.stringify((await (await request.get(`/api/devices/${id}/state`)).json()).seg);
+
+  await page.getByRole("option", { name: "Glow" }).click();
+  await page.getByLabel("Look name").fill("E2E to edit");
+  await page.getByRole("button", { name: "Save current" }).click();
+  const looks = page.getByRole("region", { name: "Looks" });
+  await expect(looks.getByText("E2E to edit")).toBeVisible();
+  const before = await state();
+
+  await page.getByLabel("Edit E2E to edit").click();
+  await expect(page.getByRole("region", { name: "Editing E2E to edit" })).toBeVisible();
+  await page.getByLabel("Effect", { exact: true }).selectOption({ label: "Comet" });
+  await page.getByLabel("Tail").fill("33");
+  await page.getByRole("button", { name: "Save “E2E to edit”" }).click();
+  await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible(); // back to live editing
+
+  const look = (await (await request.get("/api/looks")).json()).find((l: { name: string }) => l.name === "E2E to edit");
+  expect(look.segments[0].effect).toBe("Comet");
+  expect(look.segments[0].ix).toBe(33);
+  expect(await state()).toBe(before); // the strip didn't change
+  expect(problems).toEqual([]);
+});
+
 test("effect studio: the WebAssembly preview loads and runs under the CSP", async ({ page }) => {
   const problems = watchCsp(page);
   await page.goto("/");

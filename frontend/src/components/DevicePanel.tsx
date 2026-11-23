@@ -6,6 +6,7 @@ import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
 import { areas, type Room } from "../room";
 import { LiveStrip } from "./LiveStrip";
+import { LookEditor } from "./LookEditor";
 import { RoomEditor } from "./RoomEditor";
 import { SegmentLayout } from "./SegmentLayout";
 import { SegmentMap } from "./SegmentMap";
@@ -28,6 +29,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [palettes, setPalettes] = useState<Palette[]>([]);
   const [checks, setChecks] = useState<CheckItem[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
   const [segId, setSegId] = useState(0);
   const [room, setRoom] = useState<Room | null>(null);
   const pending = useRef<Partial<Segment>>({});
@@ -39,6 +41,10 @@ export function DevicePanel({ deviceId, notify }: Props) {
     api.check(deviceId).catch(() => [] as CheckItem[]), // the device may be unreachable; the lists still load
   ]).then(([l, p, c, k]) => { setLooks(l); setPlaylists(p); setPalettes(c); setChecks(k); })
     .catch((e) => notify(e.message, true)), [deviceId, notify]);
+  const closeEditor = useCallback((saved: boolean) => {
+    setEditing(null);
+    if (saved) reloadLooks();
+  }, [reloadLooks]);
 
   useEffect(() => {
     setProfile(null);
@@ -146,10 +152,16 @@ export function DevicePanel({ deviceId, notify }: Props) {
   return (
     <div className="device-panel">
       <aside>
-        <EffectList effects={profile.effects} selected={segment.fx} hasMatrix={hasMatrix}
-          onSelect={(fx) => change({ fx })} />
+        {editing ? <p className="muted small">Editing a saved look: pick its effects in the editor.</p> : (
+          <EffectList effects={profile.effects} selected={segment.fx} hasMatrix={hasMatrix}
+            onSelect={(fx) => change({ fx })} />
+        )}
       </aside>
       <main>
+        {editing ? (
+          <LookEditor key={editing} deviceId={deviceId} name={editing} profile={profile} room={room} notify={notify}
+            onClose={closeEditor} />
+        ) : (<>
         <LiveStrip deviceId={deviceId} room={room} />
         <SessionBar deviceId={deviceId} notify={notify} beforeAction={flush} onRestored={reloadState} />
         <div className="master row">
@@ -208,10 +220,11 @@ export function DevicePanel({ deviceId, notify }: Props) {
           {String(profile.info.product ?? "")} · WLED {String(profile.info.ver ?? "")} · {profile.leds.count} LEDs
         </p>
         <RoomEditor deviceId={deviceId} ledCount={profile.leds.count} onSaved={setRoom} notify={notify} />
+        </>)}
       </main>
       <aside>
         <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
-          beforeAction={flush} checks={checks} />
+          beforeAction={flush} checks={checks} onEdit={setEditing} />
         <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks} />
         <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
       </aside>

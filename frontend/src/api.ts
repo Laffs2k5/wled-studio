@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
+import type { EditedLook } from "./components/LookEditor";
 import type { CheckItem, Device, EditingSession, DeviceState, Look, Palette, Playlist, Profile, PushResult } from "./types";
 
 export class ApiError extends Error {
@@ -113,6 +114,9 @@ export const api = {
     const q = [presetId ? `preset_id=${presetId}` : "", keepLayout ? "layout=false" : ""].filter(Boolean).join("&");
     return request<Look>("POST", `/api/devices/${enc(id)}/capture/${enc(name)}` + (q ? `?${q}` : ""));
   },
+  editLook: (id: string, name: string) => request<EditedLook>("GET", `/api/devices/${enc(id)}/looks/${enc(name)}/edit`),
+  saveEditedLook: (id: string, name: string, body: object) =>
+    request<Look>("POST", `/api/devices/${enc(id)}/looks/${enc(name)}`, body),
   moveSegment: (id: string, seg: number, direction: "up" | "down") =>
     request<{ id: number }>("POST", `/api/devices/${enc(id)}/segments/${seg}/move?direction=${direction}`),
   duplicateSegment: (id: string, seg: number) =>

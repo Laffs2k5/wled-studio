@@ -257,6 +257,58 @@ def test_segment_names_and_flags_are_checked(client, dev_id):
         assert client.post(f"/api/devices/{dev_id}/state", json=bad, headers=CSRF).status_code == 422, bad
 
 
+def test_a_saved_look_is_edited_without_touching_the_device(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "start": 0, "stop": 60, "fx": 2, "sx": 10}]},
+                headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/Calm?preset_id=6", headers=CSRF)
+    shown = [dict(s) for s in device.state["seg"]]
+    ed = client.get(f"/api/devices/{dev_id}/looks/Calm/edit").json()
+    assert ed["owns_layout"] and ed["bounds"] and ed["ids"] and ed["preset_id"] == 6
+    seg = ed["state"]["seg"]
+    assert (seg[0]["fx"], seg[0]["sx"]) == (2, 10)
+    seg[0].update(fx=8, ix=200, stop=30)
+    seg.append({"id": 1, "start": 30, "stop": 60, "fx": 4})
+    r = client.post(f"/api/devices/{dev_id}/looks/Calm", json={"seg": seg, "on": True, "bri": 90}, headers=CSRF)
+    assert r.status_code == 200
+    look = next(lk for lk in client.get("/api/looks").json() if lk["name"] == "Calm")
+    assert [s.get("effect") for s in look["segments"]] == ["Comet", "Sparkle Rain"]
+    assert look["segments"][0]["ix"] == 200 and look["preset_id"] == 6 and look["bri"] == 90
+    assert look["snapshot"]["Comet"] == "!,Tail;!;!;1;sx=128,ix=200"
+    assert [dict(s) for s in device.state["seg"]] == shown  # the strip didn't change
+    assert client.get(f"/api/devices/{dev_id}/looks/Nope/edit").status_code == 404
+
+
+def test_editing_and_saving_unchanged_keeps_a_wled_preset_as_it_was(client, dev_id, device):
+    wled_saved = {"n": "Saved in WLED", "on": True, "bri": 128, "transition": 7, "bs": 0, "ql": "W",
+                  "seg": [{"start": 0, "stop": 60, "grp": 1, "spc": 0, "of": 0, "on": True, "frz": False, "bri": 255,
+                           "cct": 127, "set": 0, "lc": 9, "n": "", "col": [[255, 160, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+                           "fx": 8, "sx": 128, "ix": 128, "pal": 3, "c1": 128, "c2": 128, "c3": 16, "sel": True,
+                           "rev": False, "mi": False, "o1": False, "o2": False, "o3": False, "si": 0, "m12": 0, "bm": 0}]}
+    device.presets = {"0": {}, "5": wled_saved}
+    client.post(f"/api/devices/{dev_id}/import", headers=CSRF)
+    ed = client.get(f"/api/devices/{dev_id}/looks/Saved in WLED/edit").json()
+    assert ed["ids"] is False and ed["owns_layout"] is False
+    seg = ed["state"]["seg"]
+    r = client.post(f"/api/devices/{dev_id}/looks/Saved in WLED",
+                    json={"seg": seg, **{k: ed["state"][k] for k in ("on", "bri", "transition")},
+                          "owns_layout": ed["owns_layout"], "ids": ed["ids"]}, headers=CSRF)
+    assert r.status_code == 200, r.text
+    assert "mic" not in r.json()  # unchanged effects: no mic rule, so the preset stays as it was
+    dry = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert dry["changed_ids"] == []
+
+
+def test_a_look_without_the_layout_is_edited_without_bounds(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/capture/Loose?layout=false", headers=CSRF)
+    ed = client.get(f"/api/devices/{dev_id}/looks/Loose/edit").json()
+    assert ed["bounds"] is False and ed["owns_layout"] is False
+    seg = ed["state"]["seg"]
+    seg[0]["fx"] = 5
+    saved = client.post(f"/api/devices/{dev_id}/looks/Loose", json={"seg": seg, "owns_layout": False}, headers=CSRF).json()
+    assert "start" not in saved["segments"][0] and saved["segments"][0]["effect"] == "Pulse Meter"
+    assert saved["mic"] is True  # a sound effect now: the mic rule
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

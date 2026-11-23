@@ -65,6 +65,17 @@ class SegmentState(Strict):
     spc: int | None = Field(default=None, ge=0, le=255)
     of: int | None = Field(default=None, ge=0, le=65535)
     bm: int | None = Field(default=None, ge=0, le=31)
+    # WLED's other preset fields, so an imported look's segments can be edited and saved
+    cct: int | None = Field(default=None, ge=0, le=10091)   # 0-255, or Kelvin
+    set: int | None = Field(default=None, ge=0, le=3)
+    sel: bool | None = None
+    m12: int | None = Field(default=None, ge=0, le=4)
+    startY: int | None = Field(default=None, ge=0, le=65535)
+    stopY: int | None = Field(default=None, ge=0, le=65535)
+    rY: bool | None = None
+    mY: bool | None = None
+    tp: bool | None = None
+    lc: int | None = Field(default=None, ge=0, le=255)      # reported by WLED (light capabilities); ignored on input
 
     @field_validator("col")
     @classmethod
@@ -84,6 +95,18 @@ class LiveState(Strict):
     transition: int | None = Field(default=None, ge=0, le=65535)
     seg: list[SegmentState] | None = Field(default=None, max_length=32)
     AudioReactive: AudioState | None = None
+
+
+class EditedLookIn(Strict):
+    """A look edited in the app: its segments as device state (ids, not names)."""
+    seg: list[SegmentState] = Field(min_length=1, max_length=64)
+    on: bool | None = None
+    bri: Byte | None = None
+    transition: int | None = Field(default=None, ge=0, le=65535)
+    owns_layout: bool = True      # deletes the device's other segments when shown
+    ids: bool = True              # write segment ids (False keeps an id-less preset id-less)
+    preset_id: int | None = Field(default=None, ge=1, le=250)
+    keep_slot: bool = True        # keep the look's slot when preset_id isn't given
 
 
 class LookSegment(BaseModel):
@@ -530,27 +553,100 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
         except WLEDError as e:
             raise device_errors(e) from None
     # what the device shows is its whole layout, so the look deletes other segments when shown
-    look: dict = {"name": name, "segments": [], "snapshot": {}, "imported_ids": {}, "clear_other_segments": layout}
+    look = build_look(name, st, lists, bounds=layout, owns_layout=layout, room=room_for(request, dev.id))
+    if preset_id is not None:
+        look["preset_id"] = preset_id
+    return request.app.state.library.put(look)
+
+
+def build_look(name: str, st: dict, lists: DeviceLists, *, bounds: bool, owns_layout: bool,
+               room: dict | None, ids: bool = True) -> dict:
+    """A look from a device state (live, or edited in the app): effects and palettes by name,
+    their metadata as a snapshot, walls and zones named, and the mic rule applied."""
+    look: dict = {"name": name, "segments": [], "snapshot": {}, "imported_ids": {},
+                  "clear_other_segments": owns_layout}
     for k in ("on", "bri", "transition", "bs", "mainseg"):  # as WLED's own preset save
         if k in st:
             look[k] = st[k]
     for seg in st.get("seg", []):
         s, fxname = segment_from_state(seg, lists)
-        if not layout:
+        if not bounds:
             for k in LAYOUT_KEYS:
                 s.pop(k, None)
+        if not ids:
+            s.pop("id", None)
         look["segments"].append(s)
         if fxname is not None:
             look["snapshot"][fxname] = lists.meta(seg["fx"])
             look["imported_ids"][fxname] = seg["fx"]
-    if preset_id is not None:
-        look["preset_id"] = preset_id
-    if layout:
-        tag_areas(look, room_for(request, dev.id))
+    if bounds:
+        tag_areas(look, room)
     # the mic rule: on for looks made for sound, off for the rest (the device's current
     # mic state isn't part of the look)
     look["mic"] = mic_for(look, lists)
-    return request.app.state.library.put(look)
+    return look
+
+
+@router.get("/devices/{device_id}/looks/{name}/edit")
+async def look_for_editing(device_id: str, name: str, request: Request):
+    """A saved look as this device's state (ids, not names), for editing without showing it."""
+    dev = device_or_404(device_id, request)
+    look = request.app.state.library.looks().get(name)
+    if look is None:
+        raise HTTPException(404, "no such look")
+    async with make_client(request, dev) as c:
+        try:
+            lists = await lists_for(c, request, dev.id)
+        except WLEDError as e:
+            raise device_errors(e) from None
+    r = resolve_look(look, lists, look.get("imported_ids"), room_for(request, dev.id))
+    if r.preset is None:
+        raise HTTPException(409, {"status": r.status, "notes": r.notes})
+    segs = [dict(s) for s in r.preset["seg"] if s != {"stop": 0}]
+    had_ids = all("id" in s for s in segs)
+    for i, s in enumerate(segs):
+        s.setdefault("id", i)  # WLED: an entry without an id is its position
+    state = {k: r.preset[k] for k in ("on", "bri", "transition") if k in r.preset}
+    state["seg"] = segs
+    return {"name": look["name"], "preset_id": look.get("preset_id"), "status": r.status, "notes": r.notes,
+            "owns_layout": bool(look.get("clear_other_segments")), "ids": had_ids,
+            "bounds": all("start" in s and "stop" in s for s in segs), "state": state}
+
+
+@router.post("/devices/{device_id}/looks/{name}")
+async def save_edited_look(device_id: str, name: str, body: EditedLookIn, request: Request):
+    """Save a look edited in the app (not shown on the device), as capture would from the device."""
+    dev = device_or_404(device_id, request)
+    try:
+        name = check_name(name)
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
+    lib: LibraryStore = request.app.state.library
+    old = lib.looks().get(name) or {}
+    async with make_client(request, dev) as c:
+        try:
+            lists = await lists_for(c, request, dev.id)
+        except WLEDError as e:
+            raise device_errors(e) from None
+    st = body.model_dump(exclude_none=True, include={"on", "bri", "transition", "seg"})
+    segs = st["seg"]
+    look = build_look(name, st, lists, bounds=all("start" in s and "stop" in s for s in segs),
+                      owns_layout=body.owns_layout, room=room_for(request, dev.id), ids=body.ids)
+    for k in ("bs", "ql", "mainseg"):  # the look's other preset settings, not edited here
+        if k in old and k not in look:
+            look[k] = old[k]
+    # the mic rule applies to an edit only if the look had a mic setting or its effects changed,
+    # so saving an imported look unchanged leaves its preset unchanged
+    effects = lambda lk: [s.get("effect", s.get("effect_id")) for s in lk.get("segments", [])]  # noqa: E731
+    if old and "mic" not in old and effects(old) == effects(look):
+        look.pop("mic", None)
+    if body.preset_id is not None:
+        look["preset_id"] = body.preset_id
+    elif body.keep_slot and old.get("preset_id") is not None:
+        look["preset_id"] = old["preset_id"]
+    if "source" in old:
+        look["source"] = old["source"]
+    return lib.put(look)
 
 
 @router.post("/devices/{device_id}/apply/{name}")

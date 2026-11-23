@@ -14,9 +14,11 @@ interface Props {
   beforeAction?: () => Promise<void>;
   /** Each look's change-check status on this device. */
   checks?: CheckItem[];
+  /** Open a look in the editor (edited in the library, not on the strip). */
+  onEdit?: (name: string) => void;
 }
 
-export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [] }: Props) {
+export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit }: Props) {
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
@@ -85,6 +87,10 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
             <button disabled={busy} onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” (${r.status})`).then(onApplied)}>
               Show
             </button>
+            {onEdit && (
+              <button disabled={busy} aria-label={`Edit ${l.name}`} title="Edit it in the library, without showing it"
+                onClick={() => onEdit(l.name)}>Edit</button>
+            )}
             <button disabled={busy} className="danger" aria-label={`Delete ${l.name}`}
               onClick={() => confirm(`Delete “${l.name}” from the library?`) && run(() => api.deleteLook(l.name)).then(onChanged)}>
               ×

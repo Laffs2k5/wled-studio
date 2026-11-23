@@ -115,3 +115,10 @@ test("a look can be saved without the layout", async () => {
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/capture/Colours?layout=false");
 });
+
+test("Edit opens a look in the editor", () => {
+  const onEdit = vi.fn();
+  render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} onEdit={onEdit} />);
+  fireEvent.click(screen.getByLabelText("Edit Evening"));
+  expect(onEdit).toHaveBeenCalledWith("Evening");
+});
