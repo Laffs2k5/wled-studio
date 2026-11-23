@@ -1,0 +1,8 @@
+{
+  "name": "wled-studio-e2e",
+  "private": true,
+  "license": "EUPL-1.2",
+  "type": "module",
+  "scripts": { "test": "playwright test" },
+  "devDependencies": { "@playwright/test": "1.65.1" }
+}
