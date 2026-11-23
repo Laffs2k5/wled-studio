@@ -32,10 +32,15 @@ interface Props {
   onClose: (saved: boolean) => void;
 }
 
-const filled = (s: Partial<Segment>, ledCount: number): Segment => ({
+/** A segment with display defaults filled in. `_set` lists the fields it really has: the ones it
+ * came with, plus the ones edited here. Only those are saved, so editing one slider of a look
+ * that carries few fields (no bounds, say) doesn't add the defaults shown for display. */
+const filled = (s: Partial<Segment>, ledCount: number, all = false): Segment => ({
   start: 0, stop: ledCount, on: true, bri: 255, fx: 0, pal: 0, col: [], sx: 128, ix: 128, c1: 128, c2: 128, c3: 16,
   o1: false, o2: false, o3: false, ...s, id: Number(s.id ?? 0),
+  _set: all ? [...SEGMENT_KEYS] : Object.keys(s),
 } as Segment);
+const fieldsOf = (s: Segment) => new Set((s._set as string[] | undefined) ?? SEGMENT_KEYS);
 
 /** A saved look, edited in the library: nothing is sent to the strip. */
 export function LookEditor({ deviceId, name, profile, room, notify, onClose }: Props) {
@@ -59,7 +64,8 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
   const segment = segs.find((s) => s.id === segId) ?? segs[0];
   const place = segs.indexOf(segment);
   const effect = profile.effects.find((e) => e.id === segment.fx) ?? profile.effects[0];
-  const change = (patch: Partial<Segment>) => setSegs(segs.map((s) => (s.id === segment.id ? { ...s, ...patch } : s)));
+  const change = (patch: Partial<Segment>) => setSegs(segs.map((s) => (s.id === segment.id
+    ? { ...s, ...patch, _set: [...fieldsOf(s), ...Object.keys(patch)] } : s)));
   const nextId = () => Math.max(...segs.map((s) => s.id)) + 1;
   // the stack is the order of the list; ids follow the order, as on the device
   const reorder = (list: Segment[], selectedAt: number) => {
@@ -71,7 +77,10 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
   async function save() {
     setBusy(true);
     try {
-      const seg = segs.map((s) => Object.fromEntries(Object.entries(s).filter(([k]) => SEGMENT_KEYS.includes(k))));
+      const seg = segs.map((s) => {
+        const keep = fieldsOf(s);
+        return Object.fromEntries(Object.entries(s).filter(([k]) => SEGMENT_KEYS.includes(k) && (k === "id" || keep.has(k))));
+      });
       await api.saveEditedLook(deviceId, name, {
         seg, bri, ...(look!.state.on !== undefined ? { on: look!.state.on } : {}),
         ...(look!.state.transition !== undefined ? { transition: look!.state.transition } : {}),
@@ -105,7 +114,7 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
           </button>
         ))}
         {look.bounds && segs.length < (profile.leds.maxseg || 1) && (
-          <button onClick={() => { const id = nextId(); setSegs([...segs, filled({ id, fx: 0 }, count)]); setSegId(id); }}>+ Segment</button>
+          <button onClick={() => { const id = nextId(); setSegs([...segs, filled({ id, fx: 0 }, count, true)]); setSegId(id); }}>+ Segment</button>
         )}
         {segs.length > 1 && (
           <button className="danger" onClick={() => reorder(segs.filter((s) => s.id !== segment.id), 0)}>

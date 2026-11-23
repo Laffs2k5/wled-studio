@@ -73,3 +73,18 @@ test("a look that can't be opened is reported, and the editor closes", async () 
   await waitFor(() => expect(onClose).toHaveBeenCalledWith(false));
   expect(notify).toHaveBeenCalledWith(expect.any(String), true);
 });
+
+test("editing one control saves only the look's own fields plus that one, not the display defaults", async () => {
+  // like a bank look written by a script: no bounds, no id, a few fields
+  const minimal: EditedLook = { ...base, bounds: false, owns_layout: false, ids: false,
+    state: { on: true, bri: 120, seg: [{ id: 0, frz: false, fx: 8, sx: 100, pal: 0 }] } };
+  const calls = stub(minimal);
+  render(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={() => {}} onClose={() => {}} />);
+  await screen.findByText(/Editing “Calm”/);
+  fireEvent.change(screen.getByLabelText("Speed"), { target: { value: "200" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save “Calm”" }));
+  await waitFor(() => expect(calls.some((c) => c.key.startsWith("POST"))).toBe(true));
+  const body = JSON.parse(calls.find((c) => c.key.startsWith("POST"))!.body!);
+  expect(body.seg).toEqual([{ id: 0, frz: false, fx: 8, sx: 200, pal: 0 }]);
+  expect(body).toMatchObject({ owns_layout: false, ids: false });
+});

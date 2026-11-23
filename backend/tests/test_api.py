@@ -325,6 +325,14 @@ def test_renaming_a_look_carries_through_to_playlists(client, dev_id):
     assert client.post("/api/looks/Quiet/rename", json={"to": "x" * 40}, headers=CSRF).status_code == 422
 
 
+def test_a_look_without_bounds_can_be_put(client):
+    look = {"name": "Loose", "preset_id": 9, "clear_other_segments": False,
+            "segments": [{"effect": "Comet", "sx": 100, "frz": False}]}
+    r = client.put("/api/looks/Loose", json=look, headers=CSRF)
+    assert r.status_code == 200, r.text
+    assert r.json()["segments"] == [{"effect": "Comet", "sx": 100, "frz": False}]
+
+
 def test_push_stops_on_drift(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]

@@ -111,8 +111,9 @@ class EditedLookIn(Strict):
 
 class LookSegment(BaseModel):
     model_config = ConfigDict(extra="allow")
-    start: int = Field(ge=0, le=65535)
-    stop: int = Field(ge=0, le=65535)
+    # optional: a look saved without the layout has segments without bounds
+    start: int | None = Field(default=None, ge=0, le=65535)
+    stop: int | None = Field(default=None, ge=0, le=65535)
     effect: str | None = Field(default=None, max_length=64)
     palette: str | None = Field(default=None, max_length=64)
     wall: str | None = Field(default=None, max_length=32)
