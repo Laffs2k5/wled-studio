@@ -35,4 +35,4 @@ jobs:
         run: |
           docker compose --profile firmware logs --no-color | tail -n 300
           echo "== proxy access log (allowed and refused requests)"
-          docker compose --profile firmware exec -T egress cat /var/log/squid/access.log | awk '{print $4, $6, $7}' | sort | uniq -c | sort -rn | head -40 || true
+          docker compose --profile firmware exec -T -u proxy egress cat /var/log/squid/access.log | awk '{print $4, $6, $7}' | sort | uniq -c | sort -rn | head -40 || true
