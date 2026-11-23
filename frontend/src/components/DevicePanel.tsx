@@ -4,9 +4,10 @@ import { api } from "../api";
 import type { DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
-import type { Room } from "../room";
+import { walls, type Room } from "../room";
 import { LiveStrip } from "./LiveStrip";
 import { RoomEditor } from "./RoomEditor";
+import { SegmentLayout } from "./SegmentLayout";
 import { Looks } from "./Looks";
 import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
@@ -79,6 +80,37 @@ export function DevicePanel({ deviceId, notify }: Props) {
     }, SEND_DELAY_MS);
   }
 
+  // a new segment covers the whole strip, on top; WLED appends it to its list, so the new
+  // one is found by comparing the ids before and after
+  async function addSegment() {
+    if (!state || !profile) return;
+    await flush();
+    const used = new Set(state.seg.map((s) => s.id));
+    let id = 0;
+    while (used.has(id)) id++;
+    try {
+      await api.setState(deviceId, { seg: [{ id, start: 0, stop: profile.leds.count }] });
+      const next = await api.state(deviceId);
+      setState(next);
+      const added = next.seg.find((s) => !used.has(s.id));
+      if (added) setSegId(added.id);
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
+  async function removeSegment(id: number) {
+    if (!state || state.seg.length < 2) return;
+    await flush();
+    try {
+      await api.setState(deviceId, { seg: [{ id, stop: 0 }] });
+      setSegId(state.seg.find((s) => s.id !== id)?.id ?? 0);
+      await reloadState();
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
   function master(patch: { on?: boolean; bri?: number }) {
     if (!state) return;
     setState({ ...state, ...patch });
@@ -89,6 +121,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
   const effect = profile.effects.find((e) => e.id === segment.fx) ?? profile.effects[0];
   const hasMatrix = Boolean(profile.leds.matrix && profile.leds.matrix.h > 1);
   const mic = profile.usermods.includes("AudioReactive");
+  const wallOf = (s: Segment) => (room ? walls(room).find((w) => w.start === s.start && w.stop === s.stop)?.label : undefined);
 
   return (
     <div className="device-panel">
@@ -115,15 +148,21 @@ export function DevicePanel({ deviceId, notify }: Props) {
             </label>
           )}
         </div>
-        {state.seg.length > 1 && (
-          <div className="row">
-            {state.seg.map((s) => (
-              <button key={s.id} className={s.id === segment.id ? "primary" : ""} onClick={() => setSegId(s.id)}>
-                Segment {s.id} ({s.start}–{s.stop})
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="row segments" aria-label="Segments">
+          {state.seg.map((s) => (
+            <button key={s.id} className={s.id === segment.id ? "primary" : ""} aria-pressed={s.id === segment.id}
+              onClick={() => setSegId(s.id)}>
+              Segment {s.id} ({wallOf(s) ?? `${s.start}–${s.stop - 1}`})
+            </button>
+          ))}
+          {state.seg.length < (profile.leds.maxseg || 1) && (
+            <button onClick={addSegment} title="A new segment over the whole strip, drawn on top">+ Segment</button>
+          )}
+          {state.seg.length > 1 && (
+            <button className="danger" onClick={() => removeSegment(segment.id)}>Remove segment {segment.id}</button>
+          )}
+        </div>
+        <SegmentLayout segment={segment} ledCount={profile.leds.count} room={room} onChange={change} />
         <h2>
           {effect.name}
           {effect.audio.length > 0 && <span className="badge" title="Sound-reactive">♪</span>}

@@ -63,6 +63,64 @@ test("look studio: add the device, live control, save a look and write it", asyn
   expect(problems).toEqual([]);
 });
 
+test("segments: add a layer, place and blend it, and looks restore their layout", async ({ page, request }) => {
+  const problems = watchCsp(page);
+  await page.goto("/");
+  const name = `E2E seg ${Date.now() % 100000}`;
+  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  await page.getByLabel("Device name").fill(name);
+  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
+  const devices = await (await request.get("/api/devices")).json();
+  const id = devices.find((d: { name: string }) => d.name === name).id;
+  const segs = async () => (await (await request.get(`/api/devices/${id}/state`)).json()).seg;
+
+  // start from one segment over the whole strip (the device is shared with other tests)
+  const reset = [{ id: 0, start: 0, stop: 60, bm: 0 }, ...Array.from({ length: 31 }, (_, i) => ({ id: i + 1, stop: 0 }))];
+  expect((await request.post(`/api/devices/${id}/state`, { data: { seg: reset }, headers: { "X-WLED-Studio": "1" } })).ok()).toBe(true);
+  await expect.poll(async () => (await segs()).map((s: { id: number }) => s.id)).toEqual([0]);
+  await page.reload();
+  await page.getByLabel("Device").selectOption(id);
+  await expect(page.getByRole("button", { name: /^Segment 0 / })).toBeVisible();
+
+  // a new segment on top, placed and blended
+  await page.getByRole("button", { name: "+ Segment" }).click();
+  await expect(page.getByRole("button", { name: /^Segment 1 / })).toHaveAttribute("aria-pressed", "true");
+  await page.getByText("Layout and layer").click();
+  await page.getByLabel("Start", { exact: true }).fill("10");
+  await page.getByLabel("Start", { exact: true }).press("Enter");
+  await page.getByLabel("Stop", { exact: true }).fill("30");
+  await page.getByLabel("Stop", { exact: true }).press("Enter");
+  await page.getByLabel("Blend mode").selectOption({ label: "Add" });
+  await expect.poll(async () => {
+    const s = (await segs()).find((x: { id: number }) => x.id === 1);
+    return s && [s.start, s.stop, s.bm];
+  }).toEqual([10, 30, 2]);
+
+  await page.getByLabel("Look name").fill("E2E layers");
+  await page.getByRole("button", { name: "Save current" }).click();
+  const looks = page.getByRole("region", { name: "Looks" });
+  await expect(looks.getByText("E2E layers")).toBeVisible();
+
+  // back to one segment, saved as another look
+  await page.getByRole("button", { name: "Remove segment 1" }).click();
+  await expect.poll(async () => (await segs()).length).toBe(1);
+  await page.getByLabel("Look name").fill("E2E single");
+  await page.getByRole("button", { name: "Save current" }).click();
+  await expect(looks.getByText("E2E single")).toBeVisible();
+
+  // showing each look restores its own layout: the single one deletes the layer again
+  await looks.getByRole("listitem").filter({ hasText: "E2E layers" }).getByRole("button", { name: "Show" }).click();
+  await expect.poll(async () => (await segs()).map((s: { start: number; stop: number; bm: number }) => [s.start, s.stop, s.bm]))
+    .toEqual([[0, 60, 0], [10, 30, 2]]);
+  await expect(page.getByRole("button", { name: /^Segment 1 / })).toBeVisible();
+  await looks.getByRole("listitem").filter({ hasText: "E2E single" }).getByRole("button", { name: "Show" }).click();
+  await expect.poll(async () => (await segs()).length).toBe(1);
+
+  expect(problems).toEqual([]);
+});
+
 test("effect studio: the WebAssembly preview loads and runs under the CSP", async ({ page }) => {
   const problems = watchCsp(page);
   await page.goto("/");

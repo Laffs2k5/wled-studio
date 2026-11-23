@@ -61,9 +61,17 @@ def test_live_state(client, dev_id, device):
 
 def test_live_state_is_whitelisted(client, dev_id, device):
     for bad in ({"pin": "1234"}, {"bri": 300}, {"seg": [{"id": 0, "fx": 8, "x": 1}]},
-                {"seg": [{"id": 0, "col": [[1, 2]]}]}, {"seg": [{"id": 0, "c3": 32}]}, {"nl": {"on": True}}):
+                {"seg": [{"id": 0, "col": [[1, 2]]}]}, {"seg": [{"id": 0, "c3": 32}]}, {"nl": {"on": True}},
+                {"seg": [{"id": 0, "grp": 0}]}, {"seg": [{"id": 0, "spc": 256}]}, {"seg": [{"id": 0, "of": -1}]}):
         r = client.post(f"/api/devices/{dev_id}/state", json=bad, headers=CSRF)
         assert r.status_code == 422, bad
+
+
+def test_layout_fields_reach_the_device(client, dev_id, device):
+    r = client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "grp": 2, "spc": 1, "of": 5, "bm": 10}]},
+                    headers=CSRF)
+    assert r.status_code == 200
+    assert {k: device.state["seg"][0][k] for k in ("grp", "spc", "of", "bm")} == {"grp": 2, "spc": 1, "of": 5, "bm": 10}
 
 
 def test_import_capture_apply_push(client, dev_id, device):

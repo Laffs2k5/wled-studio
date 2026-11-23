@@ -26,6 +26,19 @@ export function totalPixels(room: Room): number {
   return room.edges.reduce((n, e) => n + e.pixels, 0);
 }
 
+export interface Wall { label: string; start: number; stop: number }
+
+/** The labelled edges as LED ranges (stop exclusive, as WLED's segment bounds). */
+export function walls(room: Room): Wall[] {
+  const out: Wall[] = [];
+  let at = 0;
+  for (const e of room.edges) {
+    if (e.label) out.push({ label: e.label, start: at, stop: at + e.pixels });
+    at += e.pixels;
+  }
+  return out;
+}
+
 /** Draw colours (r, g, b per LED) along the room's shape, or as a straight strip without one. */
 export function drawPixels(ctx: CanvasRenderingContext2D, w: number, h: number, rgb: ArrayLike<number>, room: Room | null) {
   const n = Math.floor(rgb.length / 3);

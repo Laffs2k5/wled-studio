@@ -56,6 +56,9 @@ class SegmentState(Strict):
     col: list[list[Byte]] | None = Field(default=None, max_length=3)
     rev: bool | None = None
     mi: bool | None = None
+    grp: int | None = Field(default=None, ge=1, le=255)
+    spc: int | None = Field(default=None, ge=0, le=255)
+    of: int | None = Field(default=None, ge=0, le=65535)
     bm: int | None = Field(default=None, ge=0, le=31)
 
     @field_validator("col")
