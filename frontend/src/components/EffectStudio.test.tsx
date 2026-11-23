@@ -97,6 +97,7 @@ test("streams to a device: sizes the preview to its LEDs and opens the stream wi
     const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
     if (url === "/api/devices") return reply([{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }]);
     if (url === "/api/devices/desk/profile") return reply({ device: { id: "desk", name: "Desk" }, leds: { count: 250 } });
+    if (url === "/api/devices/desk/room") return reply({ edges: [{ direction: "right", pixels: 100 }, { direction: "down", pixels: 150 }] });
     if (url === "/api/effects") return reply({ detail: "off" }, 503);
     return reply({ enabled: false });
   }));
@@ -107,7 +108,8 @@ test("streams to a device: sizes the preview to its LEDs and opens the stream wi
   fireEvent.change(await screen.findByLabelText("Stream device"), { target: { value: "desk" } });
   fireEvent.click(screen.getByText("Stream to the strip"));
   expect(await screen.findByText("Stop streaming")).toBeInTheDocument();
-  expect(setups).toContain(250);
+  expect(setups).toContain(250);   // the room's LEDs, then the device's
+  expect(screen.getByLabelText("Preview strip")).toHaveClass("room");
   expect(sockets[0].url).toMatch(/\/api\/devices\/desk\/stream$/);
   expect(sockets[0].protocols).toEqual(["wledstudio", "bearer.tok"]);
   fireEvent.click(screen.getByText("Stop streaming"));

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useEffect, useRef, useState } from "react";
-import { api, firmware, token } from "../api";
+import { api, firmware, request, token } from "../api";
+import { drawPixels, type Room } from "../room";
 import { frameMessage, Preview } from "../preview";
 import type { Device } from "../types";
 import { CodeEditor } from "./CodeEditor";
@@ -38,6 +39,21 @@ export function EffectStudio({ notify, load = Preview.load }: {
   const [target, setTarget] = useState("");
   const socket = useRef<WebSocket | null>(null);
   const [streaming, setStreaming] = useState(false);
+  const [room, setRoom] = useState<Room | null>(null);
+
+  // a chosen device's room shape (and LED count) shapes the preview
+  useEffect(() => {
+    if (!target || !preview) { setRoom(null); return; }
+    request<Room | null>("GET", `/api/devices/${encodeURIComponent(target)}/room`).then((r) => {
+      setRoom(r);
+      if (r) {
+        preview.resize(r.edges.reduce((n, e) => n + e.pixels, 0));
+        if (effect) preview.select(effect.id);
+        if (seg) preview.set(seg);
+      }
+    }).catch(() => setRoom(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, preview]);
 
   useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
   useEffect(() => () => socket.current?.close(), []);
@@ -135,19 +151,19 @@ export function EffectStudio({ notify, load = Preview.load }: {
       const px = preview.frame(Math.floor(performance.now() - start));
       const ws = socket.current;
       if (ws && ws.readyState === 1 && ws.bufferedAmount < 64 * 1024) ws.send(frameMessage(px));
-      const w = canvas.current!.width / px.length;
-      ctx.fillStyle = "#0b0d10";
-      ctx.fillRect(0, 0, canvas.current!.width, canvas.current!.height);
-      px.forEach((c, i) => {
-        const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255, wh = (c >>> 24) & 255;
-        ctx.fillStyle = `rgb(${Math.min(255, r + wh)},${Math.min(255, g + wh)},${Math.min(255, b + wh)})`;
-        ctx.fillRect(i * w + 1, 6, Math.max(1, w - 2), 20);
+      const rgb = new Uint8Array(px.length * 3);
+      px.forEach((c, i) => {   // white folded into RGB for the screen, as WLED's own live view does
+        const wh = (c >>> 24) & 255;
+        rgb[i * 3] = Math.min(255, ((c >> 16) & 255) + wh);
+        rgb[i * 3 + 1] = Math.min(255, ((c >> 8) & 255) + wh);
+        rgb[i * 3 + 2] = Math.min(255, (c & 255) + wh);
       });
+      drawPixels(ctx, canvas.current!.width, canvas.current!.height, rgb, room);
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [preview, effect]);
+  }, [preview, effect, room]);
 
   if (error) {
     return (
@@ -166,11 +182,11 @@ export function EffectStudio({ notify, load = Preview.load }: {
         the logic is the effect's own code.
       </p>
       {compileBox}
-      <canvas ref={canvas} width={960} height={32} className="strip" aria-label="Preview strip" />
+      <canvas ref={canvas} width={960} height={room ? 360 : 32} className={room ? "room" : "strip"} aria-label="Preview strip" />
       {devices.length > 0 && (
         <div className="row">
           <select aria-label="Stream device" value={target} disabled={streaming} onChange={(e) => setTarget(e.target.value)}>
-            <option value="">Stream to a device…</option>
+            <option value="">Preview on / stream to a device…</option>
             {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
           <button className={streaming ? "primary" : ""} disabled={!target} onClick={toggleStream}>
