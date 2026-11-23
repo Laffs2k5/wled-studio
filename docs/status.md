@@ -72,9 +72,14 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
 ## Next (in order)
 
-1. **A real device:** presets, the change check, live control, segment layouts, editing sessions
-   and the look editor ran against a real WLED 16 controller on 2026-11-23 (one bug found and
-   fixed: the editor saved display defaults). Not yet: custom palette uploads and DDP streaming.
+1. ~~A real device~~ (done 2026-11-23, on a WLED 16 controller): presets, the change check, live
+   control, segment layouts, editing sessions and the look editor (one bug found and fixed: the
+   editor saved display defaults); **custom palette uploads** (written and loaded at once); and
+   **DDP streaming** (WLED in DDP live mode; a known block read back from its live view at exactly
+   the LEDs sent, RGBW layout right). Notes from it:
+   - WLED doesn't unload a custom palette when its file is deleted (`/edit?func=delete`); it stays
+     in memory until the next upload or reboot. A future "delete palette on the device" must say so;
+   - WLED's live view reads zeros while the strip is off, even during a stream.
 2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; a spare board first.
 3. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
