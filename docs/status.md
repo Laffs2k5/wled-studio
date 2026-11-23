@@ -12,6 +12,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 - **Security baseline** (docs/security.md).
 - **Tests:** backend 90 (92 % coverage), frontend 19 (93 % of statements), plus an end-to-end smoke
   test against the containers with the fake device.
+- **Firmware profile end to end (CI, `firmware-e2e`):** from the published images, the builder
+  behind its egress allowlist (direct egress blocked, github.com allowed, other hosts refused); a
+  real preview job and a real gate build started through the app's API, both passing.
 - **Firmware builds from the app:** a Firmware view that runs gate jobs on wled-studio-builder's
   job service (`docker compose --profile firmware`): your usermods from `./effects`, the vendor's
   stock image checked first, then only your code may differ. Flashing from the app isn't built
