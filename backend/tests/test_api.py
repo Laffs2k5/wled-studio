@@ -470,8 +470,8 @@ def test_custom_palettes(client, dev_id, device):
 
 def test_room_model(client, dev_id):
     assert client.get(f"/api/devices/{dev_id}/room").json() is None
-    room = {"edges": [{"direction": "right", "pixels": 40, "label": "A"}, {"direction": "down", "pixels": 84},
-                      {"direction": "left", "pixels": 41}, {"direction": "up", "pixels": 85}]}
+    room = {"edges": [{"direction": "right", "pixels": 30, "label": "A"}, {"direction": "down", "pixels": 60},
+                      {"direction": "left", "pixels": 30}, {"direction": "up", "pixels": 60}]}
     assert client.put(f"/api/devices/{dev_id}/room", json=room, headers=CSRF).status_code == 200
     assert client.get(f"/api/devices/{dev_id}/room").json() == room
     for bad in ({"edges": []}, {"edges": [{"direction": "north", "pixels": 3}]},

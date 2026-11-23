@@ -10,13 +10,13 @@ test("lays pixels out along the edges, in index order", () => {
   expect(totalPixels(room)).toBe(5);
 });
 
-test("a closed rectangle (the gaming room: A, L2, B, L1)", () => {
-  const room = { edges: [{ direction: "right" as const, pixels: 40 }, { direction: "down" as const, pixels: 84 },
-    { direction: "left" as const, pixels: 41 }, { direction: "up" as const, pixels: 85 }] };
+test("a closed rectangle", () => {
+  const room = { edges: [{ direction: "right" as const, pixels: 30 }, { direction: "down" as const, pixels: 60 },
+    { direction: "left" as const, pixels: 30 }, { direction: "up" as const, pixels: 60 }] };
   const { points } = layout(room);
-  expect(points).toHaveLength(250);
-  expect(points[39]).toEqual([39.5, 0]);   // the last LED on wall A, at corner C1
-  expect(points[40]).toEqual([40, 0.5]);   // the first on L2
+  expect(points).toHaveLength(180);
+  expect(points[29]).toEqual([29.5, 0]);   // the last LED on the first wall, at the corner
+  expect(points[30]).toEqual([30, 0.5]);   // the first on the second
 });
 
 function fakeCtx() {
