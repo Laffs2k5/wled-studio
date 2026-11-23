@@ -14,7 +14,11 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
 - No home or personal details: no real host names, IP addresses, MACs, PINs, people's names.
   Tests use the fake device and placeholder hosts (`wled.lan`).
 - No WLED code or data: the fake device's effects and palettes are made up. Don't copy WLED's
-  effect names, metadata strings or palette tables into the repo; read them from a device.
+  effect names, metadata strings or palette tables into the repo; read them from a device. The
+  exception is the UI's labels for the values of WLED's segment settings (blend modes, sound
+  simulations): fixed names of an interface, kept as facts, with the source file noted.
+- **Nothing about the owner's home in this public repo,** tests included: no hosts, no room
+  dimensions or wall counts. Use made-up numbers.
 
 ## Git
 
@@ -36,6 +40,10 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
   `uv pip compile backend/pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header -o backend/requirements.txt`.
 
 ## Gotchas
+
+- **firmware-e2e runs the published images,** and the app image is published by the same commit's
+  ci run. Started side by side, it pulled the previous image and a new route fell through to the
+  web page (2026-11-23). On push it now waits for its commit's ci; keep that wait.
 
 - WLED ignores a settings-PIN check within 3 s of the previous one, **across all clients**, so
   the cooldown is tracked per device (`wled._last_pin_check`), not per client.
