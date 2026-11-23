@@ -15,7 +15,11 @@ if dc exec -T builder curl -sS -m 10 --noproxy '*' -o /dev/null https://example.
   fail "the builder reached the internet directly"
 fi
 echo "direct egress: blocked"
-code=$(dc exec -T builder curl -sS -m 20 -o /dev/null -w '%{http_code}' https://github.com || true)
+for i in $(seq 1 30); do   # wait for the proxy
+  code=$(dc exec -T builder curl -sS -m 20 -o /dev/null -w '%{http_code}' https://github.com 2>/dev/null || true)
+  case "$code" in 2*|3*) break ;; esac
+  sleep 2
+done
 case "$code" in 2*|3*) echo "github.com through the proxy: $code" ;; *) fail "github.com through the proxy answered $code" ;; esac
 if dc exec -T builder curl -sS -m 20 -o /dev/null https://example.com 2>/dev/null; then
   fail "the proxy let a host outside the allowlist through"
