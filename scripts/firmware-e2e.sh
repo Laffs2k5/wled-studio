@@ -25,6 +25,15 @@ if dc exec -T builder curl -sS -m 20 -o /dev/null https://example.com 2>/dev/nul
   fail "the proxy let a host outside the allowlist through"
 fi
 echo "example.com through the proxy: refused"
+# A bare IP must not pass on its reverse DNS: 185.199.110.153 resolves back to
+# cdn-185-199-110-153.github.com. (PlatformIO's online check asks for it; any
+# answer, a 403 too, counts as online.)
+ip=185.199.110.153
+code=$(dc exec -T builder curl -sS -m 20 -o /dev/null -w '%{http_code}' "http://$ip/" 2>/dev/null || true)
+[ "$code" = 403 ] || fail "the proxy let http://$ip through on its reverse DNS (answered $code)"
+code=$(dc exec -T builder curl -sS -m 20 -k -o /dev/null -w '%{http_connect}' "https://$ip/" 2>/dev/null || true)
+[ "$code" = 403 ] || fail "the proxy tunnelled to $ip:443 on its reverse DNS (answered $code)"
+echo "an IP address whose reverse DNS is allowed: refused"
 
 for i in $(seq 1 60); do curl -fsS "$B/api/firmware/status" 2>/dev/null | grep -q '"enabled":true' && break; sleep 2; done
 curl -fsS "$B/api/firmware/status" | grep -q '"status":"ok"' || fail "the app can't reach the builder"
