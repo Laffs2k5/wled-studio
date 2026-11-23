@@ -4,87 +4,82 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
 ## Done
 
-- **M1, the thin slice (look studio):**
-  - devices; profile with each effect's own controls;
-  - live control through a whitelisted schema;
-  - import presets into a library keyed by name; capture and show looks;
-  - write `presets.json` with backup, drift check, PIN handling and read-back verification.
-- **Security baseline** (docs/security.md).
-- **Tests:** backend (pytest, 93 % coverage), frontend (Vitest, 94 % of statements), an end-to-end
-  smoke test and browser tests (Playwright, Chromium) against the containers with the fake device,
-  and the firmware profile end to end behind the egress allowlist.
-- **Firmware profile end to end (CI, `firmware-e2e`):** from the published images, the builder
-  behind its egress allowlist (direct egress blocked, github.com allowed, other hosts refused); a
-  real preview job and a real gate build started through the app's API, both passing.
-- **Firmware builds from the app:** a Firmware view that runs gate jobs on wled-studio-builder's
-  job service (`docker compose --profile firmware`): your usermods from `./effects`, the vendor's
-  stock image checked first, then only your code may differ. Flashing from the app isn't built
-  (it waits for a spare board and the owner's go).
-- **Effect studio, first slice:** effect usermods written for WLED, compiled unchanged to
-  WebAssembly and animated in the browser with each effect's own controls:
-  - the image ships the example effect's preview;
-  - **"Compile and preview"** compiles your own effects from `./effects` through the builder's job
-    service (`--profile firmware`; Emscripten is installed into its work volume on first use).
+### Look studio
+- **Devices and the profile:** each effect's own controls from its metadata; live control through
+  a whitelisted schema; token login in the UI.
+- **The library:** looks by name, with each effect's metadata as it was when saved; capture and
+  show; history of every change.
+  - **Import** keeps every field WLED saves in a preset (and an `id` only where there was one), so
+    an import followed by a write leaves unchanged presets unchanged.
+  - **Writing** `presets.json`: backup, drift check, PIN, read-back verification.
+- **The segment layout, live:** add and remove segments; bounds by LED or by wall; on, reverse,
+  mirror, grouping, spacing, offset; opacity and WLED 16's 17 blend modes. **Looks own their
+  layout** as WLED's presets do: showing one deletes the segments it doesn't use.
+- **The room model:** the strip's shape as walls in LED order. The live view and the effect
+  preview are drawn in it. **Segments named by wall** follow it when its boundaries are corrected.
+  **Room-aware effects** get each LED's position in `room_map.h`.
+- **The mic per look,** by a rule: a look made for sound switches the mic on, any other look
+  switches it off.
+- **Playlists:** looks by name, durations, shuffle, an end look; unchanged playlists aren't
+  rewritten.
+- **Custom palettes:** a gradient editor; kept by name; uploaded as `palette<i>.json` with stable
+  indexes per device, before the presets that use them.
+- **Live view** of the device, relayed by the backend: one device connection shared by all viewers.
+- **The change check:** each look and playlist shows its status on the device with the reasons in
+  words (a control the look sets is gone, now sound-reactive, 1D → 2D, fewer colour slots, …); a
+  playlist takes the worst status of its looks. **Accept** takes the device's version as the new
+  reference.
+- **Editing sessions:** "Start editing session" remembers what the device shows. "Done" puts it
+  back: segments, effects, brightness and the mic; segments added meanwhile are deleted, and a
+  running playlist is started again. "Keep my changes" ends the session without touching the
+  device.
 
-  Colours and fades are approximate. WLED's built-in effects aren't previewed; the device's live
-  view is their preview. The compiler shim lives in wled-studio-builder (`preview/`).
-- **Packaging:** Dockerfile, `compose.yaml` with a demo profile, CI that builds, tests and publishes
-  to ghcr.io.
+### Effect studio and firmware
+- **Effect studio:** a code editor for `./effects`; new effects from a template with a fixed effect
+  id; compiled unchanged to WebAssembly through the builder's job service and animated in the
+  browser with each effect's own controls; the preview **streamed to the strip** (DDP).
+- **Firmware builds from the app:** gate jobs on wled-studio-builder's job service. The vendor's
+  stock image is checked first, then only your code may differ.
+- **The firmware profile end to end** (CI, `firmware-e2e`): from the published images, the builder
+  behind its egress allowlist, which refuses direct egress, other hosts, and IP addresses that pass
+  only on their reverse DNS. A real preview job and a real gate build are started through the app's
+  API, and both pass.
+
+### Quality
+- **Security baseline** ([security.md](security.md)).
+- **Tests:**
+  - backend: pytest, 155 tests, 94 % coverage;
+  - frontend: Vitest, 67 tests, 94 % of statements;
+  - browser tests (Playwright, Chromium) and a smoke test against the containers with the fake
+    device;
+  - the firmware profile end to end.
+- **Packaging:** Dockerfile, `compose.yaml` with demo and firmware profiles; CI builds, tests and
+  publishes to ghcr.io.
 
 ## Next (in order)
 
-1. ~~Token login in the UI~~ (done 2026-11-23).
-2. ~~Look editing: segments, layers and blend modes~~ (done 2026-11-23):
-   - the **mic per look**, by the rule: a look made for sound switches the mic on, any other look
-     switches it off;
-   - **the segment layout, live**: add and remove segments; bounds by LED or by wall; on, reverse,
-     mirror, grouping, spacing, offset; opacity and WLED 16's 17 blend modes;
-   - **looks own their layout** as WLED's presets do: showing one deletes the segments it doesn't
-     use;
-   - **segments named by wall** follow the room model when its boundaries are corrected.
+1. **A real device:** everything that writes (presets, palettes, DDP streaming, editing sessions)
+   has run only against the fake device.
+2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
+   way back; a spare board first.
+3. **Preflight:** check the library against a firmware's effect list before it is flashed. This
+   needs the builder to list a built image's effects (a build manifest).
+4. **Named zones** in the room model: named LED ranges inside a wall (a door, a desk, a TV), which
+   looks follow as they follow walls.
+5. **Editing a saved look** without showing it on a device. Today: show it, edit live, save again.
+6. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
+   instead of the stand-ins.
+7. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
 
-   Still open: editing a saved look without showing it on a device (today: show, edit live, save
-   again).
-3. ~~Playlists~~ (done 2026-11-23: looks by name, durations, shuffle, an end look; imported from and
-   written to the device, unchanged playlists not rewritten).
-4. ~~Custom palettes~~ (done 2026-11-23: a gradient editor; kept by name; uploaded as WLED's
-   `palette<i>.json` with stable file indexes per device, before the presets that use them; WLED
-   reloads them on upload, per its source. Not yet tried on a real device).
-5. ~~Live view of the device~~ (done 2026-11-23: the device's live view relayed by the backend, one
-   device connection shared by all viewers; off by default in the UI, since it takes the device's
-   single live-view slot).
-6. **Full change check UI** (mostly done 2026-11-23):
-   - each look and playlist shows its status on the device (`GET …/check`), with the reasons in
-     words: a control the look sets is gone, now sound-reactive, 1D → 2D, fewer colour slots, …;
-     a playlist takes the worst status of its looks;
-   - **Accept** takes the device's version of the look's effects as the new snapshot (not for an
-     unavailable look).
+## Open design items
 
-   Still open: a **preflight against a builder manifest**, checking looks against a firmware before
-   it's flashed; it needs the builder to write the built image's effect metadata.
-7. ~~Room model~~ (done 2026-11-23: the strip's shape as walls in LED order, a direction and a
-   count each; the live view and the Effect studio's preview are drawn in that shape; and **room-aware
-   effects**: the app writes each LED's position into `room_map.h` in an effect's folder, and a
-   template sweeps a wave across the room. It passes the gate in firmware and runs in the preview).
-8. **The effect studio, next** (done 2026-11-23: a code editor for `./effects`, and new effects
-   from a template that compiles to both the preview and firmware):
-   - exact colours (WLED's helpers from the user's checkout).
-
-   Also done 2026-11-23: **streaming the preview to the strip** (DDP, "live on the wall before
-   flashing"). Tested end to end against a UDP listener, not yet on a real device.
-9. **Editing sessions** (done 2026-11-23, the app's part): "Start editing session" remembers what
-   the device shows; "Done" puts it back (segments, effects, brightness, the mic; segments added
-   meanwhile deleted; a running playlist started again), "Keep my changes" leaves the edits. One
-   session per device, shared by everyone using the app, in memory.
-
-   Still open: **telling Home Assistant** that someone is editing, so automations and the remote
-   hold off (to be designed with the HA side).
-10. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
-   way back; spare board first.
+- **Telling a home-automation system that someone is editing,** so its automations and remotes
+  hold off during a session: a flag it can read, and what holds off.
+- **Preset banks driven by a remote:** an optional in-tree module first, with a plugin API later?
+- **Access control once the app can flash:** the bearer token today. A reverse proxy with client
+  certificates (mTLS) is the recommendation before flashing from the app is enabled.
 
 ## Waiting on
 
-- **Hardware:** a spare ESP32 (ordered) for the first flash of a self-built image. Nothing in this
-  repo needs it yet.
-- **Real-device testing of writes:** the owner's bench was read-only during the first build;
-  everything that writes was tested against the fake device only.
+- **Hardware:** a spare ESP32 (ordered) for the first flash of a self-built image.
+- **A real device for writes** (Next, 1).
