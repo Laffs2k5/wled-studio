@@ -31,6 +31,9 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
   (`WLEDSTUDIO_URL`, `DEVICE_HOST` point them elsewhere). They catch what component tests can't:
   the CSP, WebAssembly loading, real requests.
 - CI keeps coverage at 85 % or more on both sides.
+- **The image's Python dependencies are locked with hashes** (`backend/requirements.txt`). After
+  changing dependencies in `pyproject.toml`, regenerate:
+  `uv pip compile backend/pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header -o backend/requirements.txt`.
 
 ## Gotchas
 
