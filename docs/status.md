@@ -43,8 +43,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 6. **Full change check UI:** a status per look, accept-review flow, preflight against a builder
    manifest.
 7. **Room model:** pixel positions per LED for a room-shaped preview.
-8. **The effect studio, next:**
-   - a code editor (today effects are edited as files in `./effects`);
+8. **The effect studio, next** (done 2026-11-23: a code editor for `./effects`, and new effects
+   from a template that compiles to both the preview and firmware):
    - exact colours (WLED's helpers from the user's checkout);
    - streaming the preview to the strip over DDP.
 9. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the

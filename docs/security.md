@@ -24,6 +24,7 @@ that applies to such an app.
 | Arbitrary device commands | Live control goes through a whitelisted schema (on, brightness, transition, segment fields, the mic). No config writes, no raw JSON, no PIN in state requests |
 | Secrets | The settings PIN is write-only in the API, stored in a 0600 file per device (or `WLEDSTUDIO_PIN_<DEVICE_ID>`), never logged, and the device is locked again after every write, also on errors |
 | XSS, clickjacking | A strict Content-Security-Policy (`default-src 'self'`, no inline scripts or styles; `'wasm-unsafe-eval'` so the effect preview's WebAssembly can compile, JavaScript `eval` stays off), `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, no referrer; React escapes all output |
+| Effect files | The editor reads and writes only `*.cpp`, `*.h` and `library.json` in effect folders under `WLEDSTUDIO_EFFECTS_DIR`. Folder and file names are checked, there's no path traversal, and files are at most 256 kB. The code is yours; it's compiled by the builder, never run by the app |
 | Oversized requests | Bodies over 1 MB are refused; request models refuse unknown fields and enforce ranges and lengths |
 | Container | Runs as a non-root user (uid 10001), read-only root filesystem, all capabilities dropped, `no-new-privileges`; base images pinned by digest; no npm install scripts during the build |
 | Exposure | Listens on `127.0.0.1` only in the default compose file |

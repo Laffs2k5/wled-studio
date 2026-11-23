@@ -28,7 +28,9 @@ function fakeModule() {
 }
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ enabled: false }), { status: 200 })));
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/api/effects"
+    ? new Response(JSON.stringify({ detail: "off" }), { status: 503 })
+    : new Response(JSON.stringify({ enabled: false }), { status: 200 })));
 });
 afterEach(() => vi.unstubAllGlobals());
 

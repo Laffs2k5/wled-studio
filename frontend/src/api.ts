@@ -75,6 +75,18 @@ export const firmware = {
   previewUrl: (id: string) => `/api/firmware/jobs/${encodeURIComponent(id)}/preview/preview.mjs`,
 };
 
+export interface EffectFolder { folder: string; files: string[] }
+
+export const effects = {
+  list: () => request<EffectFolder[]>("GET", "/api/effects"),
+  read: (folder: string, name: string) =>
+    request<{ content: string }>("GET", `/api/effects/${encodeURIComponent(folder)}/${encodeURIComponent(name)}`),
+  save: (folder: string, name: string, content: string) =>
+    request<{ bytes: number }>("PUT", `/api/effects/${encodeURIComponent(folder)}/${encodeURIComponent(name)}`, { content }),
+  create: (folder: string, title: string, effect_id: number) =>
+    request<EffectFolder>("POST", "/api/effects", { folder, title, effect_id }),
+};
+
 export const api = {
   devices: () => request<Device[]>("GET", "/api/devices"),
   addDevice: (name: string, host: string, pin?: string) =>

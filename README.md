@@ -21,8 +21,11 @@ strip, and build verified firmware with them ([wled-studio-builder](https://gith
 - **Firmware with your effects:** gate builds through
   [wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder). The vendor's stock image is
   rebuilt and checked first, then only your code may differ. Flashing isn't built yet.
-- **Effect studio (first slice):** effect usermods written for WLED, compiled to WebAssembly and
-  animated in the browser with their own controls ([preview/](preview/README.md)).
+- **Effect studio:**
+  - write or edit effect usermods in the browser (new ones start from a template with a fixed
+    effect id);
+  - compile them to WebAssembly and watch them on a strip, with their own controls;
+  - then build them into firmware through the gate.
 - A fake WLED device for tests and a demo mode.
 
 ## Run it
@@ -33,6 +36,10 @@ docker compose --profile demo up     # also starts a fake WLED device at demo-de
 WLEDSTUDIO_BUILDER_URL=http://builder:8090 docker compose --profile firmware up
                                      # also the firmware builder; your effects go in ./effects
 ```
+
+Your own effects live in `./effects` (one usermod folder each; git-ignored). The Effect studio
+edits them in the browser; the app runs as uid 10001, so give it the folder:
+`sudo chown -R 10001:10001 effects`.
 
 By default it listens on `127.0.0.1` only. See [docs/security.md](docs/security.md) before
 exposing it on your LAN.

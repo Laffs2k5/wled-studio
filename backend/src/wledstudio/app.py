@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__, netcheck
 from .api import router
+from .effects import router as effects_router
 from .firmware import router as firmware_router
 from .config import Settings
 from .devices import DeviceStore
@@ -36,6 +37,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.add_middleware(SecurityMiddleware, settings=s)
     app.include_router(router)
     app.include_router(firmware_router)
+    app.include_router(effects_router)
 
     static = s.static_dir
     if static is not None and (static / "index.html").exists():

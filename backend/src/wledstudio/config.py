@@ -26,5 +26,7 @@ class Settings:
     # The firmware builder's job service (wled-studio-builder), e.g. http://builder:8090; unset = off.
     builder_url: str | None = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_BUILDER_URL") or None)
     builder_token: str | None = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_BUILDER_TOKEN") or None)
+    # Your effect usermods (one folder each), editable from the Effect studio; unset = off.
+    effects_dir: Path | None = field(default_factory=lambda: Path(p) if (p := os.environ.get("WLEDSTUDIO_EFFECTS_DIR")) else None)
     max_body_bytes: int = 1_000_000
     device_timeout_s: float = 5.0

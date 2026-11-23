@@ -16,8 +16,12 @@ services:
       WLEDSTUDIO_ALLOWED_HOSTS: ${WLEDSTUDIO_ALLOWED_HOSTS:-localhost,127.0.0.1}
       WLEDSTUDIO_TOKEN: ${WLEDSTUDIO_TOKEN:-}
       WLEDSTUDIO_BUILDER_URL: ${WLEDSTUDIO_BUILDER_URL:-}
+      WLEDSTUDIO_EFFECTS_DIR: /effects
     volumes:
       - wled-studio-data:/data
+      # your effect usermods, edited in the Effect studio (the app runs as uid 10001:
+      # sudo chown -R 10001:10001 effects, or edit them on the host only)
+      - ${WLEDSTUDIO_EFFECTS_DIR:-./effects}:/effects
     read_only: true
     tmpfs:
       - /tmp

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { firmware } from "../api";
 import { Preview } from "../preview";
+import { CodeEditor } from "./CodeEditor";
 import type { Effect, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 
@@ -142,6 +143,10 @@ export function EffectStudio({ notify, load = Preview.load }: {
         <EffectControls effect={effect} segment={seg} palettes={[{ id: 0, name: "Colours" }, { id: 1, name: "Rainbow" }]} rgbw
           onChange={(patch) => { preview?.set(patch); setSeg({ ...seg, ...patch }); }} />
       )}
+      <CodeEditor notify={notify} onSaved={(folder) => {
+        if (mine && !mine.includes(folder)) setMine([...mine, folder]);
+        setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
+      }} />
     </section>
   );
 }
