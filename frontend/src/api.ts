@@ -83,8 +83,10 @@ export const effects = {
     request<{ content: string }>("GET", `/api/effects/${encodeURIComponent(folder)}/${encodeURIComponent(name)}`),
   save: (folder: string, name: string, content: string) =>
     request<{ bytes: number }>("PUT", `/api/effects/${encodeURIComponent(folder)}/${encodeURIComponent(name)}`, { content }),
-  create: (folder: string, title: string, effect_id: number) =>
-    request<EffectFolder>("POST", "/api/effects", { folder, title, effect_id }),
+  create: (folder: string, title: string, effect_id: number, template: "wave" | "room" = "wave") =>
+    request<EffectFolder>("POST", "/api/effects", { folder, title, effect_id, template }),
+  roomMap: (folder: string, device: string) =>
+    request<{ leds: number }>("POST", `/api/effects/${encodeURIComponent(folder)}/room-map`, { device }),
 };
 
 export const api = {

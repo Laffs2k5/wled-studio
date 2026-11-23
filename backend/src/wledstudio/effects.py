@@ -13,6 +13,8 @@ import os
 import re
 from pathlib import Path
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -63,6 +65,95 @@ REGISTER_USERMOD({folder}_usermod);
 """
 
 
+ROOM_TEMPLATE = """// SPDX-License-Identifier: EUPL-1.2
+// {title}: a room-aware effect for WLED, made in wled-studio. A wave sweeps across
+// the room by each LED's position (room_map.h, written from the app's room model),
+// not by its index; LEDs outside the map fall back to their index.
+#include "wled.h"
+#include "room_map.h"
+
+namespace {{
+
+constexpr uint8_t kId = {effect_id};
+
+const char kPadName[] PROGMEM = "RSVD";
+void fill_solid(void) {{ SEGMENT.fill(SEGCOLOR(0)); }}
+
+void mode_{folder}(void) {{
+  const unsigned len = SEGLEN;
+  if (len <= 1) {{ fill_solid(); return; }}
+  const uint8_t phase = uint8_t(strip.now * (SEGMENT.speed + 1) / 4096);
+  const bool across = !SEGMENT.check1;  // the checkbox turns the sweep 90 degrees
+  for (unsigned i = 0; i < len; i++) {{
+    uint8_t pos;
+    if (i < kRoomLeds) {{
+      const int span = across ? kRoomW : kRoomH;
+      const int c = across ? kRoomX[i] : kRoomY[i];
+      pos = uint8_t(span > 0 ? c * 255 / span : 0);
+    }} else {{
+      pos = uint8_t(i * 256 / len);
+    }}
+    const uint8_t wave = sin8_t(uint8_t(pos - phase));
+    SEGMENT.setPixelColor(i, color_blend(SEGCOLOR(1), SEGCOLOR(0), scale8(wave, SEGMENT.intensity)));
+  }}
+}}
+const char kData[] PROGMEM = "{title}@!,!,,,,Along the other axis;!,!;;1;sx=128,ix=255";
+
+}}  // namespace
+
+class {klass} : public Usermod {{
+ public:
+  void setup() override {{
+    if (strip.getModeCount() > kId) return;
+    while (strip.getModeCount() < kId)
+      if (strip.addEffect(strip.getModeCount(), &fill_solid, kPadName) == 255) return;
+    strip.addEffect(kId, &mode_{folder}, kData);
+  }}
+  void loop() override {{}}
+}};
+
+static {klass} {folder}_usermod;
+REGISTER_USERMOD({folder}_usermod);
+"""
+
+
+def room_map_header(room: dict | None) -> str:
+    """room_map.h: each LED's position from the room model (doubled grid units, so
+    integers), the extent, and the LED count; an empty map without a model."""
+    xs: list[int] = []
+    ys: list[int] = []
+    if room:
+        step = {"up": (0, -2), "right": (2, 0), "down": (0, 2), "left": (-2, 0)}
+        x = y = 0
+        for e in room["edges"]:
+            dx, dy = step[e["direction"]]
+            for _ in range(e["pixels"]):
+                xs.append(x + dx // 2)
+                ys.append(y + dy // 2)
+                x, y = x + dx, y + dy
+    if xs:
+        mx, my = min(xs), min(ys)
+        xs, ys = [v - mx for v in xs], [v - my for v in ys]
+    n = len(xs)
+    fmt = lambda vals: ", ".join(str(v) for v in vals) if vals else "0"  # noqa: E731
+    return (
+        "// SPDX-License-Identifier: EUPL-1.2\n"
+        "// Written by wled-studio from the room model: each LED's position (doubled grid units).\n"
+        "// Regenerate it from the Effect studio after changing the room's shape.\n"
+        "#pragma once\n#include <stdint.h>\n\n"
+        f"constexpr uint16_t kRoomLeds = {n};\n"
+        f"constexpr int16_t kRoomW = {max(xs) if xs else 0};\n"
+        f"constexpr int16_t kRoomH = {max(ys) if ys else 0};\n"
+        f"constexpr int16_t kRoomX[{max(n, 1)}] = {{{fmt(xs)}}};\n"
+        f"constexpr int16_t kRoomY[{max(n, 1)}] = {{{fmt(ys)}}};\n"
+    )
+
+
+class RoomMapIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    device: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
 class FileIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     content: str = Field(max_length=MAX_FILE)
@@ -73,6 +164,7 @@ class NewEffect(BaseModel):
     folder: str = Field(pattern=FOLDER_RE.pattern)
     title: str = Field(min_length=1, max_length=28, pattern=r"^[A-Za-z0-9 _-]+$")
     effect_id: int = Field(ge=200, le=254)
+    template: Literal["wave", "room"] = "wave"
 
 
 def _root(request: Request) -> Path:
@@ -144,6 +236,21 @@ def create_effect(body: NewEffect, request: Request):
         "description": f"{body.title}: an effect made in wled-studio",
         "build": {"libArchive": False},
     }, indent=2) + "\n", encoding="utf-8")
-    (d / f"{body.folder}.cpp").write_text(TEMPLATE.format(title=body.title, folder=body.folder, klass=klass,
+    template = ROOM_TEMPLATE if body.template == "room" else TEMPLATE
+    (d / f"{body.folder}.cpp").write_text(template.format(title=body.title, folder=body.folder, klass=klass,
                                                           effect_id=body.effect_id), encoding="utf-8")
+    if body.template == "room":
+        (d / "room_map.h").write_text(room_map_header(None), encoding="utf-8")
     return {"folder": body.folder, "files": sorted(f.name for f in d.iterdir())}
+
+
+@router.post("/{folder}/room-map")
+def write_room_map(folder: str, body: RoomMapIn, request: Request):
+    """Write room_map.h into an effect's folder, from a device's room model."""
+    d = _folder(request, folder)
+    p = request.app.state.settings.data_dir / "rooms" / f"{body.device}.json"
+    if not p.exists():
+        raise HTTPException(404, "that device has no room model")
+    room = json.loads(p.read_text())
+    (d / "room_map.h").write_text(room_map_header(room), encoding="utf-8")
+    return {"folder": folder, "name": "room_map.h", "leds": sum(e["pixels"] for e in room["edges"])}

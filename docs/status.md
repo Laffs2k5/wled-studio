@@ -10,8 +10,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   - import presets into a library keyed by name; capture and show looks;
   - write `presets.json` with backup, drift check, PIN handling and read-back verification.
 - **Security baseline** (docs/security.md).
-- **Tests:** backend 90 (92 % coverage), frontend 19 (93 % of statements), plus an end-to-end smoke
-  test against the containers with the fake device.
+- **Tests:** backend (pytest, 93 % coverage), frontend (Vitest, 94 % of statements), an end-to-end
+  smoke test and browser tests (Playwright, Chromium) against the containers with the fake device,
+  and the firmware profile end to end behind the egress allowlist.
 - **Firmware profile end to end (CI, `firmware-e2e`):** from the published images, the builder
   behind its egress allowlist (direct egress blocked, github.com allowed, other hosts refused); a
   real preview job and a real gate build started through the app's API, both passing.
@@ -47,8 +48,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 6. **Full change check UI:** a status per look, accept-review flow, preflight against a builder
    manifest.
 7. ~~Room model~~ (done 2026-11-23: the strip's shape as walls in LED order, a direction and a
-   count each; the live view and the Effect studio's preview are drawn in that shape. Next: room-aware
-   effects, which get each LED's position).
+   count each; the live view and the Effect studio's preview are drawn in that shape; and **room-aware
+   effects**: the app writes each LED's position into `room_map.h` in an effect's folder, and a
+   template sweeps a wave across the room. It passes the gate in firmware and runs in the preview).
 8. **The effect studio, next** (done 2026-11-23: a code editor for `./effects`, and new effects
    from a template that compiles to both the preview and firmware):
    - exact colours (WLED's helpers from the user's checkout).

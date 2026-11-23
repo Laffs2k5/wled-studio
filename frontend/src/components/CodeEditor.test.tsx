@@ -11,6 +11,8 @@ function stub(files: Record<string, string>) {
     calls.push({ key, body: init?.body as string });
     const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
     if (key === "GET /api/effects") return reply([{ folder: "my_fx", files: ["library.json", "my_fx.cpp"] }]);
+    if (key === "GET /api/devices") return reply([{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }]);
+    if (key === "POST /api/effects/my_fx/room-map") return reply({ leds: 250 });
     if (key.startsWith("GET /api/effects/")) return reply({ content: files[url.split("/").slice(-1)[0]] ?? "" });
     if (key.startsWith("PUT /api/effects/")) return reply({ bytes: 1 });
     if (key === "POST /api/effects") return reply({ folder: "new_fx", files: ["library.json", "new_fx.cpp"] }, 201);
@@ -54,11 +56,23 @@ test("creates a new effect from the template and opens it", async () => {
   fireEvent.change(screen.getByLabelText("Effect id"), { target: { value: "251" } });
   fireEvent.click(screen.getByText("Create"));
   expect(await screen.findByLabelText("Code")).toHaveValue("// template");
-  expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects")!.body!)).toEqual({ folder: "new_fx", title: "New Fx", effect_id: 251 });
+  expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects")!.body!)).toEqual(
+    { folder: "new_fx", title: "New Fx", effect_id: 251, template: "wave" });
 });
 
 test("hidden when no effects directory is configured", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "off" }), { status: 503 })));
   const { container } = render(<CodeEditor notify={() => {}} />);
   await waitFor(() => expect(container).toBeEmptyDOMElement());
+});
+
+test("writes the room map for the open effect", async () => {
+  const calls = stub({ "my_fx.cpp": "x" });
+  const notify = vi.fn();
+  render(<CodeEditor notify={notify} />);
+  fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/my_fx.cpp" } });
+  fireEvent.change(await screen.findByLabelText("Room map device"), { target: { value: "desk" } });
+  fireEvent.click(screen.getByText("Write room map"));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("room_map.h written: 250 LEDs"));
+  expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects/my_fx/room-map")!.body!)).toEqual({ device: "desk" });
 });
