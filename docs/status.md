@@ -51,6 +51,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   browser with each effect's own controls; the preview **streamed to the strip** (DDP).
 - **Firmware builds from the app:** gate jobs on wled-studio-builder's job service. The vendor's
   stock image is checked first, then only your code may differ.
+- **Preflight before flashing:** for a passed gate job, the Firmware view checks the library
+  against the image's effect list (from wled-studio-builder's `effects.json`) for a chosen device:
+  each look's and playlist's status today and with that image, with what would change.
 - **The firmware profile end to end** (CI, `firmware-e2e`): from the published images, the builder
   behind its egress allowlist, which refuses direct egress, other hosts, and IP addresses that pass
   only on their reverse DNS. A real preview job and a real gate build are started through the app's
@@ -73,11 +76,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    has run only against the fake device.
 2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; a spare board first.
-3. **Preflight:** check the library against a firmware's effect list before it is flashed. This
-   needs the builder to list a built image's effects (a build manifest).
-4. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
+3. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
    instead of the stand-ins.
-5. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
+4. **Bulk tools** for the library: reorder, rename, where a look is used, folders.
 
 ## Decided design
 

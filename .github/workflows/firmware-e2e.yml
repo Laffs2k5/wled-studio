@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Start (published images)
-        run: docker compose --profile firmware up -d --no-build
+        run: docker compose --profile firmware --profile demo up -d --no-build
       - name: Network policy, preview job, gate build
         run: scripts/firmware-e2e.sh
       - name: Logs

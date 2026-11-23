@@ -54,7 +54,7 @@ export function App() {
         </nav>
         {view === "looks" && devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify} />}
       </header>
-      {view === "firmware" ? <Firmware notify={notify} /> : view === "studio" ? <EffectStudio notify={notify} /> :
+      {view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} /> : view === "studio" ? <EffectStudio notify={notify} /> :
         current ? <DevicePanel key={current} deviceId={current} notify={notify} /> : devices && <p className="muted">Add a WLED device to start.</p>}
       {toast && <div role="status" className={`toast ${toast.error ? "error" : ""}`}>{toast.msg}</div>}
     </div>

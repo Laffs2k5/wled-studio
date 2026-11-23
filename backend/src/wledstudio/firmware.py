@@ -118,3 +118,55 @@ async def preview_file(jid: str, name: str, request: Request):
 @router.get("/jobs/{jid}/log", response_class=PlainTextResponse)
 async def log(jid: str, request: Request):
     return (await _call(request, "GET", f"/jobs/{_job_id(jid)}/log")).text
+
+
+# --- preflight: the library against a built image's effects ------------------------
+
+def effect_lists(manifest: object) -> tuple[list[str], list[str]]:
+    """A builder's effects.json -> (names, metadata) by effect id. Checked, since it comes from
+    another service: ids 0-254, names and metadata strings of sane length."""
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("effects"), list):
+        raise HTTPException(502, "the builder's effect list isn't in the expected shape")
+    effects = [e for e in manifest["effects"] if isinstance(e, dict)
+               and isinstance(e.get("id"), int) and 0 <= e["id"] <= 254
+               and isinstance(e.get("name"), str) and len(e["name"]) <= 64
+               and isinstance(e.get("meta"), str) and len(e["meta"]) <= 512]
+    if not effects:
+        raise HTTPException(502, "the builder's effect list is empty")
+    size = max(e["id"] for e in effects) + 1
+    names, metas = ["RSVD"] * size, [""] * size
+    for e in effects:
+        names[e["id"]], metas[e["id"]] = e["name"], e["meta"]
+    return names, metas
+
+
+@router.get("/jobs/{jid}/preflight")
+async def preflight(jid: str, device: str, request: Request):
+    """The library checked against a gate job's custom image, for one device: each look's and
+    playlist's status today and if that image were flashed. Reads only."""
+    from .api import device_errors, device_or_404, make_client, room_for
+    from .library import DeviceLists, check_library
+    from .push import fetch_lists
+    from .wled import WLEDError
+
+    names, metas = effect_lists((await _call(request, "GET", f"/jobs/{_job_id(jid)}/effects.json")).json())
+    dev = device_or_404(device, request)
+    async with make_client(request, dev) as c:
+        try:
+            today = await fetch_lists(c, request.app.state.statestore.custom_ids(dev.id))
+        except WLEDError as e:
+            raise device_errors(e) from None
+    flashed = DeviceLists(names, metas, today.palettes, today.custom, today.max_segments)
+    lib = request.app.state.library
+    looks, playlists = list(lib.looks().values()), list(lib.playlists().values())
+    room = room_for(request, dev.id)
+    now = {(r.get("look"), r.get("playlist")): r for r in check_library(looks, playlists, today, room)}
+    rows = []
+    for r in check_library(looks, playlists, flashed, room):
+        before = now.get((r.get("look"), r.get("playlist")), {})
+        rows.append({**r, "today": before.get("status", "ok"), "changes": before.get("status", "ok") != r["status"]})
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    return {"job": jid, "device": dev.id, "effects": sum(1 for n in names if "RSVD" not in n),
+            "counts": counts, "rows": rows}

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
-import { firmware, type FirmwareJob, type FirmwareTarget } from "../api";
+import { firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
+import type { Device } from "../types";
+import { StatusBadge } from "./StatusBadge";
 
 const CHECK_LABELS: Record<string, string> = {
   stock_matches_verified: "Stock build matches the verified result",
@@ -9,7 +11,12 @@ const CHECK_LABELS: Record<string, string> = {
 };
 
 /** Build firmware with your own effects, through the gate (wled-studio-builder). */
-export function Firmware({ notify }: { notify: (msg: string, error?: boolean) => void }) {
+export function Firmware({ notify, devices = [], device = null }: {
+  notify: (msg: string, error?: boolean) => void;
+  /** Devices the library can be checked for, and the one selected in the look studio. */
+  devices?: Device[];
+  device?: string | null;
+}) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [targets, setTargets] = useState<FirmwareTarget[]>([]);
   const [usermods, setUsermods] = useState<string[]>([]);
@@ -18,6 +25,9 @@ export function Firmware({ notify }: { notify: (msg: string, error?: boolean) =>
   const [chosen, setChosen] = useState<string[]>([]);
   const [open, setOpen] = useState<FirmwareJob | null>(null);
   const [log, setLog] = useState("");
+  const [checkFor, setCheckFor] = useState<string>(device ?? devices[0]?.id ?? "");
+  const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const [onlyChanges, setOnlyChanges] = useState(true);
 
   const reloadJobs = useCallback(() => firmware.jobs().then(setJobs).catch((e) => notify(e.message, true)), [notify]);
 
@@ -115,6 +125,48 @@ export function Firmware({ notify }: { notify: (msg: string, error?: boolean) =>
             </ul>
           )}
           {open.report?.error && <p className="warn">{open.report.error}</p>}
+          {open.state === "passed" && devices.length > 0 && (
+            <div className="preflight">
+              <h2>Before flashing: the library against this image</h2>
+              <div className="row">
+                <select aria-label="Device to check for" value={checkFor} onChange={(e) => setCheckFor(e.target.value)}>
+                  {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                <button disabled={!checkFor} onClick={() => firmware.preflight(open.id, checkFor).then(setPreflight)
+                  .catch((e) => notify((e as Error).message, true))}>
+                  Check the library
+                </button>
+              </div>
+              {preflight && preflight.job === open.id && (
+                <>
+                  <p className="small">
+                    {preflight.effects} effects in the image.{" "}
+                    {Object.entries(preflight.counts).map(([s, n]) => `${n} ${s}`).join(", ") || "Nothing in the library."}
+                  </p>
+                  <label className="small">
+                    <input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> Only what
+                    flashing would change
+                  </label>
+                  <table className="jobs">
+                    <thead><tr><th>Look or playlist</th><th>Today</th><th>With this image</th><th>Why</th></tr></thead>
+                    <tbody>
+                      {preflight.rows.filter((r) => !onlyChanges || r.changes).map((r) => (
+                        <tr key={r.look ?? `pl:${r.playlist}`}>
+                          <td>{r.look ?? `▶ ${r.playlist}`}</td>
+                          <td>{r.today}</td>
+                          <td>{r.status === "ok" ? "ok" : <StatusBadge item={r} />}</td>
+                          <td className="small">{r.notes.join("; ")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {onlyChanges && !preflight.rows.some((r) => r.changes) && (
+                    <p className="ok small">Flashing this image changes nothing for the library.</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           <pre className="log" aria-label="Build log">{log.slice(-8000)}</pre>
         </div>
       )}

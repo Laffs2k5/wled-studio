@@ -58,3 +58,50 @@ test("warns about unverified targets", async () => {
   render(<Firmware notify={() => {}} />);
   await waitFor(() => expect(screen.getByText(/no verified result yet/)).toBeInTheDocument());
 });
+
+test("checks the library against a passed image before flashing", async () => {
+  const job = { id: JID, state: "passed", pins: "q.json", target: "board", usermods: ["my_fx"], created: 1700000000,
+    report: { passed: true, checks: { fits_app_slot: true } } };
+  const preflight = { job: JID, device: "desk", effects: 220, counts: { ok: 2, review: 1 }, rows: [
+    { look: "Calm", status: "ok", notes: [], today: "ok", changes: false },
+    { look: "Tail", status: "review", notes: ["'Comet' changed: Tail (ix) is gone"], today: "ok", changes: true },
+    { playlist: "Mix", status: "ok", notes: [], today: "ok", changes: false },
+  ] };
+  const calls = stub({
+    "GET /api/firmware/status": json({ enabled: true, status: "ok" }),
+    "GET /api/firmware/targets": json([{ pins: "q.json", release: "q", target: "board", verified: ["windows"] }]),
+    "GET /api/firmware/usermods": json(["my_fx"]),
+    "GET /api/firmware/jobs": json([job]),
+    [`GET /api/firmware/jobs/${JID}`]: json(job),
+    [`GET /api/firmware/jobs/${JID}/log`]: () => new Response("GATE PASSED", { status: 200 }),
+    [`GET /api/firmware/jobs/${JID}/preflight?device=desk`]: json(preflight),
+  });
+  render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
+  fireEvent.click(await screen.findByText("board"));
+  fireEvent.click(await screen.findByRole("button", { name: "Check the library" }));
+  expect(await screen.findByText("220 effects in the image. 2 ok, 1 review")).toBeInTheDocument();
+  expect(screen.getByText("Tail")).toBeInTheDocument();
+  expect(screen.queryByText("Calm")).toBeNull();                   // only what flashing would change
+  fireEvent.click(screen.getByLabelText(/Only what/));
+  expect(screen.getByText("Calm")).toBeInTheDocument();
+  expect(screen.getByText("▶ Mix")).toBeInTheDocument();
+  expect(calls.map((c) => c.key)).toContain(`GET /api/firmware/jobs/${JID}/preflight?device=desk`);
+});
+
+test("says so when flashing changes nothing", async () => {
+  const job = { id: JID, state: "passed", pins: "q.json", target: "board", usermods: ["my_fx"], created: 1700000000, report: { passed: true } };
+  stub({
+    "GET /api/firmware/status": json({ enabled: true, status: "ok" }),
+    "GET /api/firmware/targets": json([]),
+    "GET /api/firmware/usermods": json([]),
+    "GET /api/firmware/jobs": json([job]),
+    [`GET /api/firmware/jobs/${JID}`]: json(job),
+    [`GET /api/firmware/jobs/${JID}/log`]: () => new Response("", { status: 200 }),
+    [`GET /api/firmware/jobs/${JID}/preflight?device=desk`]: json({ job: JID, device: "desk", effects: 3, counts: {}, rows: [] }),
+  });
+  render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
+  fireEvent.click(await screen.findByText("board"));
+  fireEvent.click(await screen.findByRole("button", { name: "Check the library" }));
+  expect(await screen.findByText(/changes nothing for the library/)).toBeInTheDocument();
+  expect(screen.getByText("3 effects in the image. Nothing in the library.")).toBeInTheDocument();
+});

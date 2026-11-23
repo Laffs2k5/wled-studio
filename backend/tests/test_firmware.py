@@ -105,3 +105,50 @@ def test_preview_files_open_without_token_but_nothing_else(tmp_path):
     assert c.get(f"/api/firmware/jobs/{JID}").status_code == 401
     assert c.get(f"/api/firmware/jobs/{JID}/log").status_code == 401
     assert c.post("/api/firmware/previews", json={"usermods": ["a"]}, headers=CSRF).status_code == 401
+
+
+def test_preflight_checks_the_library_against_a_built_image(tmp_path, device_transport):
+    from wledstudio.fakewled.app import EFFECTS
+    image = [{"id": i, "name": n, "meta": m} for i, (n, m) in enumerate(EFFECTS)]
+    image[1] = {"id": 1, "name": "RSVD", "meta": ""}                        # Glow is gone
+    image[8] = {"id": 8, "name": "RSVD", "meta": ""}
+    image.append({"id": 9, "name": "Comet", "meta": "!;!;!;1;sx=128"})      # Comet moved, lost Tail
+
+    def handle(request: httpx.Request):
+        if request.url.path == f"/jobs/{JID}/effects.json":
+            return httpx.Response(200, json={"schema": 1, "effects": image})
+        if request.url.path == f"/jobs/{'c' * 32}/effects.json":
+            return httpx.Response(200, json={"effects": "nope"})
+        return httpx.Response(404, json={"detail": "not found"})
+
+    s = Settings(data_dir=tmp_path, allowed_hosts=["testserver"], builder_url="http://builder:8090")
+    c = TestClient(create_app(s, transport_for=lambda dev: device_transport, resolver=private_resolver,
+                              builder_transport=httpx.MockTransport(handle)))
+    dev = c.post("/api/devices", json={"name": "Desk", "host": "desk-strip"}, headers=CSRF).json()["id"]
+    c.post(f"/api/devices/{dev}/state", json={"seg": [{"id": 0, "fx": 8, "ix": 77}]}, headers=CSRF)
+    c.post(f"/api/devices/{dev}/capture/Tail", headers=CSRF)
+    c.post(f"/api/devices/{dev}/state", json={"seg": [{"id": 0, "fx": 1}]}, headers=CSRF)
+    c.post(f"/api/devices/{dev}/capture/Glowing", headers=CSRF)
+    c.put("/api/playlists/Both", json={"name": "Both", "entries": [{"look": "Tail"}, {"look": "Glowing"}]}, headers=CSRF)
+
+    r = c.get(f"/api/firmware/jobs/{JID}/preflight", params={"device": dev}).json()
+    rows = {x.get("look") or "pl:" + x["playlist"]: x for x in r["rows"]}
+    assert rows["Tail"]["status"] == "review" and rows["Tail"]["today"] == "ok" and rows["Tail"]["changes"]
+    assert rows["Tail"]["notes"] == ["'Comet' changed: Tail (ix) is gone"]
+    assert rows["Glowing"]["status"] == "unavailable"
+    assert rows["pl:Both"]["status"] == "unavailable"
+    assert r["counts"] == {"review": 1, "unavailable": 2} and r["effects"] == 7
+    assert c.get(f"/api/firmware/jobs/{'c' * 32}/preflight", params={"device": dev}).status_code == 502
+    assert c.get(f"/api/firmware/jobs/{JID}/preflight", params={"device": "nope"}).status_code == 404
+
+
+def test_effect_lists_are_checked():
+    import pytest
+    from fastapi import HTTPException
+    from wledstudio.firmware import effect_lists
+    names, metas = effect_lists({"effects": [{"id": 0, "name": "Solid", "meta": ""}, {"id": 2, "name": "B", "meta": "!"},
+                                             {"id": 300, "name": "x", "meta": ""}, {"id": 1, "name": 5, "meta": ""}]})
+    assert names == ["Solid", "RSVD", "B"] and metas == ["", "", "!"]
+    for bad in (None, {"effects": []}, {"effects": [{"id": 999, "name": "x", "meta": ""}]}):
+        with pytest.raises(HTTPException):
+            effect_lists(bad)

@@ -60,4 +60,20 @@ gid=$(curl -fsS "${W[@]}" -d '{"pins":"quinled-16.0.1.json","target":"dig-next-2
 state=$(wait_job "$gid" 240)
 curl -fsS "$B/api/firmware/jobs/$gid" | python3 -c 'import json,sys; r=json.load(sys.stdin).get("report",{}); print(json.dumps({k: r.get(k) for k in ("passed","checks","error")}))'
 [ "$state" = passed ] || { curl -fsS "$B/api/firmware/jobs/$gid/log" | tail -n 40; fail "gate job: $state"; }
+
+echo "== preflight: a look on the demo device, checked against the gate's image"
+did=$(curl -fsS "${W[@]}" -d "{\"name\":\"e2e\",\"host\":\"${DEMO_DEVICE:-demo-device:8081}\"}" "$B/api/devices" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -fsS "${W[@]}" -d '{"seg":[{"id":0,"fx":8}]}' "$B/api/devices/$did/state" > /dev/null
+curl -fsS "${W[@]}" -X POST "$B/api/devices/$did/capture/E2E%20preflight" > /dev/null
+# The look stores the demo device's "Comet" by name; the image has WLED's real Comet, whose
+# metadata differs from the demo device's made-up one, so the look is found but flagged.
+curl -fsS "$B/api/firmware/jobs/$gid/preflight?device=$did" | python3 -c '
+import json, sys
+r = json.load(sys.stdin)
+print(json.dumps({"effects": r["effects"], "counts": r["counts"]}))
+row = next(x for x in r["rows"] if x.get("look") == "E2E preflight")
+print("preflight:", row["status"], row["notes"])
+assert r["effects"] > 200, r["effects"]
+assert row["status"] in ("check", "review"), row
+'
 echo "firmware end-to-end passed"

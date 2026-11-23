@@ -74,7 +74,18 @@ export const firmware = {
     request<FirmwareJob>("POST", "/api/firmware/jobs", { pins, target, usermods }),
   preview: (usermods: string[]) => request<FirmwareJob>("POST", "/api/firmware/previews", { usermods }),
   previewUrl: (id: string) => `/api/firmware/jobs/${encodeURIComponent(id)}/preview/preview.mjs`,
+  preflight: (id: string, device: string) => request<Preflight>("GET",
+    `/api/firmware/jobs/${encodeURIComponent(id)}/preflight?device=${encodeURIComponent(device)}`),
 };
+
+/** The library checked against a built image, for one device (before it is flashed). */
+export interface Preflight {
+  job: string;
+  device: string;
+  effects: number;
+  counts: Record<string, number>;
+  rows: (CheckItem & { today: CheckItem["status"]; changes: boolean })[];
+}
 
 export interface EffectFolder { folder: string; files: string[] }
 
