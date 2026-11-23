@@ -9,6 +9,7 @@ __pycache__/
 .coverage
 htmlcov/
 *.egg-info/
+backend/build/
 *.tsbuildinfo
 effects/*
 !effects/README.md
