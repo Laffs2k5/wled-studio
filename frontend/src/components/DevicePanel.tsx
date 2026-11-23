@@ -4,6 +4,7 @@ import { api } from "../api";
 import type { DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
+import { LiveStrip } from "./LiveStrip";
 import { Looks } from "./Looks";
 import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
@@ -73,6 +74,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
           onSelect={(fx) => change({ fx })} />
       </aside>
       <main>
+        <LiveStrip deviceId={deviceId} />
         <div className="master row">
           <label><input type="checkbox" checked={state.on} onChange={(e) => master({ on: e.target.checked })} /> On</label>
           <label className="slider grow">

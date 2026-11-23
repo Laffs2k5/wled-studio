@@ -38,8 +38,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 4. ~~Custom palettes~~ (done 2026-11-23: a gradient editor; kept by name; uploaded as WLED's
    `palette<i>.json` with stable file indexes per device, before the presets that use them; WLED
    reloads them on upload, per its source. Not yet tried on a real device).
-5. **Live preview** from the device's live view (one websocket client per device; the backend owns
-   it and fans it out).
+5. ~~Live view of the device~~ (done 2026-11-23: the device's live view relayed by the backend, one
+   device connection shared by all viewers; off by default in the UI, since it takes the device's
+   single live-view slot).
 6. **Full change check UI:** a status per look, accept-review flow, preflight against a builder
    manifest.
 7. **Room model:** pixel positions per LED for a room-shaped preview.

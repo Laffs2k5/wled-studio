@@ -22,7 +22,9 @@ import json
 import time
 from dataclasses import dataclass, field
 
-from fastapi import FastAPI, Request, UploadFile
+import asyncio
+
+from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 # Made-up effects: (name, metadata after the name). Index = effect id.
@@ -58,6 +60,7 @@ class FakeDevice:
     busy: int = 0
     uploads: list = field(default_factory=list)
     palette_files: dict = field(default_factory=dict)
+    ws_connections: int = 0
     audio_enabled: bool = False
 
     def __post_init__(self):
@@ -125,6 +128,17 @@ class FakeDevice:
             "fs": {"u": 8, "t": 983, "pmt": 0}, "u": {"AudioReactive": ["off" if not self.audio_enabled else "on"]},
             "live": False, "uptime": 1,
         }
+
+    def live_frame(self) -> bytes:
+        """WLED's live-view frame: 'L', 1, then RGB per LED (each segment in its first colour)."""
+        px = [(0, 0, 0)] * self.led_count
+        if self.state.get("on"):
+            for seg in self.state["seg"]:
+                r, g, b, *w = (seg["col"][0] + [0, 0, 0, 0])[:4]
+                wv = w[0] if w else 0
+                for i in range(max(0, seg["start"]), min(self.led_count, seg["stop"])):
+                    px[i] = (min(255, r + wv), min(255, g + wv), min(255, b + wv))
+        return b"L\x01" + bytes(c for p in px for c in p)
 
     def public_state(self) -> dict:
         s = copy.deepcopy(self.state)
@@ -199,6 +213,30 @@ def create_app(device: FakeDevice | None = None, clock=time.monotonic) -> FastAP
         elif name.startswith("palette") and name.endswith(".json"):
             dev.palette_files[int(name[len("palette"):-len(".json")])] = json.loads(content)
         return PlainTextResponse("File Uploaded!")
+
+    @app.websocket("/ws")
+    async def ws(socket: WebSocket):
+        await socket.accept()
+        dev.ws_connections += 1
+        await socket.send_text(json.dumps({"state": dev.public_state(), "info": dev.info()}))
+        live = False
+
+        async def frames():
+            while True:
+                await asyncio.sleep(0.05)
+                if live:
+                    await socket.send_bytes(dev.live_frame())
+
+        sender = asyncio.create_task(frames())
+        try:
+            while True:
+                msg = json.loads(await socket.receive_text())
+                if isinstance(msg, dict) and "lv" in msg:
+                    live = bool(msg["lv"])
+        except (WebSocketDisconnect, json.JSONDecodeError):
+            pass
+        finally:
+            sender.cancel()
 
     @app.get("/settings/lock")
     def lock():
