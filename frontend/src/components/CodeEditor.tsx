@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
+import { deviceLabel } from "../devices";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, effects, type EffectFolder } from "../api";
 import { GitPanel } from "./GitPanel";
@@ -64,7 +65,7 @@ export function CodeEditor({ notify, onSaved }: { notify: (msg: string, error?: 
         <div className="row small">
           <select value={mapFor} aria-label="Room map device" onChange={(e) => setMapFor(e.target.value)}>
             <option value="">Room map from…</option>
-            {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
           </select>
           <button disabled={!mapFor} title="Write room_map.h (each LED's position) into this effect's folder"
             onClick={() => effects.roomMap(file.folder, mapFor)

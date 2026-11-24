@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
+import { deviceLabel } from "../devices";
 import { useState } from "react";
 import { api } from "../api";
 import type { Device } from "../types";
@@ -25,7 +26,7 @@ export function DeviceBar({ devices, current, onSelect, onChanged, notify }: Pro
       {devices.length > 0 && (
         <select value={current ?? ""} aria-label="Device" onChange={(e) => onSelect(e.target.value)}>
           {devices.map((d) => (
-            <option key={d.id} value={d.id}>{d.name} ({d.host})</option>
+            <option key={d.id} value={d.id}>{deviceLabel(d)} ({d.host})</option>
           ))}
         </select>
       )}

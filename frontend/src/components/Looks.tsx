@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
+import { deviceLabel } from "../devices";
 import { useCallback, useEffect, useState } from "react";
 import { api, type DeviceSet } from "../api";
 import { folders, groupByFolder, moveWithin, sortWithin } from "../organise";
@@ -164,7 +165,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
             <>
               <select aria-label="Copy the selected looks to device" value={copyTo} onChange={(e) => setCopyTo(e.target.value)}>
                 <option value="">Copy to device…</option>
-                {others.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {others.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
               </select>
               <button disabled={busy || !copyTo} onClick={copySelected}>Copy</button>
             </>

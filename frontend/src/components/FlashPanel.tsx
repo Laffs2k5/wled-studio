@@ -105,7 +105,7 @@ export function FlashPanel({ job, device, deviceName, notify }: {
           {run.state === "failed" && <p className="bad small">It didn't finish. The device keeps the image it had unless the upload completed; revert below if needed.</p>}
         </div>
       )}
-      <details className="revert">
+      {plan?.running.arch !== "virtual" && <details className="revert">
         <summary>The way back: revert {deviceName} to its previous image</summary>
         <p className="small muted">WLED keeps the previous image in its other slot; this boots it again (WLED's /update?revert).</p>
         <div className="row">
@@ -114,7 +114,7 @@ export function FlashPanel({ job, device, deviceName, notify }: {
           <button className="danger" disabled={revertTyped !== deviceName || running}
             onClick={() => withNotice("revert", (v) => firmware.revert(device, revertTyped, v))}>Revert {deviceName}</button>
         </div>
-      </details>
+      </details>}
       {notice?.remembered && (
         <p className="small muted">
           You accepted the flashing notice ({notice.version}) and chose not to see it again.{" "}

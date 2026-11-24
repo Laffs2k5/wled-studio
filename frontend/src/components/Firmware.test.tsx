@@ -105,3 +105,26 @@ test("says so when flashing changes nothing", async () => {
   expect(await screen.findByText(/changes nothing for the library/)).toBeInTheDocument();
   expect(screen.getByText("3 effects in the image. Nothing in the library.")).toBeInTheDocument();
 });
+
+test("a virtual device gets one line instead of the flash step", async () => {
+  const job = { id: JID, state: "passed", pins: "q.json", target: "board", usermods: ["my_fx"], created: 1700000000, report: { passed: true } };
+  stub({
+    "GET /api/firmware/status": json({ enabled: true, status: "ok" }),
+    "GET /api/firmware/targets": json([]),
+    "GET /api/firmware/usermods": json([]),
+    "GET /api/firmware/jobs": json([job]),
+    [`GET /api/firmware/jobs/${JID}`]: json(job),
+    [`GET /api/firmware/jobs/${JID}/log`]: () => new Response("", { status: 200 }),
+    "GET /api/notices/flash": json({ version: "v1", title: "t", text: "x", remembered: false, accepted: null }),
+  });
+  render(<Firmware notify={() => {}} device="twin" devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false },
+    { id: "twin", name: "Twin", host: "t", has_pin: false, virtual: true }]} />);
+  fireEvent.click(await screen.findByText("board"));
+  expect(await screen.findByText(/Twin is a virtual device: a software copy of WLED for testing/)).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Twin · virtual (no LEDs)" })).toBeInTheDocument();
+  expect(screen.queryByText("Plan the flash")).toBeNull();
+  expect(screen.queryByText(/The way back/)).toBeNull();
+  fireEvent.change(screen.getByLabelText("Device to check for"), { target: { value: "desk" } });
+  expect(await screen.findByText("Plan the flash")).toBeInTheDocument();
+  expect(screen.getByText(/The way back/)).toBeInTheDocument();
+});

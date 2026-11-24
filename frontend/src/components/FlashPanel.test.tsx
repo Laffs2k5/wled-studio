@@ -91,3 +91,13 @@ test("revert needs the name typed too, and the notice", async () => {
   await waitFor(() => expect(calls.some((c) => c.startsWith("POST /api/devices/d/revert") && c.includes('"notice":"v1"'))).toBe(true));
   expect(calls.some((c) => c.startsWith("POST /api/notices/flash") && c.includes('"remember":true'))).toBe(true);
 });
+
+test("a plan that finds a virtual device hides the way back", async () => {
+  stub({ ...okPlan, running: { ver: "16.0.1", arch: "virtual" }, can_flash: false,
+    checks: [{ id: "arch", level: "block", text: "This is a virtual device." }] }, []);
+  render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
+  expect(screen.getByText(/The way back/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Plan the flash"));
+  expect(await screen.findByText(/This is a virtual device/)).toBeInTheDocument();
+  expect(screen.queryByText(/The way back/)).toBeNull();
+});

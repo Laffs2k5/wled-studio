@@ -42,3 +42,10 @@ test("adds a device", async () => {
   await waitFor(() => expect(onSelect).toHaveBeenCalledWith("new"));
   expect(JSON.parse(calls[0].body!)).toEqual({ name: "New", host: "x.lan", pin: "1" });
 });
+
+test("a virtual device is marked in the picker", () => {
+  render(<DeviceBar devices={[...devices, { id: "twin", name: "Twin", host: "twin.lan", has_pin: false, virtual: true }]}
+    current="desk" onSelect={() => {}} onChanged={() => {}} notify={() => {}} />);
+  expect(screen.getByRole("option", { name: "Twin · virtual (no LEDs) (twin.lan)" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Desk (wled.lan)" })).toBeInTheDocument();
+});

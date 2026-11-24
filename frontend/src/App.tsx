@@ -57,7 +57,10 @@ export function App() {
         {view === "looks" && devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify} />}
       </header>
       {view === "slots" ? <SlotGrid notify={notify} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} /> : view === "studio" ? <EffectStudio notify={notify} /> :
-        current ? <DevicePanel key={current} deviceId={current} notify={notify} /> : devices && <p className="muted">Add a WLED device to start.</p>}
+        current ? <DevicePanel key={current} deviceId={current} notify={notify} onVirtual={(v) => {
+          // the list says what the device was when last read; a different answer now: list again
+          if (Boolean(devices?.find((d) => d.id === current)?.virtual) !== v) reload();
+        }} /> : devices && <p className="muted">Add a WLED device to start.</p>}
       {toast && <div role="status" className={`toast ${toast.error ? "error" : ""}`}>{toast.msg}</div>}
     </div>
   );

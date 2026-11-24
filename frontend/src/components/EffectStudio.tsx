@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
+import { deviceLabel } from "../devices";
 import { useEffect, useRef, useState } from "react";
 import { api, firmware, request, token } from "../api";
 import { drawPixels, type Room } from "../room";
@@ -205,7 +206,7 @@ export function EffectStudio({ notify, load = Preview.load }: {
         <div className="row">
           <select aria-label="Stream device" value={target} disabled={streaming} onChange={(e) => setTarget(e.target.value)}>
             <option value="">Preview on / stream to a device…</option>
-            {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
           </select>
           <button className={streaming ? "primary" : ""} disabled={!target} onClick={toggleStream}>
             {streaming ? "Stop streaming" : "Stream to the strip"}

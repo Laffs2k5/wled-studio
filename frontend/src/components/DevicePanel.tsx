@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
+import { VIRTUAL } from "../devices";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { CheckItem, DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
@@ -18,11 +19,13 @@ import { Playlists } from "./Playlists";
 interface Props {
   deviceId: string;
   notify: (msg: string, error?: boolean) => void;
+  /** Called with whether the device turned out virtual, once its profile is read. */
+  onVirtual?: (virtual: boolean) => void;
 }
 
 const SEND_DELAY_MS = 120;
 
-export function DevicePanel({ deviceId, notify }: Props) {
+export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -49,9 +52,11 @@ export function DevicePanel({ deviceId, notify }: Props) {
   useEffect(() => {
     setProfile(null);
     setState(null);
-    api.profile(deviceId).then(setProfile).catch((e) => notify(e.message, true));
+    api.profile(deviceId).then((p) => { setProfile(p); onVirtual?.(p.info.arch === "virtual"); })
+      .catch((e) => notify(e.message, true));
     reloadState();
     reloadLooks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId, notify, reloadState, reloadLooks]);
 
   const segment = state?.seg.find((s) => s.id === segId) ?? state?.seg[0];
@@ -151,6 +156,7 @@ export function DevicePanel({ deviceId, notify }: Props) {
   if (!profile || !state || !segment) return <p className="muted">Loading…</p>;
   const effect = profile.effects.find((e) => e.id === segment.fx) ?? profile.effects[0];
   const hasMatrix = Boolean(profile.leds.matrix && profile.leds.matrix.h > 1);
+  const virtual = profile.info.arch === "virtual";
   const mic = profile.usermods.includes("AudioReactive");
   const wallOf = (s: Segment) => areas(room).find((w) => w.start === s.start && w.stop === s.stop)?.label;
   const ids = state.seg.map((s) => s.id);
@@ -170,7 +176,9 @@ export function DevicePanel({ deviceId, notify }: Props) {
             onClose={closeEditor} />
         ) : (<>
         <p className="live-banner small" aria-label="Where changes go">
-          <strong>Live on {profile.device.name}:</strong> every change here shows on the strip at once. Nothing is
+          <strong>Live on {profile.device.name}</strong>
+          {virtual && <span className="badge" title="WLED's own code running as software, for testing: it behaves like a controller, but there's no strip">{VIRTUAL}</span>}
+          <strong>:</strong> every change here shows {virtual ? "in its live view" : "on the strip"} at once. Nothing is
           stored on the device until you write presets.
         </p>
         <LiveStrip deviceId={deviceId} room={room} />

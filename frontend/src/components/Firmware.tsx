@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
+import { deviceLabel } from "../devices";
 import { useCallback, useEffect, useState } from "react";
 import { FlashPanel } from "./FlashPanel";
 import { firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
@@ -129,7 +130,7 @@ export function Firmware({ notify, devices = [], device = null }: {
               <h2>Before flashing: the library against this image</h2>
               <div className="row">
                 <select aria-label="Device to check for" value={checkFor} onChange={(e) => setCheckFor(e.target.value)}>
-                  {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
                 </select>
                 <button disabled={!checkFor} onClick={() => firmware.preflight(open.id, checkFor).then(setPreflight)
                   .catch((e) => notify((e as Error).message, true))}>
@@ -166,10 +167,15 @@ export function Firmware({ notify, devices = [], device = null }: {
               )}
             </div>
           )}
-          {open.state === "passed" && open.kind !== "preview" && checkFor && (
+          {open.state === "passed" && open.kind !== "preview" && checkFor && (devices.find((d) => d.id === checkFor)?.virtual ? (
+            <p className="muted flash">
+              {devices.find((d) => d.id === checkFor)?.name} is a virtual device: a software copy of WLED for testing, with no
+              LEDs. It runs the firmware it was built from, and can't be flashed or reverted.
+            </p>
+          ) : (
             <FlashPanel job={open.id} device={checkFor} notify={notify}
               deviceName={devices.find((d) => d.id === checkFor)?.name ?? checkFor} />
-          )}
+          ))}
           <pre className="log" aria-label="Build log">{log.slice(-8000)}</pre>
         </div>
       )}

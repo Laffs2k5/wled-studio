@@ -4,6 +4,8 @@ export interface Device {
   name: string;
   host: string;
   has_pin: boolean;
+  /** A virtual WLED (no LEDs, can't be flashed), as the device said when the app last read it. */
+  virtual?: boolean;
 }
 
 export interface Control {

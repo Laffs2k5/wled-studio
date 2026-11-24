@@ -148,3 +148,20 @@ test("a sound effect on a device without sound input runs on the simulated beat"
   expect(screen.queryByText("Turn mic on")).toBeNull();
   expect(screen.queryByLabelText(/Microphone on/)).toBeNull();
 });
+
+test("a virtual device: marked in the live banner, and the device list is read again to mark it there", async () => {
+  let listed = 0;
+  backend({
+    "GET /api/devices": () => [{ id: "twin", name: "Twin", host: "twin.lan", has_pin: false, virtual: ++listed > 1 }],
+    "GET /api/devices/twin/profile": () => ({ ...profile, device: { id: "twin", name: "Twin" }, info: { ...profile.info, arch: "virtual" } }),
+    "GET /api/devices/twin/state": () => state,
+    "GET /api/looks": () => [],
+    "GET /api/playlists": () => [],
+    "GET /api/palettes": () => [],
+    "GET /api/devices/twin/room": () => null,
+  });
+  render(<App />);
+  const banner = await screen.findByLabelText("Where changes go");
+  await waitFor(() => expect(banner).toHaveTextContent("Live on Twinvirtual (no LEDs): every change here shows in its live view at once."));
+  expect(await screen.findByRole("option", { name: "Twin · virtual (no LEDs) (twin.lan)" })).toBeInTheDocument();
+});
