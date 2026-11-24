@@ -112,6 +112,14 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    out of a set leaves its preset on the device: writing never deletes presets.
 5. ~~A real code editor~~ (done 2026-11-24; see Decided design).
 
+6. **A virtual WLED in the browser** (agreed 2026-11-24, not started): WLED's own built-in effects,
+   segments, layers and blend modes compiled to WebAssembly from the firmware's checkout (as the
+   exact colours are), so Looks & effects can work with no device: a "virtual device" with the
+   firmware's real effect list (the builder's `effects.json`), moving, with the simulated beat.
+   Start with a time-boxed spike: does `FX.cpp` (and what it needs of `FX_fcn.cpp`, 2D, the
+   particle system, audio) compile against an extended shim, and how big is it? Report before
+   building.
+
 **Known bugs, found 2026-11-24:**
 - ~~The code editor hid effect folders with hyphens in their names~~ (fixed 2026-11-24): existing
   folders follow the builder's rule (`[A-Za-z0-9_-]`); a new one must still be a C identifier.
