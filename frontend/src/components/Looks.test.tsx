@@ -49,6 +49,26 @@ test("import and capture call the API and refresh", async () => {
   expect(notify).toHaveBeenCalledWith("Saved “Night” in the library (not on the device yet)");
 });
 
+test("a saved look clears the preset id; a failed save keeps the name and id", async () => {
+  let fail = true;
+  vi.stubGlobal("fetch", vi.fn(async () => fail
+    ? new Response(JSON.stringify({ detail: "the preset id must be 1-250" }), { status: 422 })
+    : new Response(JSON.stringify({ name: "Night", segments: [] }), { status: 200 })));
+  const notify = vi.fn();
+  render(<Looks deviceId="desk" looks={[]} onChanged={() => {}} onApplied={() => {}} notify={notify} />);
+  fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Night" } });
+  fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "300" } });
+  fireEvent.click(screen.getByText("Save current"));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("the preset id must be 1-250", true));
+  expect(screen.getByLabelText("Look name")).toHaveValue("Night");
+  expect(screen.getByLabelText("Preset id")).toHaveValue("300");
+  fail = false;
+  fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "7" } });
+  fireEvent.click(screen.getByText("Save current"));
+  await waitFor(() => expect(screen.getByLabelText("Preset id")).toHaveValue(""));
+  expect(screen.getByLabelText("Look name")).toHaveValue("");
+});
+
 test("check, then write; drift must be acknowledged", async () => {
   const plan = {
     done: false, drift: true, changed_ids: ["3"], backup: null, reason: "dry run",

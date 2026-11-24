@@ -119,7 +119,9 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       <form className="row" onSubmit={(e) => {
         e.preventDefault();
         run(() => api.capture(deviceId, name, slot ? Number(slot) : undefined, keepLayout), (l) => `Saved “${l.name}” in the library (not on the device yet)`)
-          .then(() => { setName(""); onChanged(); });
+          // only a saved look clears the form: the preset id too, so the next look doesn't land on the
+          // same preset; after a failure both stay, to fix and try again
+          .then((l) => { if (!l) return; setName(""); setSlot(""); onChanged(); });
       }}>
         <input placeholder="Name" value={name} maxLength={32} required aria-label="Look name"
           onChange={(e) => setName(e.target.value)} />
