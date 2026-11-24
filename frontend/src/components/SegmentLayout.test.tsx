@@ -104,7 +104,7 @@ test("zones are offered after the walls", () => {
   expect(onChange).toHaveBeenLastCalledWith({ start: 32, stop: 40 });
 });
 
-test("name, freeze and, for sound effects, the sound simulation", () => {
+test("name and freeze (the sound simulation is by the effect's heading)", () => {
   const onChange = setup();
   const name = screen.getByLabelText("Name");
   fireEvent.change(name, { target: { value: "Over the door" } });
@@ -113,13 +113,4 @@ test("name, freeze and, for sound effects, the sound simulation", () => {
   fireEvent.click(screen.getByLabelText("Freeze segment"));
   expect(onChange).toHaveBeenLastCalledWith({ frz: true });
   expect(screen.queryByLabelText("Sound simulation")).toBeNull();
-});
-
-test("the sound simulation shows for a sound effect", () => {
-  const onChange = vi.fn();
-  render(<SegmentLayout segment={{ ...seg, si: 1 }} ledCount={60} room={null} audio onChange={onChange} />);
-  const si = screen.getByLabelText("Sound simulation");
-  expect(si).toHaveValue("1");
-  fireEvent.change(si, { target: { value: "3" } });
-  expect(onChange).toHaveBeenLastCalledWith({ si: 3 });
 });

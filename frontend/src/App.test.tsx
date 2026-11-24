@@ -104,3 +104,47 @@ test("a live change still held back is sent before a look is saved", async () =>
   expect(order[1]).toBe("/api/devices/desk/capture/Quick?preset_id=5");
   expect(JSON.parse(String(calls.find((c) => c.init?.method === "POST")!.init!.body))).toEqual({ seg: [{ id: 0, ix: 77 }] });
 });
+
+test("brightness shows its value; a sound effect with the mic off says it runs on a simulated beat", async () => {
+  const sound = { ...state, seg: [{ ...state.seg[0], fx: 5, si: 1 }] };   // Pulse Meter: sound-reactive
+  const calls = backend({
+    "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
+    "GET /api/devices/desk/profile": () => profile,
+    "GET /api/devices/desk/state": () => sound,
+    "GET /api/looks": () => [],
+    "GET /api/playlists": () => [],
+    "GET /api/palettes": () => [],
+    "GET /api/devices/desk/room": () => null,
+    "POST /api/devices/desk/state": () => sound,
+  });
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: /Pulse Meter/ })).toBeInTheDocument();
+  expect(screen.getByLabelText("Brightness").nextSibling).toHaveTextContent("128");
+  const mic = screen.getByLabelText("Microphone on (sound effects react to real sound)");
+  expect(mic).not.toBeChecked();
+  expect(screen.getByText(/Mic is off: this effect runs on a simulated beat/)).toBeInTheDocument();
+  const si = screen.getByLabelText("Sound simulation");
+  expect(si).toHaveValue("1");
+  fireEvent.change(si, { target: { value: "3" } });
+  await waitFor(() => expect(calls.some((c) => String(c.init?.body).includes('"si":3'))).toBe(true));
+  fireEvent.click(screen.getByText("Turn mic on"));
+  expect(mic).toBeChecked();
+  expect(screen.queryByLabelText("Sound simulation")).toBeNull();   // it reacts to real sound now
+  await waitFor(() => expect(calls.some((c) => String(c.init?.body) === '{"AudioReactive":{"enabled":true}}')).toBe(true));
+});
+
+test("a sound effect on a device without sound input runs on the simulated beat", async () => {
+  backend({
+    "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
+    "GET /api/devices/desk/profile": () => ({ ...profile, usermods: [] }),
+    "GET /api/devices/desk/state": () => ({ ...state, seg: [{ ...state.seg[0], fx: 5 }] }),
+    "GET /api/looks": () => [],
+    "GET /api/playlists": () => [],
+    "GET /api/palettes": () => [],
+    "GET /api/devices/desk/room": () => null,
+  });
+  render(<App />);
+  expect(await screen.findByText(/This device has no sound input: this effect runs on a simulated beat/)).toBeInTheDocument();
+  expect(screen.queryByText("Turn mic on")).toBeNull();
+  expect(screen.queryByLabelText(/Microphone on/)).toBeNull();
+});

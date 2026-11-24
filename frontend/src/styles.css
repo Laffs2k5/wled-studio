@@ -51,7 +51,8 @@ aside, main { background: var(--panel); border: 1px solid var(--line); border-ra
 .controls { display: grid; gap: .6rem; }
 label.slider { display: grid; grid-template-columns: 8rem 1fr 3rem; align-items: center; gap: .6rem; }
 label.slider input[type=range] { width: 100%; padding: 0; }
-.master label.slider { grid-template-columns: 6rem 1fr; }
+.master label.slider { grid-template-columns: 6rem 1fr 2.5rem; }
+.sound-sim { margin: -.25rem 0 .5rem; }
 .checks { display: flex; gap: 1rem; flex-wrap: wrap; }
 .colours { display: flex; gap: 1rem; flex-wrap: wrap; }
 label.colour { display: flex; align-items: center; gap: .4rem; }

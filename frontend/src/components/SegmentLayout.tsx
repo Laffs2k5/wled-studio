@@ -42,7 +42,8 @@ function NumberField({ label, value, min, max, title, onCommit }: FieldProps) {
   );
 }
 
-/** WLED's sound simulations ("si"): a stand-in beat for sound effects while the mic is off. */
+/** WLED's sound simulations ("si"): a stand-in beat for sound effects while the mic is off
+ * (chosen by the effect's heading in the live column, and in the Effect studio). */
 export const SOUND_SIMULATIONS = ["BeatSin", "WeWillRockYou", "10/13", "14/3"];
 
 /** Text sent when you leave the field or press Enter. */
@@ -65,13 +66,11 @@ interface Props {
   segment: Segment;
   ledCount: number;
   room: Room | null;
-  /** The segment's effect reacts to sound: show the sound simulation. */
-  audio?: boolean;
   onChange: (patch: Partial<Segment>) => void;
 }
 
 /** A segment's place on the strip and how it layers over the segments below it. */
-export function SegmentLayout({ segment, ledCount, room, audio = false, onChange }: Props) {
+export function SegmentLayout({ segment, ledCount, room, onChange }: Props) {
   const ws = areas(room).filter((w) => w.stop <= ledCount);
   const wall = ws.findIndex((w) => w.start === segment.start && w.stop === segment.stop);
   const name = String(segment.n ?? "");
@@ -119,15 +118,6 @@ export function SegmentLayout({ segment, ledCount, room, audio = false, onChange
         <label title="Stops the animation where it is"><input type="checkbox" checked={Boolean(segment.frz)}
           aria-label="Freeze segment" onChange={(e) => onChange({ frz: e.target.checked })} /> Freeze</label>
       </div>
-      {audio && (
-        <label title="Used while the mic is off">
-          <span>Sound simulation</span>
-          <select aria-label="Sound simulation" value={Number(segment.si ?? 0)}
-            onChange={(e) => onChange({ si: Number(e.target.value) })}>
-            {SOUND_SIMULATIONS.map((n, i) => <option key={i} value={i}>{n}</option>)}
-          </select>
-        </label>
-      )}
       <div className="row">
         <NumberField label="Grouping" value={Number(segment.grp ?? 1)} min={1} max={255}
           title="LEDs that show the same pixel" onCommit={(grp) => onChange({ grp })} />

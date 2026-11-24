@@ -29,7 +29,9 @@ test("edits a saved look and saves it, without the strip", async () => {
   expect(screen.getByText(/preset 6/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Tail"), { target: { value: "200" } });             // Comet's control
   fireEvent.click(screen.getByRole("button", { name: /^Segment 1/ }));
+  expect(screen.queryByLabelText("Sound simulation")).toBeNull();
   fireEvent.change(screen.getByLabelText("Effect"), { target: { value: "5" } });             // Pulse Meter
+  fireEvent.change(screen.getByLabelText("Sound simulation"), { target: { value: "2" } });   // a sound effect's beat
   fireEvent.click(screen.getByRole("button", { name: "Lower" }));                          // segment 1 under segment 0
   fireEvent.change(screen.getByLabelText("Look brightness"), { target: { value: "120" } });
   fireEvent.click(screen.getByRole("button", { name: "Save “Calm”" }));
@@ -38,6 +40,7 @@ test("edits a saved look and saves it, without the strip", async () => {
   const body = JSON.parse(post.body!);
   expect(body.seg.map((s: { id: number; fx: number; start: number }) => [s.id, s.fx, s.start])).toEqual([[0, 5, 40], [1, 8, 0]]);
   expect(body.seg[1].ix).toBe(200);
+  expect(body.seg[0].si).toBe(2);
   expect(body.seg[1].lc).toBe(9);   // WLED's own field passes through unchanged
   expect(body).toMatchObject({ bri: 120, on: true, owns_layout: true, ids: true });
   expect(calls.some((c) => c.key.startsWith("POST /api/devices/desk/state"))).toBe(false);

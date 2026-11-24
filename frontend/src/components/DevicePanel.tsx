@@ -8,7 +8,7 @@ import { areas, type Room } from "../room";
 import { LiveStrip } from "./LiveStrip";
 import { LookEditor } from "./LookEditor";
 import { RoomEditor } from "./RoomEditor";
-import { SegmentLayout } from "./SegmentLayout";
+import { SegmentLayout, SOUND_SIMULATIONS } from "./SegmentLayout";
 import { SegmentMap } from "./SegmentMap";
 import { SessionBar } from "./SessionBar";
 import { Looks } from "./Looks";
@@ -135,6 +135,13 @@ export function DevicePanel({ deviceId, notify }: Props) {
     }
   }
 
+  // the device's sound input (the AudioReactive usermod), on or off
+  function setMic(on: boolean) {
+    if (!state) return;
+    setState({ ...state, AudioReactive: { on } });
+    api.setState(deviceId, { AudioReactive: { enabled: on } }).catch((er) => notify(er.message, true));
+  }
+
   function master(patch: { on?: boolean; bri?: number }) {
     if (!state) return;
     setState({ ...state, ...patch });
@@ -174,14 +181,12 @@ export function DevicePanel({ deviceId, notify }: Props) {
             <span>Brightness</span>
             <input type="range" min={1} max={255} value={state.bri} aria-label="Brightness"
               onChange={(e) => master({ bri: Number(e.target.value) })} />
+            <output>{state.bri}</output>
           </label>
           {mic && (
-            <label title="AudioReactive usermod">
+            <label title="The device's sound input (WLED's AudioReactive usermod). While it's off, sound effects run on a simulated beat.">
               <input type="checkbox" checked={Boolean(state.AudioReactive?.on)}
-                onChange={(e) => {
-                  setState({ ...state, AudioReactive: { on: e.target.checked } });
-                  api.setState(deviceId, { AudioReactive: { enabled: e.target.checked } }).catch((er) => notify(er.message, true));
-                }} /> Mic
+                onChange={(e) => setMic(e.target.checked)} /> Microphone on (sound effects react to real sound)
             </label>
           )}
         </div>
@@ -212,12 +217,21 @@ export function DevicePanel({ deviceId, notify }: Props) {
         </div>
         <SegmentMap ledCount={profile.leds.count} room={room} segments={state.seg} selected={segment.id}
           onSelect={setSegId} onPick={(start, stop) => change({ start, stop })} />
-        <SegmentLayout segment={segment} ledCount={profile.leds.count} room={room} onChange={change}
-          audio={effect.audio.length > 0} />
+        <SegmentLayout segment={segment} ledCount={profile.leds.count} room={room} onChange={change} />
         <h2>
           {effect.name}
           {effect.audio.length > 0 && <span className="badge" title="Sound-reactive">♪</span>}
         </h2>
+        {effect.audio.length > 0 && !(mic && state.AudioReactive?.on) && (
+          <p className="row small sound-sim">
+            <span>{mic ? "Mic is off" : "This device has no sound input"}: this effect runs on a simulated beat</span>
+            <select aria-label="Sound simulation" value={Number(segment.si ?? 0)}
+              onChange={(e) => change({ si: Number(e.target.value) })}>
+              {SOUND_SIMULATIONS.map((n, i) => <option key={i} value={i}>{n}</option>)}
+            </select>
+            {mic && <button className="small" onClick={() => setMic(true)}>Turn mic on</button>}
+          </p>
+        )}
         <EffectControls effect={effect} segment={segment} palettes={profile.palettes} rgbw={profile.leds.rgbw}
           onChange={change} />
         <p className="muted small">

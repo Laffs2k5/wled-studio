@@ -4,7 +4,7 @@ import { api } from "../api";
 import type { Room } from "../room";
 import type { CheckItem, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
-import { SegmentLayout } from "./SegmentLayout";
+import { SegmentLayout, SOUND_SIMULATIONS } from "./SegmentLayout";
 import { SegmentMap } from "./SegmentMap";
 import { StatusBadge } from "./StatusBadge";
 
@@ -139,7 +139,7 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
         <>
           <SegmentMap ledCount={count} room={room} segments={segs} selected={segment.id} onSelect={setSegId}
             onPick={(start, stop) => change({ start, stop })} />
-          <SegmentLayout segment={segment} ledCount={count} room={room} onChange={change} audio={effect.audio.length > 0} />
+          <SegmentLayout segment={segment} ledCount={count} room={room} onChange={change} />
         </>
       )}
       <label className="palette">
@@ -148,6 +148,14 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
           {profile.effects.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
       </label>
+      {effect.audio.length > 0 && (
+        <label className="palette" title="A stand-in beat for this sound effect while the device's mic is off">
+          <span>Simulated beat (mic off)</span>
+          <select aria-label="Sound simulation" value={Number(segment.si ?? 0)} onChange={(e) => change({ si: Number(e.target.value) })}>
+            {SOUND_SIMULATIONS.map((n, i) => <option key={i} value={i}>{n}</option>)}
+          </select>
+        </label>
+      )}
       <EffectControls effect={effect} segment={segment} palettes={profile.palettes} rgbw={profile.leds.rgbw} onChange={change} />
       <div className="row">
         <button className="primary" disabled={busy} onClick={save}>Save “{name}”</button>
