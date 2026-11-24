@@ -86,8 +86,13 @@ watch them run, and build them in.
 1. **Write:** in *Your effects' code*, **New effect** starts from a template: a wave along the strip,
    or a room-aware wave that uses each LED's position (**Write room map** puts the positions from
    your room shape next to it). Edit, **Save**. The files are in `./effects`, one folder per effect.
-2. **Watch:** **Compile and preview** compiles them to WebAssembly and runs them in the browser,
-   with the effect's own sliders. Colours and fades are close, not exact.
+2. **Watch:** tick the **effect folders to compile** (opening a file ticks its folder; the ticks
+   are remembered), then **Compile and preview**: it compiles them to WebAssembly and runs them in
+   the browser, with the effect's own sliders. The line above the preview says what it shows: the
+   built-in example until you compile, then your folders and when they were compiled. Saving a
+   file in them marks the preview out of date, with a **Compile** button. If compiling fails, the
+   compiler's messages appear under the button (the full log behind **Full log**); click a
+   `folder/file:line` to open the file at that line.
 3. **On the strip:** **Stream to the strip** sends the preview to the header's device (or another
    one picked under **Preview on**) live (DDP); its own effect comes back a few seconds after you
    stop.

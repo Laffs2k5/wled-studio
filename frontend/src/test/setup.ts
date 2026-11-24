@@ -9,3 +9,6 @@ if (!Range.prototype.getClientRects) {
   Range.prototype.getClientRects = () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
   Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
 }
+
+// jsdom has no execCommand; CodeMirror calls it when it focuses with a selection (going to a line)
+if (!document.execCommand) document.execCommand = () => false;

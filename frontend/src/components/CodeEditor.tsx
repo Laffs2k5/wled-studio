@@ -7,11 +7,16 @@ import { GitPanel } from "./GitPanel";
 // CodeMirror loads when a file is first opened, not with the page
 const Code = lazy(() => import("./Code").then((m) => ({ default: m.Code })));
 import type { Device } from "../types";
+import type { Place } from "../compileLog";
 
 /** Edit your effect usermods' files (./effects), and start new ones from a template. */
-export function CodeEditor({ notify, onSaved, device = null }: {
+export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null }: {
   notify: (msg: string, error?: boolean) => void;
   onSaved?: (folder: string) => void;
+  /** A file was opened (its folder): the studio ticks that folder for compiling. */
+  onOpen?: (folder: string) => void;
+  /** Open this file at this line (a compiler message's place); a new `seq` jumps again. */
+  jump?: (Place & { seq: number }) | null;
   /** The header's device: the room map is taken from it unless another is picked here. */
   device?: string | null;
 }) {
@@ -32,17 +37,31 @@ export function CodeEditor({ notify, onSaved, device = null }: {
   const reload = useCallback(() => effects.list().then(setFolders).catch(() => setFolders(null)), []);
   useEffect(() => { reload(); }, [reload]);
 
-  async function open(folder: string, name: string) {
-    if (dirty && !confirm("Discard unsaved changes?")) return;
+  async function open(folder: string, name: string): Promise<boolean> {
+    if (dirty && !confirm("Discard unsaved changes?")) return false;
     try {
       const r = await effects.read(folder, name);
       setFile({ folder, name });
       setText(r.content);
       setDirty(false);
+      onOpen?.(folder);
+      return true;
     } catch (e) {
       notify((e as Error).message, true);
+      return false;
     }
   }
+
+  // a compiler message clicked in the studio: open its file (unless it's open) and go to the line
+  const [line, setLine] = useState<{ line: number; seq: number } | null>(null);
+  useEffect(() => {
+    if (!jump) return;
+    (async () => {
+      if ((file?.folder !== jump.folder || file?.name !== jump.file) && !(await open(jump.folder, jump.file))) return;
+      setLine({ line: jump.line, seq: jump.seq });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jump?.seq]);
 
   if (folders === null) return null; // no effects directory configured
   return (
@@ -82,7 +101,7 @@ export function CodeEditor({ notify, onSaved, device = null }: {
       )}
       {file && (
         <Suspense fallback={<p className="muted small">Loading the editor…</p>}>
-          <Code value={text} fileName={file.name} onChange={(next) => { setText(next); setDirty(true); }} />
+          <Code value={text} fileName={file.name} line={line} onChange={(next) => { setText(next); setDirty(true); }} />
         </Suspense>
       )}
       <details>

@@ -9,10 +9,15 @@ import { CodeEditor } from "./CodeEditor";
 import type { Effect, Segment } from "../types";
 import { SOUND_SIMULATIONS } from "./SegmentLayout";
 import { EffectControls } from "./EffectControls";
+import { compileMessages, type Place } from "../compileLog";
+import { remembered } from "../remember";
+import { elapsed, timeOfDay, useElapsed } from "../time";
 
 const LENGTH = 60;
 // a preview without WLED's own colour code has two stand-ins: the colour slot, and a colour wheel
 const STAND_IN_PALETTES = [{ id: 0, name: "Colours" }, { id: 1, name: "Rainbow" }];
+/** The effect folders ticked for compiling, remembered in this browser. */
+export const studioFolders = remembered<string[]>("wledstudio.studio.folders", []);
 
 function initialSegment(e: Effect): Segment {
   const d = e.defaults;
@@ -39,8 +44,19 @@ export function EffectStudio({ notify, load = Preview.load, device = null }: {
   const [error, setError] = useState<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [mine, setMine] = useState<string[] | null>(null);
-  const [chosen, setChosen] = useState<string[]>([]);
-  const [compiling, setCompiling] = useState<string | null>(null);
+  const [chosen, setChosenState] = useState<string[]>(() => studioFolders.get());
+  const setChosen = (next: string[] | ((c: string[]) => string[])) => setChosenState((c) => {
+    const v = typeof next === "function" ? next(c) : next;
+    studioFolders.set(v);
+    return v;
+  });
+  // what the preview shows: null = the built-in example; else your folders, compiled at a time
+  const [shown, setShown] = useState<{ folders: string[]; at: number } | null>(null);
+  const [stale, setStale] = useState(false);   // a shown folder's code was saved since
+  const [compiling, setCompiling] = useState<{ since: number } | null>(null);
+  const compileSecs = useElapsed(compiling?.since ?? null);
+  const [failure, setFailure] = useState<{ job: string; log: string } | null>(null);
+  const [jump, setJump] = useState<(Place & { seq: number }) | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [target, setTarget] = useState(device ?? "");
   const socket = useRef<WebSocket | null>(null);
@@ -106,22 +122,33 @@ export function EffectStudio({ notify, load = Preview.load, device = null }: {
 
   useEffect(() => {
     load(undefined, LENGTH).then(use).catch((e) => setError(String(e?.message ?? e)));
-    firmware.status().then((s) => s.enabled ? firmware.usermods().then(setMine) : setMine(null)).catch(() => setMine(null));
+    firmware.status().then((s) => s.enabled ? firmware.usermods().then((m) => {
+      setMine(m);
+      setChosen((c) => c.filter((x) => m.includes(x)));   // a remembered folder that's gone
+    }) : setMine(null)).catch(() => setMine(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function compile() {
+    const folders = chosen.filter((f) => mine?.includes(f));
+    setFailure(null);
+    setCompiling({ since: Date.now() / 1000 });
     try {
-      const job = await firmware.preview(chosen);
-      setCompiling(job.id);
+      const job = await firmware.preview(folders);
       for (;;) {
         const j = await firmware.job(job.id);
         if (j.state === "passed") break;
-        if (j.state === "failed") throw new Error("compiling failed; see the log in the Firmware view");
+        if (j.state === "failed") {
+          setFailure({ job: job.id, log: await firmware.log(job.id).catch(() => "") });
+          notify("Compiling failed: the compiler's messages are under Compile and preview", true);
+          return;
+        }
         await new Promise((r) => setTimeout(r, 2000));
       }
       use(await load(firmware.previewUrl(job.id), LENGTH));
-      notify(`Previewing ${chosen.join(", ")}`);
+      setShown({ folders, at: Date.now() / 1000 });
+      setStale(false);
+      notify(`Previewing ${folders.join(", ")}`);
     } catch (e) {
       notify((e as Error).message, true);
     } finally {
@@ -129,18 +156,40 @@ export function EffectStudio({ notify, load = Preview.load, device = null }: {
     }
   }
 
+  const messages = failure ? compileMessages(failure.log, mine ?? []) : null;
   const compileBox = mine && mine.length > 0 && (
-    <div className="row">
-      <span className="small">Your effects:</span>
-      {mine.map((u) => (
-        <label key={u} className="small">
-          <input type="checkbox" checked={chosen.includes(u)}
-            onChange={(e) => setChosen(e.target.checked ? [...chosen, u] : chosen.filter((x) => x !== u))} /> {u}
-        </label>
-      ))}
-      <button disabled={!chosen.length || compiling !== null} onClick={compile}>
-        {compiling ? "Compiling…" : "Compile and preview"}
-      </button>
+    <div className="compile">
+      <div className="row">
+        <span className="small">Effect folders to compile:</span>
+        {mine.map((u) => (
+          <label key={u} className="small">
+            <input type="checkbox" checked={chosen.includes(u)}
+              onChange={(e) => setChosen(e.target.checked ? [...chosen, u] : chosen.filter((x) => x !== u))} /> {u}
+          </label>
+        ))}
+        <button className="primary" disabled={!chosen.some((f) => mine.includes(f)) || compiling !== null} onClick={compile}>
+          {compiling ? `Compiling… ${elapsed(compileSecs ?? 0)}` : "Compile and preview"}
+        </button>
+      </div>
+      {failure && messages && (
+        <div className="compile-failure" role="alert" aria-label="Compile errors">
+          <p className="bad small">Compiling failed. {messages.lines.some((l) => l.at)
+            ? "The compiler says (click a place to open it in the editor):" : "The compiler says:"}</p>
+          <pre className="log">
+            {messages.lines.length ? messages.lines.map((l, i) => (
+              <span key={i}>
+                {l.at ? <button className="link code-place" onClick={() => setJump({ ...l.at!, seq: Date.now() })}>{l.text}</button> : l.text}
+                {"\n"}
+              </span>
+            )) : "The log is empty."}
+            {messages.more ? "…\n" : ""}
+          </pre>
+          <details>
+            <summary className="small">Full log</summary>
+            <pre className="log" aria-label="Full compile log">{failure.log}</pre>
+          </details>
+        </div>
+      )}
     </div>
   );
 
@@ -179,9 +228,14 @@ export function EffectStudio({ notify, load = Preview.load, device = null }: {
 
   // the code editor works with or without a preview: without one, it's how the first preview starts
   const editor = (
-    <CodeEditor notify={notify} device={device} onSaved={(folder) => {
+    <CodeEditor notify={notify} device={device} jump={jump} onSaved={(folder) => {
       if (mine && !mine.includes(folder)) setMine([...mine, folder]);
       setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
+      if (shown?.folders.includes(folder)) setStale(true);
+    }} onOpen={(folder) => {
+      // the open file's folder is the one to compile: only a folder the builder knows (before its list
+      // has come, it's ticked anyway; the list, when it comes, drops a folder it doesn't have)
+      if (mine === null || mine.includes(folder)) setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
     }} />
   );
 
@@ -205,6 +259,16 @@ export function EffectStudio({ notify, load = Preview.load, device = null }: {
           : "Colours and fades are approximate."}
       </p>
       {compileBox}
+      <p className="small preview-caption" aria-label="What the preview shows">
+        {shown
+          ? <>Showing: <strong>{shown.folders.join(", ")}</strong>, compiled {timeOfDay(shown.at)}.</>
+          : <>Showing: the built-in example effect, not your code.{mine?.length ? " Compile your own effects to see them." : ""}</>}
+        {stale && (
+          <span className="warn"> Out of date: code changed since this compile.{" "}
+            <button disabled={compiling !== null} onClick={compile}>Compile</button>
+          </span>
+        )}
+      </p>
       <canvas ref={canvas} width={960} height={room ? 360 : 32} className={room ? "room" : "strip"} aria-label="Preview strip" />
       {devices.length > 0 && (
         <div className="row">

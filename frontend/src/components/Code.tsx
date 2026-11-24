@@ -41,8 +41,10 @@ const frame = EditorView.theme({
 // "&light" works only in a base theme.
 const lightBackground = EditorView.baseTheme({ "&light": { backgroundColor: "var(--panel, #fff)" } });
 
-export function Code({ value, fileName, onChange, label = "Code" }: {
+export function Code({ value, fileName, onChange, label = "Code", line }: {
   value: string; fileName: string; onChange: (text: string) => void; label?: string;
+  /** A line to put the cursor on and show (1-based), e.g. from a compiler message; a new `seq` jumps again. */
+  line?: { line: number; seq: number } | null;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -97,6 +99,18 @@ export function Code({ value, fileName, onChange, label = "Code" }: {
     try { v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value }, effects }); }
     finally { loading.current = false; }
   }, [value, fileName]);
+
+  // jump to a line once per request, after the document above is in place
+  const jumped = useRef(0);
+  useEffect(() => {
+    const v = view.current;
+    if (!v || !line || line.seq === jumped.current) return;
+    jumped.current = line.seq;
+    const pos = v.state.doc.line(Math.min(Math.max(1, line.line), v.state.doc.lines)).from;
+    v.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+    v.focus();
+    host.current?.scrollIntoView?.({ block: "nearest" });
+  }, [line, value, fileName]);
 
   return <div ref={host} className="code" role="group" aria-label={label} />;
 }

@@ -228,6 +228,8 @@ test("effect studio: the WebAssembly preview loads and runs under the CSP", asyn
   const select = page.getByLabel("Preview effect");
   await expect(select).toBeVisible();
   await expect(select.locator("option", { hasText: "Studio Comet (id 254)" })).toHaveCount(1);
+  // until something is compiled, the preview says it's the built-in example
+  await expect(page.getByLabel("What the preview shows")).toContainText("Showing: the built-in example effect");
   await expect(page.getByLabel("Tail")).toBeVisible();
   // exact colours: the image's preview runs WLED's own colour code, so all of WLED's palettes are offered
   await expect(page.getByText(/palettes and fades are WLED's own/)).toBeVisible();
