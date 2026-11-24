@@ -118,3 +118,5 @@ button.slot.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 .look-list .order { display: inline-flex; gap: .1rem; }
 .look-list .order button { padding: 0 .3rem; font-size: .7rem; line-height: 1.4; }
 .bulk { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .35rem .6rem; }
+.look-list li.off-device .name { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.device-set { margin: .25rem 0 .5rem; gap: .4rem .6rem; }

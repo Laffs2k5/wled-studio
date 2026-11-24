@@ -102,6 +102,15 @@ export interface FlashPlan {
   busy: boolean;
 }
 
+/** Which looks and playlists go on a device: everything (`all`), or a chosen set. */
+export interface DeviceSet {
+  all: boolean;
+  looks: string[];
+  playlists: string[];
+  brought: string[];
+  on_device: { looks: string[]; playlists: string[] };
+}
+
 /** The slot grid: preset ids as rows and columns (e.g. a remote's banks), filled from the library. */
 export interface SlotGridShape { rows: number; cols: number; first: number; row_step: number; col_step: number; name: string }
 export interface SlotCell { row: number; col: number; preset_id: number; kind: "look" | "playlist" | null; name: string | null; base: string | null; notes: string[] }
@@ -167,6 +176,13 @@ export const api = {
     request<{ moved: string[] }>("POST", `/api/library/${kind}/folder`, { names, folder }),
   setOrder: (kind: "looks" | "playlists", names: string[]) => request<{ order: string[] }>("POST", `/api/library/${kind}/order`, { names }),
   renameFolder: (from: string, to: string | null) => request<{ moved: number }>("POST", "/api/library/folders/rename", { from, to }),
+  getSet: (id: string) => request<DeviceSet>("GET", `/api/devices/${enc(id)}/set`),
+  putSet: (id: string, looks: string[] | null, playlists: string[] = []) =>
+    request<DeviceSet>("PUT", `/api/devices/${enc(id)}/set`, { looks, playlists }),
+  addToSet: (id: string, looks: string[], playlists: string[] = []) =>
+    request<DeviceSet>("POST", `/api/devices/${enc(id)}/set/add`, { looks, playlists }),
+  removeFromSet: (id: string, looks: string[], playlists: string[] = []) =>
+    request<DeviceSet>("POST", `/api/devices/${enc(id)}/set/remove`, { looks, playlists }),
   deleteLook: (name: string) => request<null>("DELETE", `/api/looks/${enc(name)}`),
   renameLook: (name: string, to: string) => request<Look>("POST", `/api/looks/${enc(name)}/rename`, { to }),
   palettes: () => request<Palette[]>("GET", "/api/palettes"),
