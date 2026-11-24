@@ -40,7 +40,7 @@ export function DeviceBar({ devices, current, onSelect, onChanged, notify }: Pro
           e.preventDefault();
           try {
             await api.setPin(pinFor, newPin || null);
-            notify(newPin ? "PIN saved" : "PIN removed");
+            notify(newPin ? "PIN saved in the app" : "PIN removed from the app");
             setPinFor(null); setNewPin("");
             onChanged();
           } catch (err) { notify((err as Error).message, true); }

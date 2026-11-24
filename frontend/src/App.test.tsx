@@ -43,6 +43,10 @@ test("shows the device's effect with its own controls, and sends live changes", 
   expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();
   expect(screen.getByLabelText("Tail")).toBeInTheDocument();
   expect(within(screen.getByRole("region", { name: "Looks" })).getByText("Evening")).toBeInTheDocument();
+  // where each column's actions land: the strip now, or the app's library
+  expect(screen.getByLabelText("Where changes go")).toHaveTextContent(
+    "Live on Desk: every change here shows on the strip at once. Nothing is stored on the device until you write presets.");
+  expect(screen.getByText(/Library: kept in the app, shared by all devices/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Tail"), { target: { value: "201" } });
   await waitFor(() => expect(calls.some((c) => c.init?.method === "POST")).toBe(true));
   const post = calls.find((c) => c.init?.method === "POST")!;

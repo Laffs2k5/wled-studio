@@ -59,7 +59,7 @@ export function SlotGrid({ notify }: { notify: (msg: string, error?: boolean) =>
           {g.name.replace("{row}", "2").replace("{col}", "3").replace("{name}", "Fire")}”.
         </p>
         <div className="row">
-          <button className="primary" onClick={() => slotsApi.setGrid(g).then((s) => { setEditing(null); done(s, "Slot grid saved"); }).catch(fail)}>
+          <button className="primary" onClick={() => slotsApi.setGrid(g).then((s) => { setEditing(null); done(s, "Slot grid saved (in the app)"); }).catch(fail)}>
             Save the grid
           </button>
           {data.grid && <button onClick={() => setEditing(null)}>Cancel</button>}
@@ -114,9 +114,9 @@ export function SlotGrid({ notify }: { notify: (msg: string, error?: boolean) =>
             <button className="primary" disabled={!source} onClick={() => {
               const name = source.slice(2);
               slotsApi.fill(picked.preset_id, source.startsWith("l:") ? { look: name } : { playlist: name })
-                .then((s) => { setSource(""); done(s, `Put ${s.filled} in the slot`); }).catch(fail);
+                .then((s) => { setSource(""); done(s, `Put “${s.filled}” in slot ${picked.row}·${picked.col} (in the library; write presets to put it on the device)`); }).catch(fail);
             }}>Put here</button>
-            {picked.name && <button onClick={() => slotsApi.clear(picked.preset_id).then((s) => done(s, "Slot emptied")).catch(fail)}>
+            {picked.name && <button onClick={() => slotsApi.clear(picked.preset_id).then((s) => done(s, "Slot emptied (in the library)")).catch(fail)}>
               Empty the slot
             </button>}
           </div>

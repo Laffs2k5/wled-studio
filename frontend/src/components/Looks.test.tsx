@@ -40,12 +40,13 @@ test("import and capture call the API and refresh", async () => {
   render(<Looks deviceId="desk" looks={[]} onChanged={onChanged} onApplied={() => {}} notify={notify} />);
   fireEvent.click(screen.getByText("Import from device"));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-  expect(notify).toHaveBeenCalledWith("Imported 1, kept 0 existing");
+  expect(notify).toHaveBeenCalledWith("Imported 1 preset from desk into the library, kept 0 existing");
   fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Night" } });
   fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "7" } });
   fireEvent.click(screen.getByText("Save current"));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(2));
   expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/capture/Night?preset_id=7");
+  expect(notify).toHaveBeenCalledWith("Saved “Night” in the library (not on the device yet)");
 });
 
 test("check, then write; drift must be acknowledged", async () => {
@@ -136,7 +137,7 @@ test("rename a look, and see which playlists use it", async () => {
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   const call = calls.find((c) => c.key === "POST /api/looks/Evening/rename")!;
   expect(JSON.parse(call.body!)).toEqual({ to: "Dusk" });
-  expect(notify).toHaveBeenCalledWith("Renamed to “Dusk”");
+  expect(notify).toHaveBeenCalledWith("Renamed to “Dusk” in the library");
 });
 
 describe("folders and order", () => {

@@ -47,7 +47,7 @@ test("shows what sits where, and fills and empties slots", async () => {
   fireEvent.click(screen.getByLabelText("Slot 1·2, preset 41: empty"));
   fireEvent.change(screen.getByLabelText("Look or playlist to put here"), { target: { value: "l:Fire" } });
   fireEvent.click(screen.getByText("Put here"));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("Put G1-2 Fire in the slot"));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("Put “G1-2 Fire” in slot 1·2 (in the library; write presets to put it on the device)"));
   expect(calls.find((c) => c.startsWith("PUT /api/slots/41"))).toContain('{"look":"Fire"}');
   fireEvent.click(screen.getByLabelText("Slot 1·1, preset 40: G1-1 Calm"));
   fireEvent.click(screen.getByText("Empty the slot"));

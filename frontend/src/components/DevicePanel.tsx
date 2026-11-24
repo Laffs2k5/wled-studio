@@ -162,6 +162,10 @@ export function DevicePanel({ deviceId, notify }: Props) {
           <LookEditor key={editing} deviceId={deviceId} name={editing} profile={profile} room={room} notify={notify}
             onClose={closeEditor} />
         ) : (<>
+        <p className="live-banner small" aria-label="Where changes go">
+          <strong>Live on {profile.device.name}:</strong> every change here shows on the strip at once. Nothing is
+          stored on the device until you write presets.
+        </p>
         <LiveStrip deviceId={deviceId} room={room} />
         <SessionBar deviceId={deviceId} notify={notify} beforeAction={flush} onRestored={reloadState} />
         <div className="master row">

@@ -57,7 +57,7 @@ export function Palettes({ palettes, onChanged, notify }: {
           }}>Add stop</button>
           <button className="primary" disabled={!name.trim()} onClick={() =>
             api.putPalette({ name: name.trim(), stops: sorted })
-              .then(() => { notify(`Saved palette “${name.trim()}”`); setName(""); setStops(START); onChanged(); })
+              .then(() => { notify(`Saved palette “${name.trim()}” in the library (not on the device yet)`); setName(""); setStops(START); onChanged(); })
               .catch((e) => notify(e.message, true))}>Save palette</button>
         </div>
         <p className="muted small">Uploaded to the device on the next write; looks pick it by name.</p>

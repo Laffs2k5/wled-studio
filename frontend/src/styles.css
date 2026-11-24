@@ -37,6 +37,8 @@ button.danger { color: var(--bad); }
 .badge.check-review { color: var(--warn); }
 .badge.check-unavailable { color: var(--bad); }
 .warn { color: var(--warn); }
+.live-banner { margin: 0 0 .5rem; padding: .3rem .6rem; border-left: 3px solid var(--accent); }
+.library-line { margin: -.25rem 0 .5rem; }
 .device-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 24rem); gap: 1rem; padding: 1rem 1.25rem; }
 @media (max-width: 1000px) { .device-panel { grid-template-columns: 1fr; } }

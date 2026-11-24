@@ -107,15 +107,16 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   return (
     <section className="looks" aria-label="Looks">
       <h2>Looks</h2>
+      <p className="muted small library-line">Library: kept in the app, shared by all devices. Nothing here is on a device until you write presets.</p>
       <div className="row">
         <button disabled={busy} onClick={() => run(() => api.importPresets(deviceId),
-          (r) => `Imported ${r.imported.length}, kept ${r.kept_existing.length} existing`).then(onChanged)}>
+          (r) => `Imported ${r.imported.length} preset${r.imported.length === 1 ? "" : "s"} from ${deviceName} into the library, kept ${r.kept_existing.length} existing`).then(onChanged)}>
           Import from device
         </button>
       </div>
       <form className="row" onSubmit={(e) => {
         e.preventDefault();
-        run(() => api.capture(deviceId, name, slot ? Number(slot) : undefined, keepLayout), (l) => `Saved “${l.name}”`)
+        run(() => api.capture(deviceId, name, slot ? Number(slot) : undefined, keepLayout), (l) => `Saved “${l.name}” in the library (not on the device yet)`)
           .then(() => { setName(""); onChanged(); });
       }}>
         <input placeholder="Name" value={name} maxLength={32} required aria-label="Look name"
@@ -230,7 +231,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                     Accept
                   </button>
                 )}
-                <button disabled={busy} onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” (${r.status})`).then(onApplied)}>
+                <button disabled={busy} onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” on ${deviceName}${r.status === "ok" ? "" : ` (${r.status})`}`).then(onApplied)}>
                   Show
                 </button>
                 {onEdit && (
@@ -240,7 +241,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                 <button disabled={busy} aria-label={`Rename ${l.name}`} title="Rename; playlists that use it follow"
                   onClick={() => {
                     const to = prompt(`New name for “${l.name}”`, l.name)?.trim();
-                    if (to && to !== l.name) run(() => api.renameLook(l.name, to), (r) => `Renamed to “${r.name}”`).then(onChanged);
+                    if (to && to !== l.name) run(() => api.renameLook(l.name, to), (r) => `Renamed to “${r.name}” in the library`).then(onChanged);
                   }}>✎</button>
                 <button disabled={busy} className="danger" aria-label={`Delete ${l.name}`}
                   onClick={() => confirm(`Delete “${l.name}” from the library?`) && run(() => api.deleteLook(l.name)).then(onChanged)}>
@@ -283,7 +284,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
           <div className="row">
             <button className="primary" disabled={busy || (plan.changed_ids.length === 0 && !plan.palettes?.length) || (plan.drift && !adopt)}
               onClick={() => run(() => api.push(deviceId, { dry_run: false, adopt_drift: adopt, accept_review: acceptReview }),
-                (r) => (r.done ? `Written and verified (backup ${r.backup})` : `Not written: ${r.reason}`))
+                (r) => (r.done ? `Written to ${deviceName} and verified (backup ${r.backup})` : `Not written to ${deviceName}: ${r.reason}`))
                 .then((r) => r && setPlan(null))}>
               Write {plan.changed_ids.length} preset{plan.changed_ids.length === 1 ? "" : "s"} to {deviceName}
             </button>

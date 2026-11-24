@@ -44,7 +44,7 @@ test("look studio: add the device, live control, save a look and write it", asyn
   await expect(page.getByText(/Presets that would change: .*7/)).toBeVisible();
   await page.getByRole("button", { name: /^Write \d+ presets? to / }).click();
   // (the sliders' <output> values have the status role too, so target the toast)
-  await expect(page.locator(".toast")).toContainText("Written and verified");
+  await expect(page.locator(".toast")).toContainText(/Written to .* and verified/);
   const presets = await (await request.get(`/api/devices/${id}/presets`)).json();
   expect(presets["7"].n).toBe("E2E look");
 

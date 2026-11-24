@@ -86,7 +86,7 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
         ...(look!.state.transition !== undefined ? { transition: look!.state.transition } : {}),
         owns_layout: look!.owns_layout, ids: look!.ids,
       });
-      notify(`Saved “${name}”`);
+      notify(`Saved “${name}” in the library (not shown on the strip, not on the device yet)`);
       onClose(true);
     } catch (e) {
       notify((e as Error).message, true);

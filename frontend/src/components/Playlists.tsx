@@ -28,7 +28,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [] }: 
   async function save() {
     try {
       await api.putPlaylist({ name: name.trim(), preset_id: slot ? Number(slot) : undefined, entries, repeat: 0, shuffle });
-      notify(`Saved playlist “${name.trim()}”`);
+      notify(`Saved playlist “${name.trim()}” in the library (not on the device yet)`);
       setName(""); setSlot(""); setEntries([]); setShuffle(false);
       onChanged();
     } catch (e) {

@@ -66,7 +66,7 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify }: {
         )}
         <button className="primary" disabled={!edges.length} onClick={() =>
           request<Room>("PUT", `/api/devices/${encodeURIComponent(deviceId)}/room`, zones.length ? { edges, zones } : { edges })
-            .then((r) => { onSaved(r); notify("Room shape saved"); }).catch((e) => notify(e.message, true))}>
+            .then((r) => { onSaved(r); notify("Room shape saved in the app"); }).catch((e) => notify(e.message, true))}>
           Save shape
         </button>
       </div>
