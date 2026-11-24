@@ -81,8 +81,21 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    - WLED doesn't unload a custom palette when its file is deleted (`/edit?func=delete`); it stays
      in memory until the next upload or reboot. A future "delete palette on the device" must say so;
    - WLED's live view reads zeros while the strip is off, even during a stream.
-2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
-   way back; a spare board first.
+2. **Flashing:** built 2026-11-24, not yet tried on hardware. From a passed gate job, the
+   Firmware view plans a flash for a device and runs it:
+   - **the plan** (reads only): flashing enabled behind the client-certificate proxy, the gate
+     passed, the image within the app slot, WLED's OTA lock off, the boot preset using no effect
+     new in the image (a crash at boot would trip WLED's boot-loop handler, which resets the
+     config), the library's changes (the preflight), and whether the app has the PIN;
+   - **the flash**, with the device's name typed to confirm: backup (presets, cfg.json, info, the
+     effect list), the image downloaded and its sha256 checked against the gate's, the upload to
+     WLED's `/update` (WLED's release check never skipped), the wait for the reboot, then checks
+     against the backup (the effect list is the image's, presets and config unchanged, free heap);
+   - **the way back:** `/update?revert` for any device, also with the name typed.
+
+   Left: the spare ESP32 first (the image, OTA, revert, a USB recovery drill), then the controller.
+   Tested against the fake device, which models WLED 16's `/update` and `?revert`. The proxy
+   is set up where the app is deployed (docs/security.md).
 3. ~~Exact colours in the preview~~ (done 2026-11-24): previews compiled by the builder run
    WLED's own colour and palette code (wled-studio-builder's `preview/wled_colors.py`, from a pins
    file's WLED commit), and the Effect studio then offers all of WLED's palettes by name. The

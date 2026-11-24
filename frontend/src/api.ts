@@ -49,6 +49,7 @@ const enc = encodeURIComponent;
 export interface FirmwareTarget { pins: string; release: string; target: string; verified: string[] }
 export interface FirmwareJob {
   id: string;
+  kind?: "gate" | "preview";
   state: "queued" | "running" | "passed" | "failed";
   pins: string;
   target: string;
@@ -76,7 +77,35 @@ export const firmware = {
   previewUrl: (id: string) => `/api/firmware/jobs/${encodeURIComponent(id)}/preview/preview.mjs`,
   preflight: (id: string, device: string) => request<Preflight>("GET",
     `/api/firmware/jobs/${encodeURIComponent(id)}/preflight?device=${encodeURIComponent(device)}`),
+  flashPlan: (id: string, device: string) => request<FlashPlan>("GET",
+    `/api/firmware/jobs/${encodeURIComponent(id)}/flash-plan?device=${encodeURIComponent(device)}`),
+  flash: (id: string, device: string, confirm: string) =>
+    request<FlashRun>("POST", `/api/firmware/jobs/${encodeURIComponent(id)}/flash`, { device, confirm }),
+  revert: (device: string, confirm: string) =>
+    request<FlashRun>("POST", `/api/devices/${encodeURIComponent(device)}/revert`, { confirm }),
+  run: (id: string) => request<FlashRun>("GET", `/api/flashes/${encodeURIComponent(id)}`),
 };
+
+/** What flashing an image to a device would do, and whether it may. */
+export interface FlashPlan {
+  job: string;
+  device: string;
+  name: string;
+  image: { size?: number; sha256?: string; slot?: number; target?: string; usermods?: string[] };
+  running: { ver?: string; release?: string; arch?: string; freeheap?: number };
+  checks: { id: string; level: "ok" | "warn" | "block"; text: string }[];
+  can_flash: boolean;
+  busy: boolean;
+}
+
+/** A flash or revert as it runs. */
+export interface FlashRun {
+  id: string;
+  kind: "flash" | "revert";
+  device: string;
+  state: "running" | "done" | "warnings" | "failed";
+  steps: { name: string; state: "running" | "ok" | "warn" | "failed"; detail: string }[];
+}
 
 /** The library checked against a built image, for one device (before it is flashed). */
 export interface Preflight {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
+import { FlashPanel } from "./FlashPanel";
 import { firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
 import type { Device } from "../types";
 import { StatusBadge } from "./StatusBadge";
@@ -166,6 +167,10 @@ export function Firmware({ notify, devices = [], device = null }: {
                 </>
               )}
             </div>
+          )}
+          {open.state === "passed" && open.kind !== "preview" && checkFor && (
+            <FlashPanel job={open.id} device={checkFor} notify={notify}
+              deviceName={devices.find((d) => d.id === checkFor)?.name ?? checkFor} />
           )}
           <pre className="log" aria-label="Build log">{log.slice(-8000)}</pre>
         </div>
