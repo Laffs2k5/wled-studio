@@ -19,7 +19,11 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter(prefix="/api/effects")
-FOLDER_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
+# An effect folder: the builder's rule for a usermod's name, so every folder it compiles can be
+# edited here (wled-studio-builder's NAME_RE). A new folder is stricter: its name becomes the
+# usermod's class and file name, so it must be a C identifier.
+FOLDER_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+NEW_FOLDER_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
 FILE_RE = re.compile(r"^(library\.json|[A-Za-z0-9_]{1,60}\.(cpp|h))$")
 MAX_FILE = 256 * 1024
 
@@ -161,7 +165,7 @@ class FileIn(BaseModel):
 
 class NewEffect(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    folder: str = Field(pattern=FOLDER_RE.pattern)
+    folder: str = Field(pattern=NEW_FOLDER_RE.pattern)
     title: str = Field(min_length=1, max_length=28, pattern=r"^[A-Za-z0-9 _-]+$")
     effect_id: int = Field(ge=200, le=254)
     template: Literal["wave", "room"] = "wave"

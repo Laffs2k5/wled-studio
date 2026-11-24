@@ -33,6 +33,21 @@ def test_create_edit_list(tmp_path):
     assert c.get("/api/effects").json() == [{"folder": "my_wave", "files": ["extra.h", "library.json", "my_wave.cpp"]}]
 
 
+def test_existing_folders_follow_the_builders_rule(tmp_path):
+    # The builder compiles any usermod named [A-Za-z0-9_-]; the editor must show and edit the same
+    # folders, such as a cloned repo with hyphens in its name. New folders stay C identifiers.
+    c, eff = client(tmp_path)
+    (eff / "wled-studio-effects").mkdir()
+    (eff / "wled-studio-effects" / "fx.cpp").write_text("// fx\n")
+    (eff / ".git").mkdir()
+    assert c.get("/api/effects").json() == [{"folder": "wled-studio-effects", "files": ["fx.cpp"]}]
+    assert c.get("/api/effects/wled-studio-effects/fx.cpp").json()["content"] == "// fx\n"
+    r = c.put("/api/effects/wled-studio-effects/fx.cpp", json={"content": "// changed\n"}, headers=CSRF)
+    assert r.status_code == 200 and (eff / "wled-studio-effects" / "fx.cpp").read_text() == "// changed\n"
+    for bad in ("my-fx", "My_fx", "_fx"):
+        assert c.post("/api/effects", json={"folder": bad, "title": "X", "effect_id": 240}, headers=CSRF).status_code == 422, bad
+
+
 def test_library_json_is_checked(tmp_path):
     c, _ = client(tmp_path)
     c.post("/api/effects", json={"folder": "fx", "title": "Fx", "effect_id": 240}, headers=CSRF)

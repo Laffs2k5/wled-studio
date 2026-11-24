@@ -99,10 +99,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    size, its web workers under the CSP, C++ highlighting quality, and mobile use.
 
 **Known bugs, found 2026-11-24:**
-- The code editor lists only effect folders named `[a-z][a-z0-9_]`, while the builder accepts
-  hyphens (`[A-Za-z0-9_-]`). A folder such as `wled-studio-effects` compiles but doesn't show in
-  the editor. Align the app's folder rule with the builder's for existing folders (keep the
-  stricter rule for new ones if wanted), with a test.
+- ~~The code editor hid effect folders with hyphens in their names~~ (fixed 2026-11-24): existing
+  folders follow the builder's rule (`[A-Za-z0-9_-]`); a new one must still be a C identifier.
 - Run outside the container (no bundled default preview), the Effect studio shows only the compile
   box until the first compile, and the code editor is hidden too. Show the editor regardless.
 
