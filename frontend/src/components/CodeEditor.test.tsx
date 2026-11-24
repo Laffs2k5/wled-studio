@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { viewOf } from "./Code";
 import { CodeEditor } from "./CodeEditor";
+
+/** The editor's text, and typing into it as a user would (a transaction from the view). */
+const textOf = (host: HTMLElement) => viewOf(host)!.state.doc.toString();
+function type(host: HTMLElement, text: string) {
+  const v = viewOf(host)!;
+  v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: text }, userEvent: "input.type" });
+}
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -28,23 +36,26 @@ test("opens, edits and saves a file", async () => {
   const pick = await screen.findByLabelText("Effect file");
   fireEvent.change(pick, { target: { value: "my_fx/my_fx.cpp" } });
   const code = await screen.findByLabelText("Code");
-  expect(code).toHaveValue("void x() {}\n");
-  expect(screen.getByText("Save")).toBeDisabled();
-  fireEvent.change(code, { target: { value: "void y() {}\n" } });
+  await waitFor(() => expect(textOf(code)).toBe("void x() {}\n"));
+  expect(screen.getByText("Save")).toBeDisabled();   // loading a file isn't an edit
+  type(code, "void y() {}\n");
+  await waitFor(() => expect(screen.getByText("Save")).toBeEnabled());   // the edit marks it unsaved
   fireEvent.click(screen.getByText("Save"));
   await waitFor(() => expect(onSaved).toHaveBeenCalledWith("my_fx"));
   const put = calls.find((c) => c.key === "PUT /api/effects/my_fx/my_fx.cpp")!;
   expect(JSON.parse(put.body!)).toEqual({ content: "void y() {}\n" });
 });
 
-test("tab indents inside the editor", async () => {
-  stub({ "my_fx.cpp": "ab" });
+test("switching files swaps the text and isn't an edit", async () => {
+  stub({ "my_fx.cpp": "void x() {}\n", "library.json": '{"name": "fx"}\n' });
   render(<CodeEditor notify={() => {}} />);
-  fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/my_fx.cpp" } });
-  const code = (await screen.findByLabelText("Code")) as HTMLTextAreaElement;
-  code.setSelectionRange(1, 1);
-  fireEvent.keyDown(code, { key: "Tab" });
-  expect(code).toHaveValue("a  b");
+  const pick = await screen.findByLabelText("Effect file");
+  fireEvent.change(pick, { target: { value: "my_fx/my_fx.cpp" } });
+  const code = await screen.findByLabelText("Code");
+  await waitFor(() => expect(textOf(code)).toBe("void x() {}\n"));
+  fireEvent.change(pick, { target: { value: "my_fx/library.json" } });
+  await waitFor(() => expect(textOf(code)).toBe('{"name": "fx"}\n'));
+  expect(screen.getByText("Save")).toBeDisabled();
 });
 
 test("creates a new effect from the template and opens it", async () => {
@@ -55,7 +66,8 @@ test("creates a new effect from the template and opens it", async () => {
   fireEvent.change(screen.getByLabelText("New effect name"), { target: { value: "New Fx" } });
   fireEvent.change(screen.getByLabelText("Effect id"), { target: { value: "251" } });
   fireEvent.click(screen.getByText("Create"));
-  expect(await screen.findByLabelText("Code")).toHaveValue("// template");
+  const code = await screen.findByLabelText("Code");
+  await waitFor(() => expect(textOf(code)).toBe("// template"));
   expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects")!.body!)).toEqual(
     { folder: "new_fx", title: "New Fx", effect_id: 251, template: "wave" });
 });

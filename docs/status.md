@@ -47,7 +47,7 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 
 ### Effect studio and firmware
 - **Effect studio:** sound for sound effects in the preview (WLED's simulated beat with its four
-  styles, or a fixed sound level, through the builder's `preview_audio`); a code editor for `./effects`; new effects from a template with a fixed effect
+  styles, or a fixed sound level, through the builder's `preview_audio`); a code editor for `./effects` (CodeMirror 6: C++ and JSON highlighting, folding, bracket matching, search and replace, multiple cursors, Tab indents, indent guides, a light or dark theme following the system); new effects from a template with a fixed effect
   id; compiled unchanged to WebAssembly through the builder's job service and animated in the
   browser with each effect's own controls; the preview **streamed to the strip** (DDP).
 - **Firmware builds from the app:** gate jobs on wled-studio-builder's job service. The vendor's
@@ -87,16 +87,7 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    instead of the stand-ins.
 4. **Bulk tools** for the library: folders, reorder, copying between devices. (Renaming, with
    playlists following, and where a look is used: done 2026-11-23.)
-5. **A real code editor in the Effect studio** (asked for 2026-11-24): syntax highlighting, indent
-   guides, code folding and the rest, close enough to VS Code that its users feel at home. Today
-   it's a plain textarea. To research first; the requirements:
-   - widely used, and actively maintained and developed: nothing abandoned;
-   - a licence that fits an EUPL-1.2 app, checked for the package and everything it bundles, with
-     its notices carried in the build;
-   - it works offline in the app's own bundle (no CDN), within the content security policy.
-
-   The obvious candidates: Monaco, the editor component of VS Code, and CodeMirror 6. Weigh bundle
-   size, its web workers under the CSP, C++ highlighting quality, and mobile use.
+5. ~~A real code editor~~ (done 2026-11-24; see Decided design).
 
 **Known bugs, found 2026-11-24:**
 - ~~The code editor hid effect folders with hyphens in their names~~ (fixed 2026-11-24): existing
@@ -105,6 +96,20 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   2026-11-24).
 
 ## Decided design
+
+- **The code editor is CodeMirror 6, not Monaco** (2026-11-24). Both are MIT and actively
+  developed; Monaco is VS Code's own editor. Decided by the CSP and the size:
+  - Monaco writes `<style>` elements without a nonce, so it would need `style-src 'unsafe-inline'`
+    (microsoft/monaco-editor#271, open since 2016). It also starts workers from `blob:` URLs unless
+    configured otherwise, weighs about 1.4 MB gzipped for C++ and JSON, and doesn't support mobile.
+  - CodeMirror in a **shadow root** styles itself with constructed stylesheets, which the CSP
+    allows unchanged. Checked with 0 CSP reports in Chromium, Firefox and WebKit. It takes about
+    175 kB gzipped, loaded only when a file is opened, and needs no workers.
+  - **Given up:** Monaco's minimap and command palette. The common indent-guide add-on
+    (`@replit/codemirror-indentation-markers`) hasn't had a release since 2024, so the guides are
+    our own (`indentGuides.ts`, about 80 lines).
+  - **Dependencies:** CodeMirror is mostly one lead developer's work. In 2026 its repositories moved
+    from GitHub to code.haverbeke.berlin (npm points there). Worth watching.
 
 - **Preset banks for a remote stay outside the app:** the home-automation system switches banks; the
   app builds the looks and writes them to the bank slots. A grid view of those slots may come later.

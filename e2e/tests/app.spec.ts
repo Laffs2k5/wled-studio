@@ -229,3 +229,33 @@ test("effect studio: the WebAssembly preview loads and runs under the CSP", asyn
   })).toBe(true);
   expect(problems).toEqual([]);
 });
+
+test("effect studio: the code editor highlights, folds and follows the system theme under the CSP", async ({ page }) => {
+  const problems = watchCsp(page);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Effect studio" }).click();
+  await page.getByLabel("Effect file").selectOption("e2e_fx/e2e_fx.cpp");
+  const content = page.locator(".code .cm-content");   // inside the editor's shadow root
+  await expect(content).toContainText("SEGMENT.fill");
+  const editor = page.locator(".code .cm-editor");
+  const looks = () => page.locator(".code").evaluate((h) => {
+    const s = h.shadowRoot!;
+    return {
+      sheets: s.adoptedStyleSheets.length,
+      colours: new Set([...s.querySelectorAll(".cm-line span")].map((x) => getComputedStyle(x).color)).size,
+      folds: s.querySelectorAll(".cm-foldGutter .cm-gutterElement span").length,
+      guides: s.querySelectorAll(".cm-ig-1, .cm-ig-2").length,
+      background: getComputedStyle(s.querySelector(".cm-editor")!).backgroundColor,
+    };
+  });
+  const dark = await looks();
+  expect(dark.sheets).toBeGreaterThan(0);      // styled through constructed stylesheets, which the CSP allows
+  expect(dark.colours).toBeGreaterThan(2);     // C++ syntax colours
+  expect(dark.folds).toBeGreaterThan(0);       // fold markers on the blocks
+  expect(dark.guides).toBeGreaterThan(0);      // indent guides
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect.poll(async () => (await looks()).background).not.toBe(dark.background);
+  await expect(editor).toBeVisible();
+  expect(problems).toEqual([]);
+});

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, effects, type EffectFolder } from "../api";
+
+// CodeMirror loads when a file is first opened, not with the page
+const Code = lazy(() => import("./Code").then((m) => ({ default: m.Code })));
 import type { Device } from "../types";
 
 /** Edit your effect usermods' files (./effects), and start new ones from a template. */
@@ -64,17 +67,9 @@ export function CodeEditor({ notify, onSaved }: { notify: (msg: string, error?: 
         </div>
       )}
       {file && (
-        <textarea className="code" spellCheck={false} aria-label="Code" value={text}
-          onChange={(e) => { setText(e.target.value); setDirty(true); }}
-          onKeyDown={(e) => {
-            if (e.key === "Tab") { // indent instead of leaving the editor
-              e.preventDefault();
-              const t = e.currentTarget, s = t.selectionStart;
-              setText(text.slice(0, s) + "  " + text.slice(t.selectionEnd));
-              setDirty(true);
-              requestAnimationFrame(() => { t.selectionStart = t.selectionEnd = s + 2; });
-            }
-          }} />
+        <Suspense fallback={<p className="muted small">Loading the editor…</p>}>
+          <Code value={text} fileName={file.name} onChange={(next) => { setText(next); setDirty(true); }} />
+        </Suspense>
       )}
       <details>
         <summary>New effect</summary>

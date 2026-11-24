@@ -8,7 +8,8 @@ export default defineConfig({
     // the backend during development: python -m wledstudio
     proxy: { "/api": "http://127.0.0.1:8080" },
   },
-  build: { sourcemap: false },
+  // the code editor (CodeMirror) is its own lazy chunk of about 530 kB (175 kB gzipped)
+  build: { sourcemap: false, chunkSizeWarningLimit: 600 },
   test: {
     environment: "jsdom",
     globals: true,

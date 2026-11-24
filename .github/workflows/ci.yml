@@ -64,6 +64,11 @@ jobs:
           tags: ghcr.io/laffs2k5/wled-studio:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: An effect for the code editor's browser test (read-only for the app)
+        run: |
+          mkdir -p effects/e2e_fx
+          printf '%s\n' '#include "wled.h"' '' 'namespace {' 'void mode_e2e() {' '  if (SEGLEN > 0) {' '    SEGMENT.fill(SEGCOLOR(0));' '  }' '}' '}  // namespace' > effects/e2e_fx/e2e_fx.cpp
+          printf '{"name": "e2e-fx"}\n' > effects/e2e_fx/library.json
       - name: Run with the demo device, end-to-end smoke test
         env:
           WLEDSTUDIO_TAG: ci
