@@ -66,3 +66,7 @@ cd frontend && npm ci && npm test && npm run build
 
 EUPL-1.2 ([LICENSE](LICENSE)). The app talks to WLED over its HTTP API and contains no WLED code;
 its tests use a fake device with made-up effects.
+
+The web UI includes third-party packages under their own licences (all MIT: React, CodeMirror and
+their dependencies). The build writes their notices to `third-party-licenses.txt`, served at
+`/third-party-licenses.txt`.
