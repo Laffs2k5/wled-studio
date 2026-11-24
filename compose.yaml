@@ -23,7 +23,7 @@ services:
       # flashing firmware: off unless "on", and only behind a client-certificate proxy (docs/security.md)
       WLEDSTUDIO_FLASHING: ${WLEDSTUDIO_FLASHING:-}
       WLEDSTUDIO_FLASH_CERT_HEADER: ${WLEDSTUDIO_FLASH_CERT_HEADER:-}
-    networks: [default, builder-net]
+    networks: [default, builder-net, virtual-net]
     volumes:
       - wled-studio-data:/data
       # your effect usermods, edited in the Effect studio (the app runs as uid 10001:
@@ -52,14 +52,16 @@ services:
     security_opt: ["no-new-privileges:true"]
 
   # A virtual WLED device: a twin of QuinLED's 16.0.1 (WLED's own effects, presets, playlists and
-  # API, compiled to WebAssembly) built from wled-studio-builder's virtual/Dockerfile. No network
-  # of its own beyond the app's; it can't be flashed. VIRTUAL_LEDS: LEDs per output, e.g. 124,126.
+  # API, compiled to WebAssembly) built from wled-studio-builder's virtual/Dockerfile. It sits on
+  # an internal network shared only with the app (no internet, no LAN, no port); it can't be
+  # flashed. VIRTUAL_LEDS: LEDs per output, e.g. 124,126.
   virtual-device:
     profiles: [virtual]
     image: wled-virtual:local
     build:
       context: https://github.com/Laffs2k5/wled-studio-builder.git#main
       dockerfile: virtual/Dockerfile
+    networks: [virtual-net]
     environment:
       LEDS: ${VIRTUAL_LEDS:-60}
       NAME: ${VIRTUAL_NAME:-Virtual WLED}
@@ -107,6 +109,8 @@ services:
 networks:
   default:
   builder-net:
+    internal: true
+  virtual-net:
     internal: true
   egress-net:
 
