@@ -163,6 +163,10 @@ export const api = {
     request<{ imported: string[]; kept_existing: string[]; imported_playlists: string[]; skipped_presets: string[] }>(
       "POST", `/api/devices/${enc(id)}/import`),
   looks: () => request<Look[]>("GET", "/api/looks"),
+  setFolder: (kind: "looks" | "playlists", names: string[], folder: string | null) =>
+    request<{ moved: string[] }>("POST", `/api/library/${kind}/folder`, { names, folder }),
+  setOrder: (kind: "looks" | "playlists", names: string[]) => request<{ order: string[] }>("POST", `/api/library/${kind}/order`, { names }),
+  renameFolder: (from: string, to: string | null) => request<{ moved: number }>("POST", "/api/library/folders/rename", { from, to }),
   deleteLook: (name: string) => request<null>("DELETE", `/api/looks/${enc(name)}`),
   renameLook: (name: string, to: string) => request<Look>("POST", `/api/looks/${enc(name)}/rename`, { to }),
   palettes: () => request<Palette[]>("GET", "/api/palettes"),

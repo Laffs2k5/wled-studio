@@ -56,8 +56,8 @@ label.colour { display: flex; align-items: center; gap: .4rem; }
 label.colour input[type=color] { width: 3rem; height: 2rem; padding: 0; }
 label.palette { display: flex; gap: .6rem; align-items: center; }
 .look-list { list-style: none; padding: 0; margin: .5rem 0; }
-.look-list li { display: flex; gap: .5rem; align-items: center; padding: .25rem 0; border-bottom: 1px solid var(--line); }
-.look-list .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.look-list li { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: center; padding: .25rem 0; border-bottom: 1px solid var(--line); }
+.look-list .name { flex: 1 1 9rem; min-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 input.slot { width: 4.5rem; }
 .segment-layout { border: 1px solid var(--line); border-radius: 8px; padding: .4rem .7rem; margin: .4rem 0; display: grid; gap: .5rem; }
 .segment-layout summary { cursor: pointer; }
@@ -112,3 +112,9 @@ button.slot.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 .slot-edit { margin: .75rem 0; }
 @media (max-width: 700px) { button.slot { width: 6.5rem; } }
 .slots { padding: 1rem 1.25rem; max-width: 64rem; }
+.look-group { margin: .25rem 0 .5rem; }
+.group-head { gap: .4rem; margin: .5rem 0 .1rem; }
+.group-head .link { color: var(--text); text-decoration: none; font-weight: 600; }
+.look-list .order { display: inline-flex; gap: .1rem; }
+.look-list .order button { padding: 0 .3rem; font-size: .7rem; line-height: 1.4; }
+.bulk { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .35rem .6rem; }

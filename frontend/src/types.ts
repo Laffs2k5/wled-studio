@@ -85,6 +85,8 @@ export interface Look {
   mic?: boolean;
   segments: LookSegment[];
   snapshot?: Record<string, string>;
+  /** Library-only grouping; never written to a device. */
+  folder?: string;
 }
 
 export interface PushReportItem {
@@ -126,6 +128,7 @@ export interface Playlist {
   repeat: number;
   shuffle: boolean;
   end?: string;
+  folder?: string;
 }
 
 export type PaletteStop = [number, string]; // [position 0-255, "rrggbb"]

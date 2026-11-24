@@ -137,3 +137,55 @@ test("rename a look, and see which playlists use it", async () => {
   expect(JSON.parse(call.body!)).toEqual({ to: "Dusk" });
   expect(notify).toHaveBeenCalledWith("Renamed to “Dusk”");
 });
+
+describe("folders and order", () => {
+  const lib = [
+    { name: "Calm", segments: [] }, { name: "Fire", segments: [], folder: "Storms" },
+    { name: "Party", segments: [] }, { name: "Rain", segments: [], folder: "Storms" },
+  ];
+  function stubLib() {
+    const calls: { url: string; body: unknown }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
+      return new Response(JSON.stringify({ moved: 1, order: [] }), { status: 200 });
+    }));
+    return calls;
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("groups looks by folder, and moves one within its folder", async () => {
+    const calls = stubLib();
+    const onChanged = vi.fn();
+    render(<Looks deviceId="desk" looks={lib} onChanged={onChanged} onApplied={() => {}} notify={() => {}} />);
+    expect(screen.getByText(/Not in a folder \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Storms \(2\)/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Move Fire up")).toBeDisabled();             // first in its folder
+    fireEvent.click(screen.getByLabelText("Move Rain up"));                    // Rain swaps with Fire, not Party
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(calls[0]).toEqual({ url: "/api/library/looks/order", body: { names: ["Calm", "Rain", "Party", "Fire"] } });
+  });
+
+  test("moves the selected looks to a folder", async () => {
+    const calls = stubLib();
+    render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
+    fireEvent.click(screen.getByLabelText("Select Party"));
+    fireEvent.click(screen.getByLabelText("Select Calm"));
+    fireEvent.change(screen.getByLabelText("Move the selected looks to"), { target: { value: "Storms" } });
+    fireEvent.click(screen.getByText("Move"));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0]).toEqual({ url: "/api/library/looks/folder", body: { names: ["Calm", "Party"], folder: "Storms" } });
+  });
+
+  test("collapses a folder, renames and dissolves it", async () => {
+    const calls = stubLib();
+    vi.stubGlobal("prompt", () => "Weather");
+    vi.stubGlobal("confirm", () => true);
+    render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
+    fireEvent.click(screen.getByText(/Storms \(2\)/));
+    expect(screen.queryByText("Rain")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Rename folder Storms"));
+    await waitFor(() => expect(calls.at(-1)).toEqual({ url: "/api/library/folders/rename", body: { from: "Storms", to: "Weather" } }));
+    fireEvent.click(screen.getByLabelText("Dissolve folder Storms"));
+    await waitFor(() => expect(calls.at(-1)).toEqual({ url: "/api/library/folders/rename", body: { from: "Storms", to: null } }));
+  });
+});

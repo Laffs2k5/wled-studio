@@ -101,8 +101,13 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    file's WLED commit), and the Effect studio then offers all of WLED's palettes by name. The
    image's bundled preview is built the same way. Not in the preview: gamma, auto-white and the
    brightness limiter, which WLED applies on the way to the LEDs.
-4. **Bulk tools** for the library: folders, reorder, copying between devices. (Renaming, with
-   playlists following, and where a look is used: done 2026-11-23.)
+4. **Bulk tools** for the library. Done: renaming with playlists following, and where a look is
+   used (2026-11-23); **folders and order** (2026-11-24): looks and playlists in folders (move one
+   or several, rename or dissolve a folder, collapse it), moved up and down within their folder,
+   or sorted A–Z. Folders and order are the library's own; nothing of them is written to a device,
+   and a look saved again keeps its folder and place. Left: copying between devices, which only
+   means something once looks can belong to some devices and not others (the library is shared
+   by all of them today, and writing puts its looks on whichever device is chosen).
 5. ~~A real code editor~~ (done 2026-11-24; see Decided design).
 
 **Known bugs, found 2026-11-24:**
