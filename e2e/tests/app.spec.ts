@@ -36,9 +36,10 @@ test("look studio: add the device, live control, save a look and write it", asyn
   await expect.poll(async () => (await (await request.get(`/api/devices/${id}/state`)).json()).seg[0].ix).toBe(42);
 
   // save it as a look in preset 7, then write it to the device
+  await page.getByRole("button", { name: "Save as look…" }).click();
   await page.getByLabel("Look name").fill("E2E look");
-  await page.getByLabel("Preset id", { exact: true }).fill("7");
-  await page.getByRole("button", { name: "Save current" }).click();
+  await page.getByLabel(/^Preset id \(optional/).fill("7");
+  await page.getByRole("button", { name: "Save in the library" }).click();
   await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E look")).toBeVisible();
   // the write bar at the bottom sees the device is out of date, and opens the plan
   await expect(page.getByText(/presets? differs? from the library/)).toBeVisible();
@@ -53,9 +54,10 @@ test("look studio: add the device, live control, save a look and write it", asyn
   // pick a sound-reactive effect and save straight away: the look must get that effect
   // (and the mic rule: on), not the one before (the live change is held back briefly)
   await page.getByRole("option", { name: /Spectrum Bars/ }).click();
+  await page.getByRole("button", { name: "Save as look…" }).click();
   await page.getByLabel("Look name").fill("E2E loud");
-  await page.getByLabel("Preset id", { exact: true }).fill("8");
-  await page.getByRole("button", { name: "Save current" }).click();
+  await page.getByLabel(/^Preset id \(optional/).fill("8");
+  await page.getByRole("button", { name: "Save in the library" }).click();
   await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E loud")).toBeVisible();
   const looks = await (await request.get("/api/looks")).json();
   const loud = looks.find((l: { name: string }) => l.name === "E2E loud");
@@ -105,16 +107,19 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
     return s && [s.start, s.stop, s.bm];
   }).toEqual([10, 30, 2]);
 
+  await page.getByRole("button", { name: "Save as look…" }).click();
+
   await page.getByLabel("Look name").fill("E2E layers");
-  await page.getByRole("button", { name: "Save current" }).click();
+  await page.getByRole("button", { name: "Save in the library" }).click();
   const looks = page.getByRole("region", { name: "Looks" });
   await expect(looks.getByText("E2E layers")).toBeVisible();
 
   // back to one segment, saved as another look
   await page.getByRole("button", { name: "Remove segment 1" }).click();
   await expect.poll(async () => (await segs()).length).toBe(1);
+  await page.getByRole("button", { name: "Save as look…" }).click();
   await page.getByLabel("Look name").fill("E2E single");
-  await page.getByRole("button", { name: "Save current" }).click();
+  await page.getByRole("button", { name: "Save in the library" }).click();
   await expect(looks.getByText("E2E single")).toBeVisible();
 
   // showing each look restores its own layout: the single one deletes the layer again
@@ -195,8 +200,9 @@ test("a saved look is edited in the library, not on the strip", async ({ page, r
   const state = async () => JSON.stringify((await (await request.get(`/api/devices/${id}/state`)).json()).seg);
 
   await page.getByRole("option", { name: "Glow" }).click();
+  await page.getByRole("button", { name: "Save as look…" }).click();
   await page.getByLabel("Look name").fill("E2E to edit");
-  await page.getByRole("button", { name: "Save current" }).click();
+  await page.getByRole("button", { name: "Save in the library" }).click();
   const looks = page.getByRole("region", { name: "Looks" });
   await expect(looks.getByText("E2E to edit")).toBeVisible();
   const before = await state();

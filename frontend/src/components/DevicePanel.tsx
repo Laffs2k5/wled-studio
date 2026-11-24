@@ -16,6 +16,7 @@ import { Looks } from "./Looks";
 import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
 import { WriteBar } from "./WriteBar";
+import { SaveLook } from "./SaveLook";
 
 interface Props {
   deviceId: string;
@@ -245,6 +246,8 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
         )}
         <EffectControls effect={effect} segment={segment} palettes={profile.palettes} rgbw={profile.leds.rgbw}
           onChange={change} />
+        <SaveLook deviceId={deviceId} looks={looks} playlists={playlists} notify={notify} beforeSave={flush}
+          onSaved={() => reloadLooks()} />
         <p className="muted small">
           {String(profile.info.product ?? "")} · WLED {String(profile.info.ver ?? "")} · {profile.leds.count} LEDs
         </p>

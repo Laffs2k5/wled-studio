@@ -65,6 +65,14 @@ label.palette { display: flex; gap: .6rem; align-items: center; }
 .look-list .name { flex: 1 1 9rem; min-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 input.slot { width: 4.5rem; }
 input.preset-id { width: 11rem; }
+.save-look { margin-top: .9rem; }
+.save-look-form { margin-top: .9rem; border: 1px solid var(--accent); border-radius: 8px; padding: .5rem .9rem; display: grid; gap: .45rem; }
+.save-look-form h3 { margin: .2rem 0; font-size: .95rem; }
+.save-look-form p { margin: 0; }
+label.field { display: grid; gap: .2rem; font-size: .9rem; }
+label.field input:not(.preset-id) { max-width: 22rem; }
+fieldset.choice { border: none; padding: 0; margin: 0; display: grid; gap: .3rem; font-size: .9rem; }
+fieldset.choice legend { padding: 0; margin-bottom: .2rem; }
 .segment-layout { border: 1px solid var(--line); border-radius: 8px; padding: .4rem .7rem; margin: .4rem 0; display: grid; gap: .5rem; }
 .segment-layout summary { cursor: pointer; }
 .segment-layout > label:not(.slider) { display: flex; gap: .6rem; align-items: center; }

@@ -42,9 +42,13 @@ read from WLED's effect metadata. Changes go to the strip at once.
 
 - **Import from device** turns the device's presets into looks, **by name**. A look keeps the
   effect's and palette's names, not their numbers, so it survives firmware changes.
-- **Save current** stores what the strip shows as a look, with a **preset id** (1-250, WLED's
-  preset number) if you give one; without one the look stays in the library only. The mic follows
-  the look: on for a sound-reactive effect, off for any other.
+- **Save as look…**, under the effect controls, stores what the strip shows as a look in the
+  library. Give it a name and, optionally, a **preset id** (1-250, WLED's preset number; the form
+  suggests the next free one, and warns when another look has it); without one the look stays in
+  the library only. Choose what it keeps: the **whole strip setup** (segments and their effects;
+  showing it replaces the strip's segments) or **effects and colours only** (applied to whatever
+  segments the strip has). The mic follows the look: on for a sound-reactive effect, off for any
+  other.
 - **Show** plays a look on the strip without saving anything on the device.
 - **The write bar** at the bottom of Looks & effects and the Slot grid compares the header's device
   with the library: "Desk: 3 presets differ from the library", or "Desk is up to date (written

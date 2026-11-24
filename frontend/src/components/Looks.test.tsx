@@ -30,43 +30,15 @@ test("a look on walls names them", () => {
   expect(screen.getByTitle("Follows these walls of the room model")).toHaveTextContent("A · L2");
 });
 
-test("import and capture call the API and refresh", async () => {
-  const calls = stubFetch({
-    "POST /api/devices/desk/import": { imported: ["A"], kept_existing: [], skipped_presets: [] },
-    "POST /api/devices/desk/capture/": { name: "Night", segments: [] },
-  });
+test("import calls the API and refreshes", async () => {
+  stubFetch({ "POST /api/devices/desk/import": { imported: ["A"], kept_existing: [], skipped_presets: [] } });
   const onChanged = vi.fn();
   const notify = vi.fn();
   render(<Looks deviceId="desk" looks={[]} onChanged={onChanged} onApplied={() => {}} notify={notify} />);
   fireEvent.click(screen.getByText("Import from device"));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   expect(notify).toHaveBeenCalledWith("Imported 1 preset from desk into the library, kept 0 existing");
-  fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Night" } });
-  fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "7" } });
-  fireEvent.click(screen.getByText("Save current"));
-  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(2));
-  expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/capture/Night?preset_id=7");
-  expect(notify).toHaveBeenCalledWith("Saved “Night” in the library (not on the device yet)");
-});
-
-test("a saved look clears the preset id; a failed save keeps the name and id", async () => {
-  let fail = true;
-  vi.stubGlobal("fetch", vi.fn(async () => fail
-    ? new Response(JSON.stringify({ detail: "the preset id must be 1-250" }), { status: 422 })
-    : new Response(JSON.stringify({ name: "Night", segments: [] }), { status: 200 })));
-  const notify = vi.fn();
-  render(<Looks deviceId="desk" looks={[]} onChanged={() => {}} onApplied={() => {}} notify={notify} />);
-  fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Night" } });
-  fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "300" } });
-  fireEvent.click(screen.getByText("Save current"));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("the preset id must be 1-250", true));
-  expect(screen.getByLabelText("Look name")).toHaveValue("Night");
-  expect(screen.getByLabelText("Preset id")).toHaveValue("300");
-  fail = false;
-  fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "7" } });
-  fireEvent.click(screen.getByText("Save current"));
-  await waitFor(() => expect(screen.getByLabelText("Preset id")).toHaveValue(""));
-  expect(screen.getByLabelText("Look name")).toHaveValue("");
+  expect(screen.queryByText("Save current")).toBeNull();              // saving is under the live controls now
 });
 
 test("show a look live; delete asks first", async () => {
@@ -115,17 +87,6 @@ test("a look whose effect the device lacks: not on this device, can't be accepte
   expect(screen.getByRole("button", { name: "Edit Evening" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Edit Evening" })).toHaveAttribute("title", why);
   expect(screen.getByRole("button", { name: "Edit Loose" })).toBeEnabled();
-});
-
-test("a look can be saved without the layout", async () => {
-  const calls = stubFetch({ "POST /api/devices/desk/capture/": { name: "Colours", segments: [] } });
-  const onChanged = vi.fn();
-  render(<Looks deviceId="desk" looks={[]} onChanged={onChanged} onApplied={() => {}} notify={() => {}} />);
-  fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Colours" } });
-  fireEvent.click(screen.getByLabelText("Without the layout"));
-  fireEvent.click(screen.getByText("Save current"));
-  await waitFor(() => expect(onChanged).toHaveBeenCalled());
-  expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/capture/Colours?layout=false");
 });
 
 test("Edit opens a look in the editor", () => {

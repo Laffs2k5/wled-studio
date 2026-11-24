@@ -27,9 +27,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
   // a look whose effect (or palette, or wall) this device lacks can't be shown or edited here
   const showable = (name: string) => status.get(name)?.status !== "unavailable";
-  const [name, setName] = useState("");
-  const [slot, setSlot] = useState("");
-  const [keepLayout, setKeepLayout] = useState(false);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -115,22 +112,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
           Import from device
         </button>
       </div>
-      <form className="row" onSubmit={(e) => {
-        e.preventDefault();
-        run(() => api.capture(deviceId, name, slot ? Number(slot) : undefined, keepLayout), (l) => `Saved “${l.name}” in the library (not on the device yet)`)
-          // only a saved look clears the form: the preset id too, so the next look doesn't land on the
-          // same preset; after a failure both stay, to fix and try again
-          .then((l) => { if (!l) return; setName(""); setSlot(""); onChanged(); });
-      }}>
-        <input placeholder="Name" value={name} maxLength={32} required aria-label="Look name"
-          onChange={(e) => setName(e.target.value)} />
-        <input placeholder="Preset id (1-250)" value={slot} inputMode="numeric" pattern="[0-9]*" aria-label="Preset id"
-          className="preset-id" title="The WLED preset this look is written to; without one it stays in the library only" onChange={(e) => setSlot(e.target.value)} />
-        <button disabled={busy || !name.trim()}>Save current</button>
-        <label className="small" title="Save effects and colours only: showing the look then leaves the segments as they are">
-          <input type="checkbox" checked={keepLayout} onChange={(e) => setKeepLayout(e.target.checked)} /> Without the layout
-        </label>
-      </form>
       {set && (
         <div className="row device-set small" aria-label="What goes on this device">
           {set.all ? (
@@ -259,7 +240,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
           </div>
         );
       })}
-      {looks.length === 0 && <p className="muted">No looks yet. Import the device's presets, or save what it shows.</p>}
+      {looks.length === 0 && <p className="muted">No looks yet. Import the device's presets, or save what the strip shows with
+        “Save as look…” under the controls.</p>}
 
     </section>
   );
