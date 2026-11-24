@@ -116,9 +116,12 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    segments, layers and blend modes compiled to WebAssembly from the firmware's checkout (as the
    exact colours are), so Looks & effects can work with no device: a "virtual device" with the
    firmware's real effect list (the builder's `effects.json`), moving, with the simulated beat.
-   Start with a time-boxed spike: does `FX.cpp` (and what it needs of `FX_fcn.cpp`, 2D, the
-   particle system, audio) compile against an extended shim, and how big is it? Report before
-   building.
+   **Spiked 2026-11-24: feasible.** WLED 16.0.1's own effect code (`FX.cpp`, `FX_fcn.cpp`, 2D,
+   the particle system, colours, palettes) compiles unchanged against a small `wled.h` of ours,
+   links with 26 symbols of glue (the core being a virtual bus that keeps the pixels), and runs:
+   the image's 220 effects, Twinklefox and the rest moving as on a device, 0.02 ms a frame for
+   280 LEDs, 201 kB. Details and what's left: wled-studio-builder `spikes/virtual-wled/README.md`.
+   Not started as a feature (owner: "don't build just yet").
 
    **A virtual device is always one firmware** (owner, 2026-11-24): built from that firmware's
    exact sources and build settings, the ones the builder already uses to reproduce it.
