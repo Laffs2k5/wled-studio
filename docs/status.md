@@ -120,6 +120,23 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    particle system, audio) compile against an extended shim, and how big is it? Report before
    building.
 
+   **A virtual device is always one firmware** (owner, 2026-11-24): built from that firmware's
+   exact sources and build settings, the ones the builder already uses to reproduce it.
+   - **Official:** a vendor release as pinned (QuinLED's 16.0.1 for a Dig-Next-2): the effect list
+     a controller running it has.
+   - **Ours:** the same plus our usermods, as a gate job builds it: a twin of an image before it is
+     flashed.
+   - **Checked:** the virtual build's effect list must equal the firmware's (the builder's
+     `effects.json` for that image); a mismatch means it isn't a faithful twin. Build flags matter
+     as much as the commit: 2D, the particle-system effects and sound support are compiled in or
+     out per board.
+   - **Faithful in:** the effects' logic, segments, layers, blend modes, palettes and colours.
+     **Not in:** the hardware side (LED timing, gamma, white handling, the power limiter),
+     performance (the chip's frame rate, its memory), random sequences, and sound (simulated, as
+     on a device without a mic). It answers "what does this look like and how does it move", not
+     "will the controller cope".
+   - Later: link a real device to its virtual twin, to work offline on the firmware it runs.
+
 **Known bugs, found 2026-11-24:**
 - ~~The code editor hid effect folders with hyphens in their names~~ (fixed 2026-11-24): existing
   folders follow the builder's rule (`[A-Za-z0-9_-]`); a new one must still be a C identifier.
