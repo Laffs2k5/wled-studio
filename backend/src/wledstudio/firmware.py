@@ -144,8 +144,7 @@ def effect_lists(manifest: object) -> tuple[list[str], list[str]]:
 async def preflight(jid: str, device: str, request: Request):
     """The library checked against a gate job's custom image, for one device: each look's and
     playlist's status today and if that image were flashed. Reads only."""
-    from .api import device_errors, device_or_404, make_client, room_for
-    from .library import DeviceLists, check_library
+    from .api import device_errors, device_or_404, make_client
     from .push import fetch_lists
     from .wled import WLEDError
 
@@ -156,10 +155,20 @@ async def preflight(jid: str, device: str, request: Request):
             today = await fetch_lists(c, request.app.state.statestore.custom_ids(dev.id))
         except WLEDError as e:
             raise device_errors(e) from None
+    rows, counts = compare_library(request, dev.id, today, names, metas)
+    return {"job": jid, "device": dev.id, "effects": sum(1 for n in names if "RSVD" not in n),
+            "counts": counts, "rows": rows}
+
+
+def compare_library(request: Request, device_id: str, today, names: list[str], metas: list[str]):
+    """Each look's and playlist's status on the device today and with this image's effects."""
+    from .api import room_for
+    from .library import DeviceLists, check_library
+
     flashed = DeviceLists(names, metas, today.palettes, today.custom, today.max_segments)
     lib = request.app.state.library
     looks, playlists = list(lib.looks().values()), list(lib.playlists().values())
-    room = room_for(request, dev.id)
+    room = room_for(request, device_id)
     now = {(r.get("look"), r.get("playlist")): r for r in check_library(looks, playlists, today, room)}
     rows = []
     for r in check_library(looks, playlists, flashed, room):
@@ -168,5 +177,4 @@ async def preflight(jid: str, device: str, request: Request):
     counts: dict[str, int] = {}
     for r in rows:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
-    return {"job": jid, "device": dev.id, "effects": sum(1 for n in names if "RSVD" not in n),
-            "counts": counts, "rows": rows}
+    return rows, counts

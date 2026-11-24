@@ -79,4 +79,34 @@ assert r["effects"] > 200, r["effects"]
 assert rows["E2E solid"]["status"] == "ok", rows["E2E solid"]
 assert rows["E2E comet"]["status"] == "unavailable" and rows["E2E comet"]["changes"], rows["E2E comet"]
 '
+echo "== flash: the gate's real image to the demo device (which models WLED's /update), then revert"
+# without the client-certificate proxy's header, the plan blocks
+curl -fsS "$B/api/firmware/jobs/$gid/flash-plan?device=$did" | python3 -c '
+import json, sys
+p = json.load(sys.stdin)
+assert not p["can_flash"] and [c["id"] for c in p["checks"] if c["level"] == "block"] == ["certificate"], p["checks"]'
+C=(-H "X-Client-Cert: e2e")
+curl -fsS "${C[@]}" "$B/api/firmware/jobs/$gid/flash-plan?device=$did" | python3 -c '
+import json, sys
+p = json.load(sys.stdin)
+print(json.dumps({"image": p["image"], "checks": [(c["id"], c["level"]) for c in p["checks"]]}))
+assert p["can_flash"], p["checks"]
+assert p["image"]["size"] and p["image"]["size"] <= p["image"]["slot"] and len(p["image"]["sha256"]) == 64, p["image"]'
+follow() {  # follow <run json>: wait for a flash or revert to finish, print its steps
+  local rid; rid=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  for _ in $(seq 1 90); do
+    run=$(curl -fsS "$B/api/flashes/$rid")
+    [[ $(python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])' <<< "$run") != running ]] && break
+    sleep 2
+  done
+  python3 -c 'import json,sys; r = json.load(sys.stdin); print(r["state"]); [print(" ", s["name"], s["state"], s["detail"]) for s in r["steps"]]' <<< "$run"
+}
+flash=$(curl -fsS "${W[@]}" "${C[@]}" -d "{\"device\":\"$did\",\"confirm\":\"e2e\"}" "$B/api/firmware/jobs/$gid/flash" | follow)
+echo "$flash"
+# the demo device keeps its made-up effects after a flash, so the effect-list check warns
+grep -q '^warnings$' <<< "$flash" && grep -q 'upload ok Update successful' <<< "$flash" && grep -q 'image ok' <<< "$flash" \
+  || { echo "flash: not as expected"; exit 1; }
+revert=$(curl -fsS "${W[@]}" "${C[@]}" -d '{"confirm":"e2e"}' "$B/api/devices/$did/revert" | follow)
+echo "$revert"
+grep -q '^done$' <<< "$revert" || { echo "revert: not as expected"; exit 1; }
 echo "firmware end-to-end passed"

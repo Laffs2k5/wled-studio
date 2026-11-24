@@ -28,9 +28,42 @@ that applies to such an app.
 | Effect files | The editor reads and writes only `*.cpp`, `*.h` and `library.json` in effect folders under `WLEDSTUDIO_EFFECTS_DIR`. Folder and file names are checked, there's no path traversal, and files are at most 256 kB. The code is yours; it's compiled by the builder, never run by the app |
 | Oversized requests | Bodies over 1 MB are refused; request models refuse unknown fields and enforce ranges and lengths |
 | Firmware builder's network | In the `firmware` profile the builder has no internet of its own: it sits on an internal network shared only with the app and an egress proxy (squid), which allows only GitHub, the PlatformIO registry, PyPI, npm and Emscripten's downloads (`proxy/squid.conf`). Hosts match by the name in the request only (`dstdomain -n`), so a bare IP address can't pass on a reverse DNS name its owner chose. The `firmware-e2e` workflow checks that direct egress is blocked and that other hosts and such IP addresses are refused |
+| Flashing firmware | Off unless `WLEDSTUDIO_FLASHING=on`, and meant to be turned on only behind a client-certificate proxy (below). A flash needs a gate-passed image whose sha256 matches the gate's report, a plan with no blocking check (OTA lock off, a boot preset with no effect new in the image, the image within the app slot), and the device's name typed as confirmation; a revert needs the name too. WLED's own release check is never skipped. A backup is taken first; the PIN is unlocked only for the upload and locked again |
 | Container | Runs as a non-root user (uid 10001), read-only root filesystem, all capabilities dropped, `no-new-privileges`; base images pinned by digest; no npm install scripts during the build |
 | Exposure | Listens on `127.0.0.1` only in the default compose file |
 | Supply chain | Python dependencies locked by version and file hash (`pip --require-hashes`), npm by its lockfile's integrity hashes; base images by digest; `npm audit` in CI; GitHub Actions pinned by commit |
+
+## Flashing: behind a client-certificate proxy
+
+Flashing replaces what runs on a device, so it gets a stronger gate than the token:
+
+1. Put the app behind a reverse proxy that **requires a client certificate** (mutual TLS), and
+   make the app reachable **only** through it (don't publish its port on the LAN).
+2. Have the proxy set a header for a verified certificate, **overwriting** any copy the client
+   sent, and tell the app its name: `WLEDSTUDIO_FLASH_CERT_HEADER=X-Client-Cert`. Flashing and
+   reverting then need that header, non-empty.
+3. Turn flashing on: `WLEDSTUDIO_FLASHING=on`. Add the proxy's host name to
+   `WLEDSTUDIO_ALLOWED_HOSTS`, and set a token as below.
+
+An example with Caddy (`client_auth` checks the certificate against your own CA; `header_up`
+replaces the header). Check the syntax against your Caddy version:
+
+```
+studio.example.lan {
+	tls /etc/caddy/studio.crt /etc/caddy/studio.key {
+		client_auth {
+			mode require_and_verify
+			trust_pool file /etc/caddy/clients-ca.pem
+		}
+	}
+	reverse_proxy wled-studio:8080 {
+		header_up X-Client-Cert {http.request.tls.client.fingerprint}
+	}
+}
+```
+
+Without step 2 the app can't tell whether a request came through the proxy, so steps 1 and 2 go
+together. The app never sees the certificate itself.
 
 ## Using it from other machines
 

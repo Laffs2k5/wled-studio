@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 import logging
 import time
 from typing import Any
@@ -25,6 +26,9 @@ log = logging.getLogger(__name__)
 PIN_COOLDOWN_S = 3.2
 BUSY_RETRIES = 4
 BUSY_BACKOFF_S = 0.25
+
+
+FLASH_TIMEOUT_S = 180.0   # a 1.3 MB image over Wi-Fi, written to flash as it arrives
 
 
 class WLEDError(Exception):
@@ -179,3 +183,45 @@ class WLEDClient:
         """Upload one file with the device unlocked (if a PIN is set)."""
         async with self.unlocked():
             await self._upload_raw(name, content)
+
+    async def cfg_file(self) -> dict:
+        """cfg.json as the device serves it (WLED leaves the secrets out; they're in wsec.json)."""
+        return await self.get_json("/cfg.json")
+
+    # --- firmware ---
+    async def flash(self, image: bytes, *, timeout: float = FLASH_TIMEOUT_S) -> str:
+        """Upload a firmware image to WLED's /update, unlocked; WLED validates its release
+        metadata (never skipped here), writes the other OTA slot and reboots. Returns WLED's
+        message; raises WLEDLocked (PIN or OTA lock) or WLEDError (refused or failed)."""
+        async with self.unlocked():
+            try:
+                r = await self._http.post("/update", files={"update": ("firmware.bin", image, "application/octet-stream")},
+                                          timeout=timeout)
+            except httpx.HTTPError as e:
+                raise WLEDError(f"firmware upload: {e.__class__.__name__}") from None
+            return _ota_answer(r, "Update successful")
+
+    async def revert(self) -> str:
+        """Boot the image in the other OTA slot again (WLED's /update?revert), unlocked."""
+        async with self.unlocked():
+            try:
+                r = await self._http.get("/update", params={"revert": ""}, timeout=30.0)
+            except httpx.HTTPError as e:
+                raise WLEDError(f"revert: {e.__class__.__name__}") from None
+            return _ota_answer(r, "Reverted")
+
+
+def page_text(html: str, limit: int = 200) -> str:
+    """The words of one of WLED's small HTML message pages."""
+    text = re.sub(r"<(script|style)\b.*?</\1>", " ", html, flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return " ".join(text.split())[:limit]
+
+
+def _ota_answer(r: httpx.Response, success: str) -> str:
+    text = page_text(r.text)
+    if r.status_code == 401:
+        raise WLEDLocked(f"the device refused it: {text or 'access denied'}")
+    if r.status_code != 200 or success.lower() not in text.lower():
+        raise WLEDError(f"HTTP {r.status_code}: {text or 'no answer'}")
+    return text

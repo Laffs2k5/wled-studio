@@ -26,6 +26,9 @@ jobs:
     timeout-minutes: 75
     env:
       WLEDSTUDIO_BUILDER_URL: http://builder:8090
+      # flashing on, behind a (pretend) client-certificate proxy: the script sends the header
+      WLEDSTUDIO_FLASHING: "on"
+      WLEDSTUDIO_FLASH_CERT_HEADER: X-Client-Cert
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # This runs the published app image, which this commit's ci run publishes: wait for it,

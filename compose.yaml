@@ -17,6 +17,9 @@ services:
       WLEDSTUDIO_TOKEN: ${WLEDSTUDIO_TOKEN:-}
       WLEDSTUDIO_BUILDER_URL: ${WLEDSTUDIO_BUILDER_URL:-}
       WLEDSTUDIO_EFFECTS_DIR: /effects
+      # flashing firmware: off unless "on", and only behind a client-certificate proxy (docs/security.md)
+      WLEDSTUDIO_FLASHING: ${WLEDSTUDIO_FLASHING:-}
+      WLEDSTUDIO_FLASH_CERT_HEADER: ${WLEDSTUDIO_FLASH_CERT_HEADER:-}
     networks: [default, builder-net]
     volumes:
       - wled-studio-data:/data

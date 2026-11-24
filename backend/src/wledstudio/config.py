@@ -28,5 +28,11 @@ class Settings:
     builder_token: str | None = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_BUILDER_TOKEN") or None)
     # Your effect usermods (one folder each), editable from the Effect studio; unset = off.
     effects_dir: Path | None = field(default_factory=lambda: Path(p) if (p := os.environ.get("WLEDSTUDIO_EFFECTS_DIR")) else None)
+    # Flashing firmware to devices: off unless set to "on". Turn it on only behind the client-
+    # certificate (mTLS) proxy (docs/security.md): a flash replaces what runs on the device.
+    flashing: bool = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_FLASHING", "") == "on")
+    # The header the mTLS proxy sets for a verified client certificate (e.g. X-Client-Cert); when
+    # set, flashing and reverting need it in the request, non-empty. The proxy must overwrite it.
+    flash_cert_header: str | None = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_FLASH_CERT_HEADER") or None)
     max_body_bytes: int = 1_000_000
     device_timeout_s: float = 5.0
