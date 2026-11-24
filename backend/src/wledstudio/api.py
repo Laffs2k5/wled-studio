@@ -130,6 +130,7 @@ class LookIn(BaseModel):
     mic: bool | None = None
     segments: list[LookSegment] = Field(default_factory=list, max_length=32)
     snapshot: dict[str, str] = Field(default_factory=dict)
+    folder: str | None = Field(default=None, max_length=40)   # library only
 
 
 class PlaylistEntry(Strict):
@@ -139,6 +140,7 @@ class PlaylistEntry(Strict):
 
 
 class PlaylistIn(Strict):
+    folder: str | None = Field(default=None, max_length=40)   # library only
     name: str
     preset_id: int | None = Field(default=None, ge=1, le=250)
     entries: list[PlaylistEntry] = Field(min_length=1, max_length=100)
@@ -496,6 +498,56 @@ def rename_look(name: str, body: RenameIn, request: Request):
         raise HTTPException(404, "no such look") from None
     except LookError as e:
         raise HTTPException(409 if "exists" in str(e) else 422, str(e)) from None
+
+
+class FolderIn(Strict):
+    names: list[str] = Field(min_length=1, max_length=500)
+    folder: str | None = Field(default=None, max_length=40)
+
+
+class OrderIn(Strict):
+    names: list[str] = Field(max_length=1000)
+
+
+class FolderRenameIn(Strict):
+    from_: str = Field(alias="from", min_length=1, max_length=40)
+    to: str | None = Field(default=None, max_length=40)
+
+
+LibraryKind = Literal["looks", "playlists"]
+
+
+@router.post("/library/{kind}/folder")
+def set_folder(kind: LibraryKind, body: FolderIn, request: Request):
+    """Put looks or playlists in a folder (none: `folder` null). Library only."""
+    try:
+        request.app.state.library.set_folder(kind, body.names, body.folder)
+    except KeyError as e:
+        raise HTTPException(404, f"no such item: {e.args[0]!r}") from None
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
+    return {"moved": body.names, "folder": body.folder or None}
+
+
+@router.post("/library/{kind}/order")
+def set_order(kind: LibraryKind, body: OrderIn, request: Request):
+    """The library's order of looks or playlists: every name, once. Library only."""
+    try:
+        return {"order": request.app.state.library.reorder(kind, body.names)}
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@router.post("/library/folders/rename")
+def rename_folder(body: FolderRenameIn, request: Request):
+    """Rename a folder for looks and playlists alike; `to` null dissolves it."""
+    try:
+        moved = request.app.state.library.rename_folder(body.from_, body.to)
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
+    if not moved:
+        raise HTTPException(404, "no such folder")
+    return {"moved": moved}
 
 
 @router.delete("/looks/{name}", status_code=204)

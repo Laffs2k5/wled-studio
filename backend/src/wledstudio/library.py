@@ -57,6 +57,23 @@ def check_name(name: str) -> str:
     return name
 
 
+MAX_FOLDER_BYTES = 40
+
+
+def check_folder(folder: str | None) -> str | None:
+    """A folder name for library items (library-only: never written to a device); "" means none."""
+    if folder is None:
+        return None
+    folder = folder.strip()
+    if not folder:
+        return None
+    if len(folder.encode("utf-8")) > MAX_FOLDER_BYTES:
+        raise LookError(f"folder names are at most {MAX_FOLDER_BYTES} bytes")
+    if any(ord(c) < 32 for c in folder):
+        raise LookError("no control characters in folder names")
+    return folder
+
+
 CUSTOM_PALETTE_BASE = 200  # WLED 16: custom palette file index i has palette id 200 - i
 MAX_CUSTOM_PALETTES = 129
 
@@ -526,6 +543,19 @@ def assign_palettes(palettes: list[dict], manifest: dict[str, dict]) -> tuple[di
 
 # --- storage -------------------------------------------------------------------
 
+def _keep_folder(old: dict | None, new: dict) -> None:
+    """A look saved again (captured, edited, imported) stays in its folder unless told otherwise;
+    a folder given is checked, and an empty one means none."""
+    if "folder" in new:
+        folder = check_folder(new["folder"])
+        if folder is None:
+            new.pop("folder")
+        else:
+            new["folder"] = folder
+    elif old and "folder" in old:
+        new["folder"] = old["folder"]
+
+
 class LibraryStore:
     """Looks in data/library.json; every save keeps the previous file as a version."""
 
@@ -577,6 +607,7 @@ class LibraryStore:
     def put(self, look: dict) -> dict:
         look["name"] = check_name(look["name"])
         lib = self.load()
+        _keep_folder(lib["looks"].get(look["name"]), look)
         lib["looks"][look["name"]] = look
         self.save(lib)
         return look
@@ -594,9 +625,54 @@ class LibraryStore:
     def put_playlist(self, pl: dict) -> dict:
         pl["name"] = check_name(pl["name"])
         lib = self.load()
+        _keep_folder(lib["playlists"].get(pl["name"]), pl)
         lib["playlists"][pl["name"]] = pl
         self.save(lib)
         return pl
+
+    # --- organising: folders and order (library only; never written to a device) ---
+    def set_folder(self, kind: str, names: list[str], folder: str | None) -> list[str]:
+        """Put the named looks or playlists in a folder (None: in none)."""
+        folder = check_folder(folder)
+        lib = self.load()
+        coll = lib[kind]
+        missing = [n for n in names if n not in coll]
+        if missing:
+            raise KeyError(missing[0])
+        for n in names:
+            if folder is None:
+                coll[n].pop("folder", None)
+            else:
+                coll[n]["folder"] = folder
+        self.save(lib)
+        return names
+
+    def reorder(self, kind: str, names: list[str]) -> list[str]:
+        """The library's order of looks or playlists: `names` must be all of them, each once."""
+        lib = self.load()
+        coll = lib[kind]
+        if sorted(names) != sorted(coll) or len(set(names)) != len(names):
+            raise LookError("the order must list every item exactly once")
+        lib[kind] = {n: coll[n] for n in names}
+        self.save(lib)
+        return names
+
+    def rename_folder(self, old: str, new: str | None) -> int:
+        """Rename a folder in looks and playlists alike (None: dissolve it). Returns the count moved."""
+        new = check_folder(new)
+        lib = self.load()
+        moved = 0
+        for kind in ("looks", "playlists"):
+            for item in lib[kind].values():
+                if item.get("folder") == old:
+                    if new is None:
+                        item.pop("folder", None)
+                    else:
+                        item["folder"] = new
+                    moved += 1
+        if moved:
+            self.save(lib)
+        return moved
 
     def palettes(self) -> dict:
         return self.load()["palettes"]
