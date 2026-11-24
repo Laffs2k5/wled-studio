@@ -53,6 +53,17 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
 - The SPA route answers GET only: `curl -I` (HEAD) gets 405. Use `curl -D - -o /dev/null`.
 - Under the strict CSP, React's `style={{…}}` works (set through the CSSOM), but inline
   `<style>` and `style="…"` in HTML don't.
+- **The code editor (CodeMirror) lives in a shadow root** because of that CSP: there it styles
+  itself with constructed stylesheets; in the document it would add a `<style>` the CSP blocks.
+  So:
+  - Testing Library can't see inside it: tests reach the view with `viewOf(host)` from `Code.tsx`.
+    Playwright's CSS locators do pierce it (`.code .cm-content`);
+  - the app's CSS doesn't reach in, but CSS variables do (`--panel`, `--cm-focus`);
+  - CodeMirror's `&light`/`&dark` selectors work only in `EditorView.baseTheme`. In
+    `EditorView.theme` they throw "Unsupported selector" and the editor doesn't appear;
+  - jsdom has no layout: `src/test/setup.ts` stubs `Range.getClientRects` for CodeMirror.
+- Check the editor's styling in more than Chromium when it changes: Firefox and WebKit run in
+  Playwright here (WebKit needed `playwright install-deps webkit`, done 2026-11-24).
 - Don't `pkill -f` the dev servers: the pattern matches your own shell. Kill by PID.
 - **Pin commits by SHAs taken from `git rev-parse`, never typed from memory:** the Dockerfile's
   `BUILDER_COMMIT` once held a mistyped SHA, and the image build failed with "not our ref".
