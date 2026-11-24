@@ -79,10 +79,14 @@ export const firmware = {
     `/api/firmware/jobs/${encodeURIComponent(id)}/preflight?device=${encodeURIComponent(device)}`),
   flashPlan: (id: string, device: string) => request<FlashPlan>("GET",
     `/api/firmware/jobs/${encodeURIComponent(id)}/flash-plan?device=${encodeURIComponent(device)}`),
-  flash: (id: string, device: string, confirm: string) =>
-    request<FlashRun>("POST", `/api/firmware/jobs/${encodeURIComponent(id)}/flash`, { device, confirm }),
-  revert: (device: string, confirm: string) =>
-    request<FlashRun>("POST", `/api/devices/${encodeURIComponent(device)}/revert`, { confirm }),
+  flash: (id: string, device: string, confirm: string, notice: string) =>
+    request<FlashRun>("POST", `/api/firmware/jobs/${encodeURIComponent(id)}/flash`, { device, confirm, notice }),
+  revert: (device: string, confirm: string, notice: string) =>
+    request<FlashRun>("POST", `/api/devices/${encodeURIComponent(device)}/revert`, { confirm, notice }),
+  notice: () => request<FlashNotice>("GET", "/api/notices/flash"),
+  acceptNotice: (version: string, remember: boolean) =>
+    request<{ version: string; remembered: boolean }>("POST", "/api/notices/flash", { version, remember }),
+  forgetNotice: () => request<{ remembered: boolean }>("DELETE", "/api/notices/flash"),
   run: (id: string) => request<FlashRun>("GET", `/api/flashes/${encodeURIComponent(id)}`),
 };
 
@@ -97,6 +101,9 @@ export interface FlashPlan {
   can_flash: boolean;
   busy: boolean;
 }
+
+/** The notice accepted before flashing or reverting (no warranty, no liability, no support). */
+export interface FlashNotice { version: string; title: string; text: string; remembered: boolean; accepted: string | null }
 
 /** A flash or revert as it runs. */
 export interface FlashRun {
