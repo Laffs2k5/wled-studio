@@ -43,6 +43,8 @@ services:
       FAKE_WLED_PORT: "8081"
       FAKE_WLED_PIN: ${FAKE_WLED_PIN:-}
     read_only: true
+    tmpfs:
+      - /tmp   # uploads over 1 MB (a firmware image) are spooled to a temporary file
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
