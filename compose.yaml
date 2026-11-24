@@ -25,6 +25,7 @@ services:
       WLEDSTUDIO_EFFECTS_GIT: ${WLEDSTUDIO_EFFECTS_GIT:-}
       WLEDSTUDIO_EFFECTS_GIT_KEY: ${WLEDSTUDIO_EFFECTS_GIT_KEY:-}
       WLEDSTUDIO_EFFECTS_GIT_AUTHOR: ${WLEDSTUDIO_EFFECTS_GIT_AUTHOR:-}
+      TZ: ${TZ:-UTC}   # your time zone (e.g. Europe/Oslo): commit times and logs
       # flashing firmware: off unless "on", and only behind a client-certificate proxy (docs/security.md)
       WLEDSTUDIO_FLASHING: ${WLEDSTUDIO_FLASHING:-}
       WLEDSTUDIO_FLASH_CERT_HEADER: ${WLEDSTUDIO_FLASH_CERT_HEADER:-}

@@ -36,9 +36,10 @@ LABEL org.opencontainers.image.title="wled-studio" \
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
  && mkdir /data && chown app:app /data
-# git and ssh: committing and pushing an effect folder that is a git clone (effects_git.py)
+# git and ssh: committing and pushing an effect folder that is a git clone (effects_git.py);
+# tzdata: so a TZ set on the container (e.g. Europe/Oslo) applies, to commit times among others
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git openssh-client \
+ && apt-get install -y --no-install-recommends git openssh-client tzdata \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 # dependencies pinned by version and file hash (backend/requirements.txt, generated with
