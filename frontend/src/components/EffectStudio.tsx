@@ -26,9 +26,11 @@ function initialSegment(e: Effect): Segment {
 }
 
 /** Your own effects, running in the browser (WebAssembly), drawn on a strip. */
-export function EffectStudio({ notify, load = Preview.load }: {
+export function EffectStudio({ notify, load = Preview.load, device = null }: {
   notify: (msg: string, error?: boolean) => void;
   load?: (url?: string, length?: number) => Promise<Preview>;
+  /** The header's device: the preview takes its shape, and streams to it, unless another is picked here. */
+  device?: string | null;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [effects, setEffects] = useState<Effect[]>([]);
@@ -40,8 +42,10 @@ export function EffectStudio({ notify, load = Preview.load }: {
   const [chosen, setChosen] = useState<string[]>([]);
   const [compiling, setCompiling] = useState<string | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
-  const [target, setTarget] = useState("");
+  const [target, setTarget] = useState(device ?? "");
   const socket = useRef<WebSocket | null>(null);
+  // a new device in the header becomes the preview's device (not while streaming to another)
+  useEffect(() => { if (!socket.current) setTarget(device ?? ""); }, [device]);
   const [streaming, setStreaming] = useState(false);
   // sound for sound effects in the preview: null = WLED's simulated beat, else a level 0-255.
   // A newly loaded preview starts with the simulation.
@@ -175,7 +179,7 @@ export function EffectStudio({ notify, load = Preview.load }: {
 
   // the code editor works with or without a preview: without one, it's how the first preview starts
   const editor = (
-    <CodeEditor notify={notify} onSaved={(folder) => {
+    <CodeEditor notify={notify} device={device} onSaved={(folder) => {
       if (mine && !mine.includes(folder)) setMine([...mine, folder]);
       setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
     }} />
@@ -204,8 +208,9 @@ export function EffectStudio({ notify, load = Preview.load }: {
       <canvas ref={canvas} width={960} height={room ? 360 : 32} className={room ? "room" : "strip"} aria-label="Preview strip" />
       {devices.length > 0 && (
         <div className="row">
+          <span className="small muted">Preview on</span>
           <select aria-label="Stream device" value={target} disabled={streaming} onChange={(e) => setTarget(e.target.value)}>
-            <option value="">Preview on / stream to a device…</option>
+            <option value="">No device: a plain strip</option>
             {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
           </select>
           <button className={streaming ? "primary" : ""} disabled={!target} onClick={toggleStream}>

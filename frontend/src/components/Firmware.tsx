@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { deviceLabel } from "../devices";
 import { useCallback, useEffect, useState } from "react";
 import { FlashPanel } from "./FlashPanel";
 import { firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
 import { gateLines } from "../gate";
 import type { Device } from "../types";
 import { StatusBadge } from "./StatusBadge";
+import { ChangeDevice } from "./ChangeDevice";
 
 /** Build firmware with your own effects, through the gate (wled-studio-builder). */
 export function Firmware({ notify, devices = [], device = null }: {
   notify: (msg: string, error?: boolean) => void;
-  /** Devices the library can be checked for, and the one selected in the look studio. */
+  /** The devices, and the one picked in the header: the library is checked, and images flashed, for it. */
   devices?: Device[];
   device?: string | null;
 }) {
@@ -22,7 +22,6 @@ export function Firmware({ notify, devices = [], device = null }: {
   const [chosen, setChosen] = useState<string[]>([]);
   const [open, setOpen] = useState<FirmwareJob | null>(null);
   const [log, setLog] = useState("");
-  const [checkFor, setCheckFor] = useState<string>(device ?? devices[0]?.id ?? "");
   const [preflight, setPreflight] = useState<Preflight | null>(null);
   const [onlyChanges, setOnlyChanges] = useState(true);
 
@@ -71,6 +70,7 @@ export function Firmware({ notify, devices = [], device = null }: {
   }
 
   const [pins, tgt] = target.split("|");
+  const dev = devices.find((d) => d.id === device);
   const current = targets.find((t) => t.pins === pins && t.target === tgt);
   return (
     <section className="firmware">
@@ -125,19 +125,19 @@ export function Firmware({ notify, devices = [], device = null }: {
             </ul>
           )}
           {open.report?.error && <p className="warn">{open.report.error}</p>}
-          {open.state === "passed" && devices.length > 0 && (
+          {open.state === "passed" && open.kind !== "preview" && !dev && (
+            <p className="muted small">Add a device in the header to check your looks against this image and flash it.</p>
+          )}
+          {open.state === "passed" && dev && (
             <div className="preflight">
-              <h2>Before flashing: the library against this image</h2>
+              <h2>Before flashing: your looks on {dev.name} with this image <ChangeDevice /></h2>
               <div className="row">
-                <select aria-label="Device to check for" value={checkFor} onChange={(e) => setCheckFor(e.target.value)}>
-                  {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
-                </select>
-                <button disabled={!checkFor} onClick={() => firmware.preflight(open.id, checkFor).then(setPreflight)
+                <button onClick={() => firmware.preflight(open.id, dev.id).then(setPreflight)
                   .catch((e) => notify((e as Error).message, true))}>
                   Check the library
                 </button>
               </div>
-              {preflight && preflight.job === open.id && (
+              {preflight && preflight.job === open.id && preflight.device === dev.id && (
                 <>
                   <p className="small">
                     {preflight.effects} effects in the image.{" "}
@@ -167,14 +167,13 @@ export function Firmware({ notify, devices = [], device = null }: {
               )}
             </div>
           )}
-          {open.state === "passed" && open.kind !== "preview" && checkFor && (devices.find((d) => d.id === checkFor)?.virtual ? (
+          {open.state === "passed" && open.kind !== "preview" && dev && (dev.virtual ? (
             <p className="muted flash">
-              {devices.find((d) => d.id === checkFor)?.name} is a virtual device: a software copy of WLED for testing, with no
-              LEDs. It runs the firmware it was built from, and can't be flashed or reverted.
+              {dev.name} is a virtual device: a software copy of WLED for testing, with no
+              LEDs. It runs the firmware it was built from, and can't be flashed or reverted. <ChangeDevice />
             </p>
           ) : (
-            <FlashPanel job={open.id} device={checkFor} notify={notify}
-              deviceName={devices.find((d) => d.id === checkFor)?.name ?? checkFor} />
+            <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} />
           ))}
           <pre className="log" aria-label="Build log">{log.slice(-8000)}</pre>
         </div>

@@ -165,3 +165,34 @@ test("a virtual device: marked in the live banner, and the device list is read a
   await waitFor(() => expect(banner).toHaveTextContent("Live on Twinvirtual (no LEDs): every change here shows in its live view at once."));
   expect(await screen.findByRole("option", { name: "Twin · virtual (no LEDs) (twin.lan)" })).toBeInTheDocument();
 });
+
+test("one device picker in the header for every view, remembered across reloads", async () => {
+  localStorage.clear();
+  const routes = (id: string, name: string) => ({
+    [`GET /api/devices/${id}/profile`]: () => ({ ...profile, device: { id, name } }),
+    [`GET /api/devices/${id}/state`]: () => state,
+    [`GET /api/devices/${id}/room`]: () => null,
+  });
+  backend({
+    "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false },
+      { id: "twin", name: "Twin", host: "twin.lan", has_pin: false, virtual: true }],
+    ...routes("desk", "Desk"), ...routes("twin", "Twin"),
+    "GET /api/looks": () => [], "GET /api/playlists": () => [], "GET /api/palettes": () => [],
+    "GET /api/slots": () => ({ grid: null, cells: [] }),
+    "GET /api/firmware/status": () => ({ enabled: false }),
+  });
+  const { unmount } = render(<App />);
+  const select = await screen.findByLabelText("Device");
+  expect(select).toHaveValue("desk");
+  fireEvent.change(select, { target: { value: "twin" } });
+  expect(localStorage.getItem("wledstudio.device")).toBe("twin");
+  expect(await screen.findByText(/Live on Twin/)).toBeInTheDocument();
+  for (const view of ["Slot grid", "Firmware", "Looks & effects"]) {
+    fireEvent.click(screen.getByRole("button", { name: view }));
+    expect(screen.getByLabelText("Device")).toHaveValue("twin");
+  }
+  unmount();
+  render(<App />);   // a reload: the same device again
+  await waitFor(() => expect(screen.getByLabelText("Device")).toHaveValue("twin"));
+  localStorage.clear();
+});

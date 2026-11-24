@@ -9,7 +9,12 @@ const Code = lazy(() => import("./Code").then((m) => ({ default: m.Code })));
 import type { Device } from "../types";
 
 /** Edit your effect usermods' files (./effects), and start new ones from a template. */
-export function CodeEditor({ notify, onSaved }: { notify: (msg: string, error?: boolean) => void; onSaved?: (folder: string) => void }) {
+export function CodeEditor({ notify, onSaved, device = null }: {
+  notify: (msg: string, error?: boolean) => void;
+  onSaved?: (folder: string) => void;
+  /** The header's device: the room map is taken from it unless another is picked here. */
+  device?: string | null;
+}) {
   const [folders, setFolders] = useState<EffectFolder[] | null>(null);
   const [file, setFile] = useState<{ folder: string; name: string } | null>(null);
   const [text, setText] = useState("");
@@ -19,7 +24,8 @@ export function CodeEditor({ notify, onSaved }: { notify: (msg: string, error?: 
   const [newId, setNewId] = useState("250");
   const [template, setTemplate] = useState<"wave" | "room">("wave");
   const [devices, setDevices] = useState<Device[]>([]);
-  const [mapFor, setMapFor] = useState("");
+  const [mapFor, setMapFor] = useState(device ?? "");
+  useEffect(() => { setMapFor(device ?? ""); }, [device]);
   const [saves, setSaves] = useState(0);      // refreshes the git panel after a save
   useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
 
@@ -63,8 +69,9 @@ export function CodeEditor({ notify, onSaved }: { notify: (msg: string, error?: 
       )}
       {file && devices.length > 0 && (
         <div className="row small">
+          <span className="muted">Room map from</span>
           <select value={mapFor} aria-label="Room map device" onChange={(e) => setMapFor(e.target.value)}>
-            <option value="">Room map from…</option>
+            <option value="">Pick a device…</option>
             {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
           </select>
           <button disabled={!mapFor} title="Write room_map.h (each LED's position) into this effect's folder"

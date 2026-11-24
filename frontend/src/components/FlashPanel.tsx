@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { firmware, type FlashNotice, type FlashPlan, type FlashRun } from "../api";
 import { NoticeDialog } from "./NoticeDialog";
+import { ChangeDevice } from "./ChangeDevice";
 
 const STEP_LABELS: Record<string, string> = {
   backup: "Backup (presets, config, info, effects)",
@@ -68,7 +69,7 @@ export function FlashPanel({ job, device, deviceName, notify }: {
 
   return (
     <div className="flash">
-      <h2>Flash it to {deviceName}</h2>
+      <h2>Flash it to {deviceName} <ChangeDevice /></h2>
       <button disabled={running} onClick={() => firmware.flashPlan(job, device).then(setPlan).catch((e) => notify((e as Error).message, true))}>
         Plan the flash
       </button>

@@ -88,3 +88,12 @@ test("writes the room map for the open effect", async () => {
   await waitFor(() => expect(notify).toHaveBeenCalledWith("room_map.h written: 250 LEDs"));
   expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects/my_fx/room-map")!.body!)).toEqual({ device: "desk" });
 });
+
+test("the room map comes from the header's device unless another is picked", async () => {
+  stub({ "my_fx.cpp": "x" });
+  const { rerender } = render(<CodeEditor notify={() => {}} device="desk" />);
+  fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/my_fx.cpp" } });
+  expect(await screen.findByLabelText("Room map device")).toHaveValue("desk");
+  rerender(<CodeEditor notify={() => {}} device={null} />);
+  expect(screen.getByLabelText("Room map device")).toHaveValue("");
+});

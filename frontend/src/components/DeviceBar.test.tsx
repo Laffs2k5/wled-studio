@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DeviceBar } from "./DeviceBar";
+import { ChangeDevice } from "./ChangeDevice";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -48,4 +49,13 @@ test("a virtual device is marked in the picker", () => {
     current="desk" onSelect={() => {}} onChanged={() => {}} notify={() => {}} />);
   expect(screen.getByRole("option", { name: "Twin · virtual (no LEDs) (twin.lan)" })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: "Desk (wled.lan)" })).toBeInTheDocument();
+});
+
+test("Change device, beside a heading that names the device, takes you to the header's picker", () => {
+  render(<>
+    <DeviceBar devices={devices} current="desk" onSelect={() => {}} onChanged={() => {}} notify={() => {}} />
+    <ChangeDevice />
+  </>);
+  fireEvent.click(screen.getByText("Change device"));
+  expect(screen.getByLabelText("Device")).toHaveFocus();
 });

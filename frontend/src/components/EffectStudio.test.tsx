@@ -104,7 +104,7 @@ test("frame messages are RGBW with a channel byte", async () => {
   expect(Array.from(frameMessage(new Uint32Array([0x04ff8000, 0x00000001])))).toEqual([4, 255, 128, 0, 4, 0, 0, 1, 0]);
 });
 
-test("streams to a device: sizes the preview to its LEDs and opens the stream with the token", async () => {
+test("streams to the header's device: sizes the preview to its LEDs and opens the stream with the token", async () => {
   const sockets: { url: string; protocols: string[] }[] = [];
   class FakeSocket {
     readyState = 0; bufferedAmount = 0; binaryType = ""; onopen: (() => void) | null = null; onclose: (() => void) | null = null;
@@ -125,8 +125,9 @@ test("streams to a device: sizes the preview to its LEDs and opens the stream wi
   const m = fakeModule();
   const setups: number[] = [];
   m._preview_setup = (n: number) => { setups.push(n); };
-  render(<EffectStudio notify={() => {}} load={async () => new Preview(m as never)} />);
-  fireEvent.change(await screen.findByLabelText("Stream device"), { target: { value: "desk" } });
+  // the header's device is the preview's device, without picking it here
+  render(<EffectStudio notify={() => {}} device="desk" load={async () => new Preview(m as never)} />);
+  expect(await screen.findByLabelText("Stream device")).toHaveValue("desk");
   fireEvent.click(screen.getByText("Stream to the strip"));
   expect(await screen.findByText("Stop streaming")).toBeInTheDocument();
   expect(setups).toContain(250);   // the room's LEDs, then the device's

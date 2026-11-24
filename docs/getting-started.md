@@ -26,6 +26,10 @@ docker compose up -d                    # http://localhost:8080
 **Add device**, with a name and the host (`wled-kitchen.local`, `192.168.1.40`, …). Hosts must be
 on your network; public addresses are refused unless you allow them.
 
+The **Device** select in the header picks the device you work on, in every view: Looks & effects,
+the Effect studio's preview and room map, and the device Firmware checks and flashes. The browser remembers it across reloads. Headings that name the device have a
+**Change device** link back to it.
+
 If the device has a **settings PIN** (WLED → Security), set it with the **PIN** button. It's needed
 only to write presets and palettes, and it's never shown again.
 
@@ -68,8 +72,9 @@ watch them run, and build them in.
    your room shape next to it). Edit, **Save**. The files are in `./effects`, one folder per effect.
 2. **Watch:** **Compile and preview** compiles them to WebAssembly and runs them in the browser,
    with the effect's own sliders. Colours and fades are close, not exact.
-3. **On the strip:** pick the device and **Stream to the strip**. The strip shows the preview live
-   (DDP), and its own effect comes back a few seconds after you stop.
+3. **On the strip:** **Stream to the strip** sends the preview to the header's device (or another
+   one picked under **Preview on**) live (DDP); its own effect comes back a few seconds after you
+   stop.
 
 Compiling needs the firmware builder:
 
