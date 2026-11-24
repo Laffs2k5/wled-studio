@@ -17,10 +17,10 @@ afterEach(() => vi.unstubAllGlobals());
 
 const looks = [{ name: "Evening", preset_id: 3, mic: false, segments: [] }, { name: "Loose", segments: [] }];
 
-test("lists looks with their slots", () => {
+test("lists looks with their preset ids", () => {
   render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
-  expect(screen.getByText("slot 3")).toBeInTheDocument();
-  expect(screen.getByText("no slot")).toBeInTheDocument();
+  expect(screen.getByText("preset 3")).toBeInTheDocument();
+  expect(screen.getByText("no preset id")).toBeInTheDocument();
 });
 
 test("a look on walls names them", () => {
@@ -42,7 +42,7 @@ test("import and capture call the API and refresh", async () => {
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   expect(notify).toHaveBeenCalledWith("Imported 1, kept 0 existing");
   fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Night" } });
-  fireEvent.change(screen.getByLabelText("Preset slot"), { target: { value: "7" } });
+  fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "7" } });
   fireEvent.click(screen.getByText("Save current"));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(2));
   expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/capture/Night?preset_id=7");
@@ -57,7 +57,7 @@ test("check, then write; drift must be acknowledged", async () => {
   render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
   fireEvent.click(screen.getByText("Check what would change"));
   expect(await screen.findByText(/changed since the last write/)).toBeInTheDocument();
-  const write = screen.getByText("Write 1 slot(s)");
+  const write = screen.getByText("Write 1 preset to desk");
   expect(write).toBeDisabled();
   fireEvent.click(screen.getByLabelText(/Write anyway/));
   fireEvent.click(screen.getByLabelText(/marked “review” too/));

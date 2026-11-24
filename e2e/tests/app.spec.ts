@@ -35,14 +35,14 @@ test("look studio: add the device, live control, save a look and write it", asyn
   const id = devices.find((d: { name: string }) => d.name === name).id;
   await expect.poll(async () => (await (await request.get(`/api/devices/${id}/state`)).json()).seg[0].ix).toBe(42);
 
-  // save it as a look in slot 7, then write it to the device
+  // save it as a look in preset 7, then write it to the device
   await page.getByLabel("Look name").fill("E2E look");
-  await page.getByLabel("Preset slot").fill("7");
+  await page.getByLabel("Preset id", { exact: true }).fill("7");
   await page.getByRole("button", { name: "Save current" }).click();
   await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E look")).toBeVisible();
   await page.getByRole("button", { name: "Check what would change" }).click();
-  await expect(page.getByText(/Slots that would change: .*7/)).toBeVisible();
-  await page.getByRole("button", { name: /^Write \d+ slot/ }).click();
+  await expect(page.getByText(/Presets that would change: .*7/)).toBeVisible();
+  await page.getByRole("button", { name: /^Write \d+ presets? to / }).click();
   // (the sliders' <output> values have the status role too, so target the toast)
   await expect(page.locator(".toast")).toContainText("Written and verified");
   const presets = await (await request.get(`/api/devices/${id}/presets`)).json();
@@ -52,7 +52,7 @@ test("look studio: add the device, live control, save a look and write it", asyn
   // (and the mic rule: on), not the one before (the live change is held back briefly)
   await page.getByRole("option", { name: /Spectrum Bars/ }).click();
   await page.getByLabel("Look name").fill("E2E loud");
-  await page.getByLabel("Preset slot").fill("8");
+  await page.getByLabel("Preset id", { exact: true }).fill("8");
   await page.getByRole("button", { name: "Save current" }).click();
   await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E loud")).toBeVisible();
   const looks = await (await request.get("/api/looks")).json();

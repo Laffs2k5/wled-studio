@@ -47,7 +47,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [] }: 
               <li key={p.name}>
                 <span className="name">▶ {p.name}</span>
                 <StatusBadge item={status.get(p.name)} />
-                <span className="muted small">{p.entries.length} looks{p.shuffle ? ", shuffled" : ""} · {p.preset_id ? `slot ${p.preset_id}` : "no slot"}</span>
+                <span className="muted small">{p.entries.length} looks{p.shuffle ? ", shuffled" : ""} · {p.preset_id ? `preset ${p.preset_id}` : "no preset id"}</span>
                 <select aria-label={`Folder for ${p.name}`} value={p.folder ?? ""} onChange={(e) => {
                   let to: string | null = e.target.value || null;
                   if (to === "\u0000new") to = prompt("New folder name")?.trim() || null;
@@ -71,7 +71,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [] }: 
         <summary>New playlist</summary>
         <div className="row">
           <input placeholder="Name" value={name} maxLength={32} aria-label="Playlist name" onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Slot" value={slot} inputMode="numeric" className="slot" aria-label="Playlist slot" onChange={(e) => setSlot(e.target.value)} />
+          <input placeholder="Preset id (1-250)" value={slot} inputMode="numeric" className="preset-id" aria-label="Playlist preset id" onChange={(e) => setSlot(e.target.value)} />
         </div>
         <div className="row">
           <select value={pick} aria-label="Look to add" onChange={(e) => setPick(e.target.value)}>
@@ -95,7 +95,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [] }: 
         <div className="row">
           <button className="primary" disabled={!name.trim() || entries.length === 0} onClick={save}>Save playlist</button>
         </div>
-        {slotted.length < looks.length && <p className="muted small">Only looks with a slot can be in a playlist.</p>}
+        {slotted.length < looks.length && <p className="muted small">Only looks with a preset id can be in a playlist.</p>}
       </details>
     </section>
   );

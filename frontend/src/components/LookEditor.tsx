@@ -99,7 +99,7 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
     <section className="look-editor" aria-label={`Editing ${name}`}>
       <h2>
         Editing “{name}” <StatusBadge item={{ look: name, status: look.status, notes: look.notes }} />
-        <span className="muted small"> {look.preset_id ? `slot ${look.preset_id}` : "no slot"} · not shown on the strip</span>
+        <span className="muted small"> {look.preset_id ? `preset ${look.preset_id}` : "no preset id"} · not shown on the strip</span>
       </h2>
       <label className="slider">
         <span>Brightness</span>

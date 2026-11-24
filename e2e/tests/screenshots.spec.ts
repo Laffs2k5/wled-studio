@@ -18,14 +18,14 @@ test("screenshots", async ({ page }) => {
   await page.getByRole("option", { name: "Spectrum Bars" }).click();
   await expect(page.getByRole("heading", { name: /Spectrum Bars/ })).toBeVisible();
   await page.getByLabel("Look name").fill("Party");
-  await page.getByLabel("Preset slot").fill("3");
+  await page.getByLabel("Preset id", { exact: true }).fill("3");
   await page.getByRole("button", { name: "Save current" }).click();
   await page.getByRole("option", { name: "Comet" }).click();
   await page.getByLabel("Look name").fill("Evening");
-  await page.getByLabel("Preset slot").fill("2");
+  await page.getByLabel("Preset id", { exact: true }).fill("2");
   await page.getByRole("button", { name: "Save current" }).click();
   await page.getByRole("button", { name: "Check what would change" }).click();
-  await expect(page.getByText(/Slots that would change/)).toBeVisible();
+  await expect(page.getByText(/Presets that would change/)).toBeVisible();
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${OUT}/look-studio.png` });
 

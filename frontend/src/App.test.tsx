@@ -92,7 +92,7 @@ test("a live change still held back is sent before a look is saved", async () =>
   render(<App />);
   fireEvent.change(await screen.findByLabelText("Tail"), { target: { value: "77" } });
   fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Quick" } });
-  fireEvent.change(screen.getByLabelText("Preset slot"), { target: { value: "5" } });
+  fireEvent.change(screen.getByLabelText("Preset id"), { target: { value: "5" } });
   fireEvent.click(screen.getByText("Save current"));   // at once, inside the 120 ms hold-back
   await waitFor(() => expect(calls.some((c) => c.url.includes("/capture/"))).toBe(true));
   const order = calls.filter((c) => c.init?.method === "POST").map((c) => c.url);

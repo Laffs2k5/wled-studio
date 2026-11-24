@@ -674,7 +674,7 @@ async def capture(device_id: str, name: str, request: Request, preset_id: int | 
     except LookError as e:
         raise HTTPException(422, str(e)) from None
     if preset_id is not None and not 1 <= preset_id <= 250:
-        raise HTTPException(422, "preset_id is 1-250")
+        raise HTTPException(422, "the preset id must be 1-250")
     async with make_client(request, dev) as c:
         try:
             lists = await lists_for(c, request, dev.id)

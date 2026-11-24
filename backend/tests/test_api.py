@@ -410,7 +410,7 @@ def test_playlists(client, dev_id, device):
     assert r["done"] is True
     status = {x.get("playlist"): x for x in r["report"] if "playlist" in x}
     assert status["Party"]["status"] == "ok"
-    assert status["Bad"]["status"] == "unavailable" and "no slot" in status["Bad"]["notes"][0]
+    assert status["Bad"]["status"] == "unavailable" and "no preset id" in status["Bad"]["notes"][0]
     assert status["Clash"]["status"] == "unavailable"
     assert device.presets["10"] == {"n": "Party", "playlist": {"ps": [1, 2], "dur": [300, 50], "transition": [7, 7],
                                                                "repeat": 0, "r": True, "end": 1}}

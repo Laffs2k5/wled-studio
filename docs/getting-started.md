@@ -37,10 +37,11 @@ read from WLED's effect metadata. Changes go to the strip at once.
 
 - **Import from device** turns the device's presets into looks, **by name**. A look keeps the
   effect's and palette's names, not their numbers, so it survives firmware changes.
-- **Save current** stores what the strip shows as a look, in a preset slot if you give one. The
-  mic follows the look: on for a sound-reactive effect, off for any other.
+- **Save current** stores what the strip shows as a look, with a **preset id** (1-250, WLED's
+  preset number) if you give one; without one the look stays in the library only. The mic follows
+  the look: on for a sound-reactive effect, off for any other.
 - **Show** plays a look on the strip without saving anything on the device.
-- **Check what would change**, then **Write**:
+- **Check what would change**, then **Write N presets to** the device:
   - the device's `presets.json` is backed up;
   - the write stops if someone changed the presets in the meantime (in WLED's own UI, say), unless
     you say to go ahead;

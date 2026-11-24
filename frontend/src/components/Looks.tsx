@@ -120,8 +120,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       }}>
         <input placeholder="Name" value={name} maxLength={32} required aria-label="Look name"
           onChange={(e) => setName(e.target.value)} />
-        <input placeholder="Slot" value={slot} inputMode="numeric" pattern="[0-9]*" aria-label="Preset slot"
-          className="slot" onChange={(e) => setSlot(e.target.value)} />
+        <input placeholder="Preset id (1-250)" value={slot} inputMode="numeric" pattern="[0-9]*" aria-label="Preset id"
+          className="preset-id" title="The WLED preset this look is written to; without one it stays in the library only" onChange={(e) => setSlot(e.target.value)} />
         <button disabled={busy || !name.trim()}>Save current</button>
         <label className="small" title="Save effects and colours only: showing the look then leaves the segments as they are">
           <input type="checkbox" checked={keepLayout} onChange={(e) => setKeepLayout(e.target.checked)} /> Without the layout
@@ -212,7 +212,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                     : <span className="badge" title="On this device because a playlist in its set plays it">via playlist</span>)
                   : <button className="small" disabled={busy} aria-label={`Add ${l.name} to this device`} title={`Add it to ${deviceName}'s set`}
                       onClick={() => changeSet(() => api.addToSet(deviceId, [l.name]), `Added “${l.name}” to ${deviceName}'s set`)}>＋</button>)}
-                <span className="muted small">{l.preset_id ? `slot ${l.preset_id}` : "no slot"}</span>
+                <span className="muted small">{l.preset_id ? `preset ${l.preset_id}` : "no preset id"}</span>
                 {l.segments.some((s) => s.wall) && (
                   <span className="muted small" title="Follows these walls of the room model">
                     {[...new Set(l.segments.map((s) => s.wall).filter(Boolean))].join(" · ")}
@@ -265,7 +265,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
         <div className="plan">
           {plan.drift && <p className="warn">The device's presets changed since the last write (another tool or WLED's own UI).</p>}
           <table>
-            <thead><tr><th>Look</th><th>Slot</th><th>Status</th><th>Notes</th></tr></thead>
+            <thead><tr><th>Look</th><th>Preset</th><th>Status</th><th>Notes</th></tr></thead>
             <tbody>
               {plan.report.map((r) => (
                 <tr key={r.look ?? `pl:${r.playlist}`} className={`status-${r.status}`}>
@@ -274,7 +274,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               ))}
             </tbody>
           </table>
-          <p className="small">Slots that would change: {plan.changed_ids.length ? plan.changed_ids.join(", ") : "none"}</p>
+          <p className="small">Presets that would change: {plan.changed_ids.length ? plan.changed_ids.join(", ") : "none"}</p>
           {plan.palettes && plan.palettes.length > 0 && (
             <p className="small">Palettes to upload: {plan.palettes.map((p) => `${p.palette} (id ${p.id})`).join(", ")}</p>
           )}
@@ -285,7 +285,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               onClick={() => run(() => api.push(deviceId, { dry_run: false, adopt_drift: adopt, accept_review: acceptReview }),
                 (r) => (r.done ? `Written and verified (backup ${r.backup})` : `Not written: ${r.reason}`))
                 .then((r) => r && setPlan(null))}>
-              Write {plan.changed_ids.length} slot(s)
+              Write {plan.changed_ids.length} preset{plan.changed_ids.length === 1 ? "" : "s"} to {deviceName}
             </button>
           </div>
         </div>

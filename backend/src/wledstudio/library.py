@@ -222,7 +222,7 @@ def resolve_playlist(pl: dict, looks: dict[str, dict]) -> Resolved:
         if look is None:
             return Resolved(None, "unavailable", [f"look {e['look']!r} isn't in the library"])
         if look.get("preset_id") is None:
-            return Resolved(None, "unavailable", [f"look {e['look']!r} has no slot"])
+            return Resolved(None, "unavailable", [f"look {e['look']!r} has no preset id"])
         ids.append(int(look["preset_id"]))
     if not ids:
         return Resolved(None, "unavailable", ["a playlist needs at least one look"])
@@ -230,7 +230,7 @@ def resolve_playlist(pl: dict, looks: dict[str, dict]) -> Resolved:
     if pl.get("end"):
         end_look = looks.get(pl["end"])
         if end_look is None or end_look.get("preset_id") is None:
-            notes.append(f"end look {pl['end']!r} has no slot; the playlist ends where it is")
+            notes.append(f"end look {pl['end']!r} has no preset id; the playlist ends where it is")
         else:
             end = int(end_look["preset_id"])
     body = {"ps": ids, "dur": [int(e.get("duration", 100)) for e in pl["entries"]],
@@ -473,7 +473,7 @@ def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
             continue
         entry = {"playlist": pl["name"], "preset_id": pid}
         if int(pid) in look_slots:
-            report.append({**entry, "status": "unavailable", "notes": ["slot already used by a look"], "written": False})
+            report.append({**entry, "status": "unavailable", "notes": ["preset id already used by a look"], "written": False})
             continue
         r = resolve_playlist(pl, by_name)
         existing = out.get(str(pid))

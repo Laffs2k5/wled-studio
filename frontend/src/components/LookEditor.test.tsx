@@ -26,7 +26,7 @@ test("edits a saved look and saves it, without the strip", async () => {
   const onClose = vi.fn();
   render(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={() => {}} onClose={onClose} />);
   expect(await screen.findByText(/Editing “Calm”/)).toBeInTheDocument();
-  expect(screen.getByText(/slot 6/)).toBeInTheDocument();
+  expect(screen.getByText(/preset 6/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Tail"), { target: { value: "200" } });             // Comet's control
   fireEvent.click(screen.getByRole("button", { name: /^Segment 1/ }));
   fireEvent.change(screen.getByLabelText("Effect"), { target: { value: "5" } });             // Pulse Meter
