@@ -18,7 +18,7 @@ The flash, after the plan passes and the user typed the device's name:
 5. checks against the baseline: the effect list is the image's, presets and config unchanged,
    free heap.
 
-The way back is WLED's /update?revert (the previous image is still in the other slot), offered
+Both need the flashing notice (notice.py) accepted, by its version. The way back is WLED's /update?revert (the previous image is still in the other slot), offered
 for every device. Flashes and reverts run in the background, one per device; the UI polls.
 """
 from __future__ import annotations
@@ -34,6 +34,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from .notice import require_accepted
 from .wled import WLEDError, WLEDLocked
 
 router = APIRouter()
@@ -47,11 +48,13 @@ class FlashIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     device: str = Field(min_length=1, max_length=64)
     confirm: str = Field(max_length=64)
+    notice: str | None = Field(default=None, max_length=32)   # the flashing notice's version, accepted
 
 
 class RevertIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirm: str = Field(max_length=64)
+    notice: str | None = Field(default=None, max_length=32)
 
 
 @dataclass
@@ -61,6 +64,7 @@ class Run:
     kind: str                     # "flash" or "revert"
     device: str
     job: str | None = None
+    notice: str | None = None     # the version of the flashing notice the user accepted
     state: str = "running"        # running, done, warnings, failed
     steps: list[dict] = field(default_factory=list)
     started: float = field(default_factory=time.time)
@@ -72,7 +76,7 @@ class Run:
         return s
 
     def public(self) -> dict:
-        return {"id": self.id, "kind": self.kind, "device": self.device, "job": self.job, "state": self.state,
+        return {"id": self.id, "kind": self.kind, "device": self.device, "job": self.job, "notice": self.notice, "state": self.state,
                 "steps": self.steps, "started": self.started, "finished": self.finished}
 
 
@@ -350,6 +354,7 @@ async def flash(jid: str, body: FlashIn, request: Request):
     `confirm` is the device's name, as the user typed it."""
     if any(c["level"] == "block" for c in check_allowed(request)):
         raise HTTPException(403, check_allowed(request)[0]["text"])
+    require_accepted(body.notice)
     g = await gather(request, jid, body.device)
     if body.confirm != g["dev"].name:
         raise HTTPException(400, "type the device's name to confirm")
@@ -359,7 +364,7 @@ async def flash(jid: str, body: FlashIn, request: Request):
     blocking = [c["text"] for c in checks if c["level"] == "block"]
     if blocking:
         raise HTTPException(409, blocking[0])
-    run = Run(id=uuid.uuid4().hex, kind="flash", device=g["dev"].id, job=jid)
+    run = Run(id=uuid.uuid4().hex, kind="flash", device=g["dev"].id, job=jid, notice=body.notice)
     return _start(request, run, _flash(request, run, g, image))
 
 
@@ -370,12 +375,13 @@ async def revert(device_id: str, body: RevertIn, request: Request):
 
     if any(c["level"] == "block" for c in check_allowed(request)):
         raise HTTPException(403, check_allowed(request)[0]["text"])
+    require_accepted(body.notice)
     dev = device_or_404(device_id, request)
     if body.confirm != dev.name:
         raise HTTPException(400, "type the device's name to confirm")
     if _busy(request, dev.id):
         raise HTTPException(409, "a flash or revert is already running for this device")
-    run = Run(id=uuid.uuid4().hex, kind="revert", device=dev.id)
+    run = Run(id=uuid.uuid4().hex, kind="revert", device=dev.id, notice=body.notice)
     return _start(request, run, _revert(request, run, dev))
 
 

@@ -11,6 +11,7 @@ from conftest import CSRF, private_resolver
 from wledstudio.app import create_app
 from wledstudio.config import Settings
 from wledstudio.fakewled.app import EFFECTS
+from wledstudio.notice import VERSION as NOTICE
 
 JID = "b" * 32
 IMAGE = b"\xe9" + b"\x01" * 4095                       # an ESP32 app image, as far as anyone checks
@@ -81,9 +82,9 @@ def test_flashing_is_off_unless_turned_on(make, device):
     c, dev, _ = make(flashing=False)
     plan = c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()
     assert not plan["can_flash"] and blocks(plan) == {"enabled"}
-    r = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF)
+    r = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF)
     assert r.status_code == 403
-    assert c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk"}, headers=CSRF).status_code == 403
+    assert c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk", "notice": NOTICE}, headers=CSRF).status_code == 403
     assert device.flashes == 0
 
 
@@ -100,8 +101,8 @@ def test_flash_backs_up_uploads_waits_and_checks(make, device, tmp_path):
     plan = c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()
     assert plan["can_flash"], plan["checks"]
     assert plan["image"]["size"] == len(IMAGE) and plan["running"]["ver"] == "16.0.1"
-    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "desk"}, headers=CSRF).status_code == 400
-    r = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF)
+    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "desk", "notice": NOTICE}, headers=CSRF).status_code == 400
+    r = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF)
     assert r.status_code == 202, r.text
     run = wait(c, r.json()["id"])
     assert run["state"] == "done", run
@@ -117,10 +118,10 @@ def test_flash_backs_up_uploads_waits_and_checks(make, device, tmp_path):
 
 def test_revert_boots_the_previous_image(make, device):
     c, dev, _ = make()
-    rid = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF).json()["id"]
+    rid = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"]
     assert wait(c, rid)["state"] == "done"
-    assert c.post(f"/api/devices/{dev}/revert", json={"confirm": "nope"}, headers=CSRF).status_code == 400
-    r = c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk"}, headers=CSRF)
+    assert c.post(f"/api/devices/{dev}/revert", json={"confirm": "nope", "notice": NOTICE}, headers=CSRF).status_code == 400
+    r = c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk", "notice": NOTICE}, headers=CSRF)
     run = wait(c, r.json()["id"])
     assert run["state"] == "done", run
     assert "Reverted" in run["steps"][1]["detail"]
@@ -129,7 +130,7 @@ def test_revert_boots_the_previous_image(make, device):
 
 def test_revert_without_a_previous_image_fails_cleanly(make, device):
     c, dev, _ = make()
-    run = wait(c, c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk"}, headers=CSRF).json()["id"])
+    run = wait(c, c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
     assert run["state"] == "failed" and "Rollback failed" in run["steps"][-1]["detail"]
 
 
@@ -139,7 +140,7 @@ def test_a_boot_preset_with_a_new_effect_blocks(make, device):
     device.boot_preset = 5
     plan = c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()
     assert blocks(plan) == {"boot-preset"}
-    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF).status_code == 409
+    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).status_code == 409
     device.presets["5"]["seg"][0]["fx"] = 0                                                  # Solid: fine
     assert c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()["can_flash"]
     # a playlist as the boot preset: its presets count
@@ -152,12 +153,12 @@ def test_ota_lock_and_a_failed_gate_block(make, device):
     c, dev, _ = make(passed=False)
     device.ota_lock = True
     assert blocks(c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()) == {"gate", "ota-lock"}
-    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF).status_code == 409
+    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).status_code == 409
 
 
 def test_an_image_that_isnt_the_gates_is_not_uploaded(make, device):
     c, dev, _ = make(sha="0" * 64)
-    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF).json()["id"])
+    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
     assert run["state"] == "failed" and run["steps"][-1]["name"] == "image"
     assert "isn't the gate's" in run["steps"][-1]["detail"]
     assert device.flashes == 0
@@ -167,7 +168,7 @@ def test_without_the_pin_the_device_refuses(make, device):
     c, dev, _ = make(pin=False)
     plan = c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()
     assert {x["id"]: x["level"] for x in plan["checks"]}["pin"] == "warn"
-    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF).json()["id"])
+    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
     assert run["state"] == "failed" and run["steps"][-1]["name"] == "upload"
     assert "refused" in run["steps"][-1]["detail"] and device.flashes == 0
 
@@ -176,7 +177,7 @@ def test_a_heap_drop_and_a_wrong_effect_list_are_warnings(make, device):
     c, dev, _ = make()
     device.flash_heap = 60000
     device.flash_effects = list(EFFECTS)            # the device kept its old effects: not the image's
-    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF).json()["id"])
+    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
     assert run["state"] == "warnings"
     assert "isn't the image's" in run["steps"][-1]["detail"] and "lower than expected" in run["steps"][-1]["detail"]
 
@@ -184,8 +185,42 @@ def test_a_heap_drop_and_a_wrong_effect_list_are_warnings(make, device):
 def test_one_at_a_time_per_device(make, device):
     c, dev, _ = make()
     device.reboot_seconds = 1.0
-    first = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF)
+    first = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF)
     assert first.status_code == 202
-    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk"}, headers=CSRF).status_code in (409, 502)
+    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).status_code in (409, 502)
     wait(c, first.json()["id"])
     assert c.get("/api/flashes/" + "0" * 32).status_code == 404
+
+
+def test_flash_and_revert_need_the_notice_accepted(make, device):
+    c, dev, _ = make()
+    for body in ({"device": dev, "confirm": "Desk"}, {"device": dev, "confirm": "Desk", "notice": "1999-01-01"}):
+        assert c.post(f"/api/firmware/jobs/{JID}/flash", json=body, headers=CSRF).status_code == 428
+    assert c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk"}, headers=CSRF).status_code == 428
+    assert device.flashes == 0
+    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE},
+                         headers=CSRF).json()["id"])
+    assert run["notice"] == NOTICE                     # the acceptance is in the run's record
+
+
+def test_the_notice_and_dont_show_again(make):
+    c, _, s = make()
+    n = c.get("/api/notices/flash").json()
+    assert n["version"] == NOTICE and not n["remembered"] and "No support" in n["text"]
+    assert c.post("/api/notices/flash", json={"version": "old", "remember": True}, headers=CSRF).status_code == 409
+    assert c.post("/api/notices/flash", json={"version": NOTICE}, headers=CSRF).json()["remembered"] is False
+    assert c.get("/api/notices/flash").json()["remembered"] is False          # accepted once, not remembered
+    assert c.post("/api/notices/flash", json={"version": NOTICE, "remember": True}, headers=CSRF).status_code == 200
+    n = c.get("/api/notices/flash").json()
+    assert n["remembered"] and n["accepted"]
+    assert (s.data_dir / "notices.json").exists()
+    assert c.delete("/api/notices/flash", headers=CSRF).json() == {"remembered": False}
+    assert c.get("/api/notices/flash").json()["remembered"] is False
+
+
+def test_the_repository_carries_the_same_notice():
+    from pathlib import Path
+    from wledstudio.notice import TEXT, TITLE
+    md = (Path(__file__).resolve().parents[2] / "DISCLAIMER.md").read_text(encoding="utf-8")
+    assert TITLE in md and f"Version {NOTICE}" in md
+    assert " ".join(TEXT.split()) in " ".join(md.split())

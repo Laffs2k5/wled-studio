@@ -17,6 +17,7 @@ from .live import router as live_router
 from .stream import router as stream_router
 from .firmware import router as firmware_router
 from .flash import router as flash_router
+from .notice import router as notice_router
 from .config import Settings
 from .devices import DeviceStore
 from .library import LibraryStore
@@ -54,6 +55,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.include_router(router)
     app.include_router(firmware_router)
     app.include_router(flash_router)
+    app.include_router(notice_router)
     app.include_router(effects_router)
     app.include_router(stream_router)
     app.include_router(live_router)

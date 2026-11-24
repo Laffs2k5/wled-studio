@@ -10,6 +10,12 @@ and [docs/status.md](docs/status.md) for what's done and next. New to WLED's own
 segments, layers, presets, playlists)? [docs/wled-model.md](docs/wled-model.md) explains the
 building blocks everything here sits on.
 
+> **No warranty, no liability, no support.** wled-studio can write firmware to your devices, and
+> a flash can fail and leave a device unable to start. You use it entirely at your own risk; the
+> authors accept no liability for failed flashes, bricked devices or any other damage or loss, and
+> offer no support of any kind. Read [DISCLAIMER.md](DISCLAIMER.md) before you flash; the app asks
+> you to accept it first.
+
 ![The look studio: effects with their own controls, the look library, the write plan](docs/screenshots/look-studio.png)
 
 ![The Effect studio: an effect usermod compiled to WebAssembly, running in the browser](docs/screenshots/effect-studio.png)
