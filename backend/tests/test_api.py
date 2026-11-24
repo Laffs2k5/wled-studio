@@ -352,6 +352,37 @@ def test_push_with_pin(client, dev_id, device):
     assert r["done"] is True and device.presets["1"]["n"] == "A"
 
 
+def test_two_looks_on_one_preset_id_block_the_write(client, dev_id, device):
+    device.presets = {"0": {}, "5": {"n": "Set in WLED"}}
+    client.post(f"/api/devices/{dev_id}/capture/Sparkle?preset_id=5", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/Extra?preset_id=5", headers=CSRF)
+    dry = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert dry["duplicates"] == [{"preset_id": 5, "looks": ["Sparkle", "Extra"], "playlists": []}]
+    r = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False, "adopt_drift": True}, headers=CSRF)
+    assert r.status_code == 409
+    assert r.json()["detail"] == (
+        "Not written: more than one look wants the same preset id, so which one ends up on the device would be "
+        "left to chance (preset 5: “Sparkle” and “Extra”). Give each its own preset id, then write.")
+    assert device.presets["5"] == {"n": "Set in WLED"} and not device.uploads   # nothing touched
+    assert client.get(f"/api/devices/{dev_id}/backups").json() == []
+
+
+def test_the_plan_says_what_the_device_holds_now(client, dev_id, device):
+    device.presets = {"0": {}, "1": {"n": "Old one", "seg": [{"fx": 0}]}, "2": {"seg": [{"fx": 0}]}}
+    client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/B?preset_id=2", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/C?preset_id=3", headers=CSRF)
+    rows = {x["look"]: x for x in client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()["report"]}
+    assert rows["A"]["on_device"] == "Old one" and rows["A"]["changed"] is True
+    assert rows["B"]["on_device"] == "Preset 2"     # stored without a name
+    assert rows["C"]["on_device"] is None           # empty
+    assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]
+    again = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert again["changed_ids"] == []
+    assert all(x["changed"] is False and x["written"] for x in again["report"])   # already the same
+    assert {x["look"]: x["on_device"] for x in again["report"]} == {"A": "A", "B": "B", "C": "C"}
+
+
 def test_looks_crud(client):
     look = {"name": "Calm", "preset_id": 5, "segments": [{"start": 0, "stop": 10, "effect": "Glow", "sx": 3}]}
     assert client.put("/api/looks/Calm", json=look, headers=CSRF).status_code == 200
@@ -406,15 +437,21 @@ def test_playlists(client, dev_id, device):
     assert client.put("/api/playlists/Bad", json=bad, headers=CSRF).status_code == 200
     clash = {**pl, "name": "Clash", "preset_id": 1}
     client.put("/api/playlists/Clash", json=clash, headers=CSRF)
+    dry = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert {x.get("playlist"): x for x in dry["report"]}["Clash"]["status"] == "unavailable"
+    assert dry["duplicates"] == [{"preset_id": 1, "looks": ["A"], "playlists": ["Clash"]}]
+    # a playlist and a look on one preset id: the write is refused until one moves
+    r = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF)
+    assert r.status_code == 409 and "preset 1: “A” and playlist “Clash”" in r.json()["detail"]
+    assert client.delete("/api/playlists/Clash", headers=CSRF).status_code == 204
     r = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()
     assert r["done"] is True
     status = {x.get("playlist"): x for x in r["report"] if "playlist" in x}
     assert status["Party"]["status"] == "ok"
     assert status["Bad"]["status"] == "unavailable" and "no preset id" in status["Bad"]["notes"][0]
-    assert status["Clash"]["status"] == "unavailable"
     assert device.presets["10"] == {"n": "Party", "playlist": {"ps": [1, 2], "dur": [300, 50], "transition": [7, 7],
                                                                "repeat": 0, "r": True, "end": 1}}
-    assert device.presets["1"]["n"] == "A"  # the clash didn't overwrite the look
+    assert device.presets["1"]["n"] == "A"
     # validation
     assert client.put("/api/playlists/X", json={"name": "X", "entries": []}, headers=CSRF).status_code == 422
     assert client.put("/api/playlists/X", json={"name": "Y", "entries": [{"look": "A"}]}, headers=CSRF).status_code == 422

@@ -17,7 +17,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .library import CUSTOM_PALETTE_BASE, DeviceLists, assign_palettes, plan_presets
+from .library import (CUSTOM_PALETTE_BASE, DeviceLists, assign_palettes, duplicate_ids, duplicates_message,
+                      plan_presets)
 from .wled import WLEDClient
 
 
@@ -68,6 +69,10 @@ class StateStore:
         return sorted(p.name for p in d.glob("*-presets.json")) if d.exists() else []
 
 
+class DuplicatePresetIds(Exception):
+    """Two looks (or a look and a playlist) want the same preset id: the write is refused."""
+
+
 @dataclass
 class PushResult:
     done: bool
@@ -77,6 +82,7 @@ class PushResult:
     backup: str | None = None
     reason: str | None = None
     palettes: list | None = None
+    duplicates: list | None = None   # preset ids wanted by more than one item: they block the write
 
 
 async def fetch_lists(client: WLEDClient, custom: dict[str, int] | None = None) -> DeviceLists:
@@ -92,9 +98,12 @@ def diff_ids(before: dict, after: dict) -> list[str]:
 
 
 async def push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, *,
-               dry_run: bool = False, adopt_drift: bool = False, accept_review: bool = False,
+               dry_run: bool = False, adopt_drift: bool = False, accept_review: bool | list[str] = False,
                playlists: list[dict] | None = None, palettes: list[dict] | None = None,
                room: dict | None = None) -> PushResult:
+    dups = duplicate_ids(looks, playlists or [])
+    if dups and not dry_run:   # refused before the device is touched
+        raise DuplicatePresetIds(duplicates_message(dups))
     manifest, uploads = assign_palettes(palettes or [], state.palette_manifest(device_id))
     custom = {n: CUSTOM_PALETTE_BASE - m["index"] for n, m in manifest.items()}
     lists = await fetch_lists(client, custom)
@@ -107,7 +116,7 @@ async def push(client: WLEDClient, device_id: str, looks: list[dict], state: Sta
                                    room=room)
     changed = diff_ids(current, planned)
     if dry_run:
-        return PushResult(False, drift, report, changed, reason="dry run", palettes=pal_report)
+        return PushResult(False, drift, report, changed, reason="dry run", palettes=pal_report, duplicates=dups)
     if drift and not adopt_drift:
         return PushResult(False, True, report, changed, palettes=pal_report,
                           reason="the device's presets changed since the last push; adopt or review first")

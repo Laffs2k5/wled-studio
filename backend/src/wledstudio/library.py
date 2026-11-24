@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -442,14 +443,50 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
     return Resolved(preset, worst(statuses), notes)
 
 
+def preset_name(preset: dict | None, pid: int) -> str | None:
+    """What the device shows for a preset id: its name, "Preset <id>" if it has none, or None when
+    nothing is stored there."""
+    if not preset:
+        return None
+    return preset.get("n") or f"Preset {pid}"
+
+
+def duplicate_ids(looks: list[dict], playlists: list[dict]) -> list[dict]:
+    """Preset ids that more than one look or playlist wants: only one of them could be on the
+    device, and which one would be left to chance. [{"preset_id", "looks", "playlists"}]"""
+    by_id: dict[int, dict] = {}
+    for kind, items in (("looks", looks), ("playlists", playlists)):
+        for item in items:
+            pid = item.get("preset_id")
+            if isinstance(pid, int):
+                by_id.setdefault(pid, {"preset_id": pid, "looks": [], "playlists": []})[kind].append(item["name"])
+    return [d for _, d in sorted(by_id.items()) if len(d["looks"]) + len(d["playlists"]) > 1]
+
+
+def duplicates_message(dups: list[dict]) -> str:
+    """The write's refusal, in plain words."""
+    parts = []
+    for d in dups:
+        names = [f"“{n}”" for n in d["looks"]] + [f"playlist “{n}”" for n in d["playlists"]]
+        parts.append(f"preset {d['preset_id']}: {', '.join(names[:-1])} and {names[-1]}")
+    return ("Not written: more than one look wants the same preset id, so which one ends up on the device "
+            f"would be left to chance ({'; '.join(parts)}). Give each its own preset id, then write.")
+
+
 def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
-                 accept_review: bool = False, playlists: list[dict] | None = None,
+                 accept_review: bool | Collection[str] = False, playlists: list[dict] | None = None,
                  room: dict | None = None) -> tuple[dict, list[dict]]:
     """Merge the library's looks (those with a preset_id) into the device's presets.
 
     Entries the library doesn't manage are kept as they are. Looks that resolve
-    to 'unavailable', or to 'review' without accept_review, are left out.
+    to 'unavailable', or to 'review' without accept_review (True, or the look's name
+    among those given), are left out. Each report item says what the device holds at
+    that id now (`on_device`: its name, or None when empty) and whether writing would
+    change it (`changed`).
     """
+    def reviewed(name: str) -> bool:
+        return accept_review is True or (not isinstance(accept_review, bool) and name in accept_review)
+
     out = json.loads(json.dumps(device_presets))  # deep copy
     report = []
     for look in looks:
@@ -459,30 +496,36 @@ def plan_presets(device_presets: dict, looks: list[dict], lists: DeviceLists,
         if not 1 <= int(pid) <= 250:
             report.append({"look": look["name"], "status": "unavailable", "notes": ["preset id out of range"]})
             continue
+        current = device_presets.get(str(pid))
         r = resolve_look(look, lists, look.get("imported_ids"), room)
-        written = r.preset is not None and (r.status != "review" or accept_review)
+        written = r.preset is not None and (r.status != "review" or reviewed(look["name"]))
         if written:
             out[str(pid)] = r.preset
         report.append({"look": look["name"], "preset_id": pid, "status": r.status, "notes": r.notes,
-                       "written": written})
+                       "written": written, "changed": written and r.preset != current,
+                       "on_device": preset_name(current, pid)})
     by_name = {lk["name"]: lk for lk in looks}
     look_slots = {int(lk["preset_id"]) for lk in looks if lk.get("preset_id") is not None}
     for pl in playlists or []:
         pid = pl.get("preset_id")
         if pid is None:
             continue
-        entry = {"playlist": pl["name"], "preset_id": pid}
+        current = device_presets.get(str(pid))
+        entry = {"playlist": pl["name"], "preset_id": pid, "on_device": preset_name(current, pid)}
         if int(pid) in look_slots:
-            report.append({**entry, "status": "unavailable", "notes": ["preset id already used by a look"], "written": False})
+            report.append({**entry, "status": "unavailable", "notes": ["preset id already used by a look"],
+                           "written": False, "changed": False})
             continue
         r = resolve_playlist(pl, by_name)
         existing = out.get(str(pid))
         if r.preset is not None and existing is not None and normalized_playlist(existing) == normalized_playlist(r.preset):
-            report.append({**entry, "status": r.status, "notes": r.notes + ["unchanged"], "written": False})
+            report.append({**entry, "status": r.status, "notes": r.notes + ["unchanged"], "written": False,
+                           "changed": False})
             continue
         if r.preset is not None:
             out[str(pid)] = r.preset
-        report.append({**entry, "status": r.status, "notes": r.notes, "written": r.preset is not None})
+        report.append({**entry, "status": r.status, "notes": r.notes, "written": r.preset is not None,
+                       "changed": r.preset is not None})
     return out, report
 
 

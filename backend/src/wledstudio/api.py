@@ -14,7 +14,7 @@ from .devices import Device, DeviceStore
 from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
                       import_presets, mic_for,
                       playlist_from_preset, resolve_look, segment_from_state, tag_areas)
-from .push import StateStore, fetch_lists, push
+from .push import DuplicatePresetIds, StateStore, fetch_lists, push
 from .session import SEG_RESTORE, Sessions, restore_payload
 from .wled import WLEDClient, WLEDError, WLEDLocked
 
@@ -196,7 +196,8 @@ class RoomIn(Strict):
 class PushIn(Strict):
     dry_run: bool = True
     adopt_drift: bool = False
-    accept_review: bool = False
+    # write looks whose effect changed ("review"): all of them, or the looks named
+    accept_review: bool | list[Annotated[str, Field(max_length=64)]] = Field(default=False, max_length=500)
 
 
 # --- dependencies ---------------------------------------------------------------
@@ -852,6 +853,8 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
             res = await push(c, dev.id, looks, request.app.state.statestore, dry_run=body.dry_run,
                              adopt_drift=body.adopt_drift, accept_review=body.accept_review, playlists=playlists,
                              palettes=palettes, room=room_for(request, dev.id))
+        except DuplicatePresetIds as e:
+            raise HTTPException(409, str(e)) from None
         except WLEDError as e:
             raise device_errors(e) from None
     return {**res.__dict__, "set_notes": set_notes}

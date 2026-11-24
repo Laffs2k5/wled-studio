@@ -2,7 +2,7 @@
 import pytest
 
 from wledstudio.library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
-                                classify, compare_meta, import_presets,
+                                classify, compare_meta, duplicate_ids, duplicates_message, import_presets,
                                 mic_for, plan_presets, resolve_look, worst)
 
 LISTS = DeviceLists(effects=["Solid", "Glow", "RSVD", "Comet", "Meter"],
@@ -92,6 +92,20 @@ def test_plan_keeps_unmanaged_and_skips_review():
     assert out2["1"] == {"n": "old"}
     out3, _ = plan_presets(device, [look], changed, accept_review=True)
     assert out3["1"]["n"] == "Comet look"
+    # accepted one by one: only the looks named
+    assert plan_presets(device, [look], changed, accept_review=["Comet look"])[0]["1"]["n"] == "Comet look"
+    assert plan_presets(device, [look], changed, accept_review=["Another"])[0]["1"] == {"n": "old"}
+
+
+def test_duplicate_preset_ids():
+    looks = [{"name": "A", "preset_id": 4}, {"name": "B", "preset_id": 4}, {"name": "C", "preset_id": 5},
+             {"name": "D"}]
+    pls = [{"name": "P", "preset_id": 5}, {"name": "Q", "preset_id": 6}]
+    dups = duplicate_ids(looks, pls)
+    assert dups == [{"preset_id": 4, "looks": ["A", "B"], "playlists": []},
+                    {"preset_id": 5, "looks": ["C"], "playlists": ["P"]}]
+    assert "preset 4: “A” and “B”; preset 5: “C” and playlist “P”" in duplicates_message(dups)
+    assert duplicate_ids(looks[2:], pls[1:]) == []
 
 
 def test_plan_ignores_looks_without_slot_and_bad_ids():

@@ -39,12 +39,16 @@ flowchart LR
 - **A look saved without the layout** (`layout=false` on capture) keeps no bounds and doesn't own
   the layout: shown, it changes only the segments it names, by position.
 - **Writing** replaces `presets.json` as a whole (`push.py`):
+  0. refuse (409) when two looks, or a look and a playlist, want the same preset id: which one
+     would end up on the device is left to chance. The dry run lists them as `duplicates`;
   1. back up the current file;
   2. check for drift since the last write;
   3. upload, with the PIN unlocked only for that and locked again in a finally path;
   4. read back and verify.
 
-  Entries the library doesn't manage are kept as they are.
+  Entries the library doesn't manage are kept as they are. The plan's rows say what the device
+  holds at each id now (`on_device`: its name, or none) and whether writing changes it
+  (`changed`); "review" looks are written when accepted, all at once or by name.
 - **The fake device** (`wledstudio.fakewled`) implements the API subset with made-up effects; it
   backs the tests and `docker compose --profile demo`.
 - **The virtual device** (`docker compose --profile virtual`) is wled-studio-builder's
