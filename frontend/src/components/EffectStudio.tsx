@@ -10,6 +10,8 @@ import { SOUND_SIMULATIONS } from "./SegmentLayout";
 import { EffectControls } from "./EffectControls";
 
 const LENGTH = 60;
+// a preview without WLED's own colour code has two stand-ins: the colour slot, and a colour wheel
+const STAND_IN_PALETTES = [{ id: 0, name: "Colours" }, { id: 1, name: "Rainbow" }];
 
 function initialSegment(e: Effect): Segment {
   const d = e.defaults;
@@ -192,8 +194,10 @@ export function EffectStudio({ notify, load = Preview.load }: {
     <section className="studio">
       <h2>Effect studio</h2>
       <p className="muted small">
-        Your own effects, compiled to WebAssembly and running in the browser. Colours and fades are approximate;
-        the logic is the effect's own code.
+        Your own effects, compiled to WebAssembly and running in the browser: the logic is the effect's own code.{" "}
+        {preview?.palettes()
+          ? "Colours, palettes and fades are WLED's own; the strip adds its gamma and white handling."
+          : "Colours and fades are approximate."}
       </p>
       {compileBox}
       <canvas ref={canvas} width={960} height={room ? 360 : 32} className={room ? "room" : "strip"} aria-label="Preview strip" />
@@ -218,7 +222,7 @@ export function EffectStudio({ notify, load = Preview.load }: {
         </select>
       </div>
       {effect && seg && (
-        <EffectControls effect={effect} segment={seg} palettes={[{ id: 0, name: "Colours" }, { id: 1, name: "Rainbow" }]} rgbw
+        <EffectControls effect={effect} segment={seg} palettes={preview?.palettes() ?? STAND_IN_PALETTES} rgbw
           onChange={(patch) => { preview?.set(patch); setSeg({ ...seg, ...patch }); }} />
       )}
       {effect && seg && effect.audio.length > 0 && preview?.hasSound() && (

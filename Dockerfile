@@ -1,14 +1,25 @@
 # syntax=docker/dockerfile:1
 # wled-studio: the web UI (built with Node) served by the Python backend.
 
-# The effect preview: example effects compiled to WebAssembly (platform-independent output).
+# The effect preview: example effects compiled to WebAssembly (platform-independent output), in
+# exact colours: WLED's own colour code from the WLED commit of a builder pins file.
 FROM --platform=$BUILDPLATFORM emscripten/emsdk:7.0.1@sha256:73aece2e0ab748487945ad117b79fc4d277e9f656e54fc800a9b1a0a6562715b AS preview
 ARG BUILDER_REPO=https://github.com/Laffs2k5/wled-studio-builder.git
-ARG BUILDER_COMMIT=8e6779e484faca564b688e2a7282e9867cb70a0d
+ARG BUILDER_COMMIT=346df96c0dc38fdb3376a86deb180d3e9bf97523
+ARG PREVIEW_PINS=quinled-16.0.1.json
 WORKDIR /src
 RUN git init -q builder && git -C builder fetch -q --depth 1 "$BUILDER_REPO" "$BUILDER_COMMIT" \
  && git -C builder checkout -q FETCH_HEAD
-RUN builder/preview/build.sh /out builder/examples/usermods/studio_example_fx
+# The compiled preview contains WLED's colour code (EUPL-1.2) and fastled_slim (MIT): NOTICE.txt
+# next to it says where the source is and carries fastled_slim's licence.
+RUN set -e; set -- $(python3 -c 'import json, sys; w = json.load(open(sys.argv[1]))["wled"]; print(w["repo"], w["commit"])' "builder/pins/$PREVIEW_PINS") \
+ && git init -q wled && git -C wled fetch -q --depth 1 "$1" "$2" && git -C wled checkout -q FETCH_HEAD \
+ && WLED_SRC=/src/wled builder/preview/build.sh /out builder/examples/usermods/studio_example_fx \
+ && { echo "The effect preview (preview.wasm) contains code from WLED, licensed under the EUPL-1.2:"; \
+      echo "colour and palette code, compiled from $1 at commit $2 (wled00/colors.cpp, FX_fcn.cpp,"; \
+      echo "palettes.cpp, colors.h), and fastled_slim (MIT, derived from FastLED), whose licence follows."; \
+      echo; cat /out/wled-colors/src/dependencies/fastled_slim/LICENSE.txt; } > /out/NOTICE.txt \
+ && rm -rf /out/wled-colors
 
 FROM --platform=$BUILDPLATFORM node:22.23.5-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS web
 WORKDIR /src

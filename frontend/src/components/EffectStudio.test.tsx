@@ -50,6 +50,16 @@ test("lists the build's own effects with their controls, and sends changes to th
   expect(screen.getByLabelText("Intensity")).toBeInTheDocument();
 });
 
+test("a preview with WLED's colour code offers WLED's palettes by name", async () => {
+  const base = fakeModule();
+  const names = JSON.stringify(["Default", "* Random Cycle", "* Color 1", "* Colors 1&2", "* Color Gradient", "* Colors Only", "Party"]);
+  const m = { ...base, _preview_palette_names: () => -1, UTF8ToString: (p: number) => (p === -1 ? names : base.UTF8ToString(p)) };
+  render(<EffectStudio notify={() => {}} load={async () => new Preview(m as never)} />);
+  const pal = await screen.findByLabelText("Palette");
+  expect([...pal.querySelectorAll("option")].map((o) => o.textContent)).toContain("Party");
+  expect(screen.getByText(/palettes and fades are WLED's own/)).toBeInTheDocument();
+});
+
 test("explains a build without a preview", async () => {
   render(<EffectStudio notify={() => {}} load={async () => { throw new Error("404"); }} />);
   expect(await screen.findByText(/has no effect preview/)).toBeInTheDocument();

@@ -69,4 +69,5 @@ its tests use a fake device with made-up effects.
 
 The web UI includes third-party packages under their own licences (all MIT: React, CodeMirror and
 their dependencies). The build writes their notices to `third-party-licenses.txt`, served at
-`/third-party-licenses.txt`.
+`/third-party-licenses.txt`. The image's bundled effect preview contains part of WLED's code (its colour and
+palette code, EUPL-1.2) and fastled_slim (MIT); `/preview/NOTICE.txt` says where their source is.

@@ -221,6 +221,9 @@ test("effect studio: the WebAssembly preview loads and runs under the CSP", asyn
   await expect(select).toBeVisible();
   await expect(select.locator("option", { hasText: "Studio Comet (id 254)" })).toHaveCount(1);
   await expect(page.getByLabel("Tail")).toBeVisible();
+  // exact colours: the image's preview runs WLED's own colour code, so all of WLED's palettes are offered
+  await expect(page.getByText(/palettes and fades are WLED's own/)).toBeVisible();
+  expect(await page.getByLabel("Palette").locator("option").count()).toBeGreaterThan(70);
   // the canvas is being drawn: some pixel in it isn't the background
   await expect.poll(async () => page.getByLabel("Preview strip").evaluate((c: HTMLCanvasElement) => {
     const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;

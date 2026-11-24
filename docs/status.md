@@ -83,8 +83,11 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    - WLED's live view reads zeros while the strip is off, even during a stream.
 2. **Flashing** a gate-passed image over the air, with a backup first and `/update?revert` as the
    way back; a spare board first.
-3. **Exact colours in the preview:** WLED's own colour and palette helpers from the checkout,
-   instead of the stand-ins.
+3. ~~Exact colours in the preview~~ (done 2026-11-24): previews compiled by the builder run
+   WLED's own colour and palette code (wled-studio-builder's `preview/wled_colors.py`, from a pins
+   file's WLED commit), and the Effect studio then offers all of WLED's palettes by name. The
+   image's bundled preview is built the same way. Not in the preview: gamma, auto-white and the
+   brightness limiter, which WLED applies on the way to the LEDs.
 4. **Bulk tools** for the library: folders, reorder, copying between devices. (Renaming, with
    playlists following, and where a look is used: done 2026-11-23.)
 5. ~~A real code editor~~ (done 2026-11-24; see Decided design).

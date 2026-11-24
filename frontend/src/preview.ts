@@ -15,6 +15,9 @@ interface PreviewModule {
   /** The preview's "mic": a volume 0-255, or < 0 for none (sound effects then simulate). Builds
    * before 2026-11-23 don't have it. */
   _preview_audio?(level: number): void;
+  /** WLED's palette names as a JSON array when the preview was built with WLED's own colour
+   * code ("exact colours"), "" otherwise. Builds before 2026-11-24 don't have it. */
+  _preview_palette_names?(): number;
   UTF8ToString(ptr: number): string;
   HEAPU32: Uint32Array;
 }
@@ -63,6 +66,19 @@ export class Preview {
 
   /** Whether this build can be fed sound (preview_audio). */
   hasSound() { return typeof this.m._preview_audio === "function"; }
+
+  /** WLED's palettes by id, if this preview runs WLED's own colour code; null if its colours are
+   * approximate (then palettes are stand-ins). */
+  palettes(): { id: number; name: string }[] | null {
+    const raw = this.m._preview_palette_names ? this.m.UTF8ToString(this.m._preview_palette_names()) : "";
+    if (!raw) return null;
+    try {
+      const names: unknown = JSON.parse(raw);
+      return Array.isArray(names) ? names.map((n, id) => ({ id, name: String(n) })) : null;
+    } catch {
+      return null;
+    }
+  }
 
   /** Feed sound to sound effects: a level 0-255, or null for WLED's simulated beat. */
   sound(level: number | null) { this.m._preview_audio?.(level === null ? -1 : level); }
