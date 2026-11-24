@@ -121,7 +121,14 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    links with 26 symbols of glue (the core being a virtual bus that keeps the pixels), and runs:
    the image's 220 effects, Twinklefox and the rest moving as on a device, 0.02 ms a frame for
    280 LEDs, 201 kB. Details and what's left: wled-studio-builder `spikes/virtual-wled/README.md`.
-   Not started as a feature (owner: "don't build just yet").
+   **Built (2026-11-24), phases 1 and 2 of 4:** wled-studio-builder `virtual/` builds the twin of
+   any firmware (its checkout, its own flags, its usermods), and the gate has a fifth check,
+   `virtual_twin`: the twin runs every effect, its effect list is the image's, and no effect
+   crashes that doesn't crash stock. A failure fails the gate, so the image can't be flashed. In
+   CI on wled-studio-effects' real gate: the build's 68 flags gave the engine's 13, and 165
+   effects ran, none crashing. The stock twin's 220 effects equal the real controller's. Left:
+   phase 3, a virtual device the app can use like any device (Looks & effects with WLED's real
+   effects, no hardware); phase 4, polish.
 
    **A virtual device is always one firmware** (owner, 2026-11-24): built from that firmware's
    exact sources and build settings, the ones the builder already uses to reproduce it.
