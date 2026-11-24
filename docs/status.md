@@ -91,7 +91,7 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
      effect list), the image downloaded and its sha256 checked against the gate's, the upload to
      WLED's `/update` (WLED's release check never skipped), the wait for the reboot, then checks
      against the backup (the effect list is the image's, presets and config unchanged, free heap);
-   - **the way back:** `/update?revert` for any device, also with the name typed.
+   - **the way back:** `/update?revert` for any device but a virtual one, also with the name typed.
 
    Left: the spare ESP32 first (the image, OTA, revert, a USB recovery drill), then the controller.
    Tested against the fake device, which models WLED 16's `/update` and `?revert`. The proxy

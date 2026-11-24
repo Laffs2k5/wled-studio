@@ -17,6 +17,9 @@ class Device:
     id: str
     name: str
     host: str  # host[:port], validated by netcheck
+    # a virtual WLED (WLED's code in a container: no LEDs, can't be flashed), as the device said
+    # the last time the app read its /json/info (arch "virtual")
+    virtual: bool = False
 
     @property
     def base_url(self) -> str:
@@ -60,6 +63,14 @@ class DeviceStore:
         devices[did] = dev
         self._save(devices)
         return dev
+
+    def mark_virtual(self, device_id: str, virtual: bool) -> None:
+        """Remember whether the device is virtual (written only when that changes)."""
+        devices = self._load()
+        dev = devices.get(device_id)
+        if dev is not None and dev.virtual != virtual:
+            dev.virtual = virtual
+            self._save(devices)
 
     def remove(self, device_id: str) -> bool:
         devices = self._load()

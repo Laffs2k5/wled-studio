@@ -19,7 +19,7 @@ The flash, after the plan passes and the user typed the device's name:
    free heap.
 
 Both need the flashing notice (notice.py) accepted, by its version. The way back is WLED's /update?revert (the previous image is still in the other slot), offered
-for every device. Flashes and reverts run in the background, one per device; the UI polls.
+for every device but a virtual one. Flashes and reverts run in the background, one per device; the UI polls.
 """
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def boot_effects(presets: dict, boot: int, depth: int = 0) -> set[int]:
 
 async def gather(request: Request, jid: str, device_id: str) -> dict[str, Any]:
     """Everything a plan or a flash needs from the builder and the device (reads only)."""
-    from .api import device_errors, device_or_404, make_client
+    from .api import device_errors, device_or_404, is_virtual, make_client
     from .firmware import _call, _job_id, effect_lists
     from .push import fetch_lists
 
@@ -149,6 +149,7 @@ async def gather(request: Request, jid: str, device_id: str) -> dict[str, Any]:
             today = await fetch_lists(c, request.app.state.statestore.custom_ids(dev.id))
         except WLEDError as e:
             raise device_errors(e) from None
+    request.app.state.devices.mark_virtual(dev.id, is_virtual(info))
     return {"job": job, "names": names, "metas": metas, "dev": dev, "info": info,
             "device_effects": device_effects, "cfg": cfg, "presets": presets, "today": today}
 
@@ -375,13 +376,23 @@ async def flash(jid: str, body: FlashIn, request: Request):
 
 @router.post("/api/devices/{device_id}/revert", status_code=202)
 async def revert(device_id: str, body: RevertIn, request: Request):
-    """Boot the device's previous image again (WLED's /update?revert)."""
-    from .api import device_or_404
+    """Boot the device's previous image again (WLED's /update?revert). Never for a virtual
+    device: it runs the firmware it was built from and has no other image."""
+    from .api import device_errors, device_or_404, is_virtual, make_client
 
     if any(c["level"] == "block" for c in check_allowed(request)):
         raise HTTPException(403, check_allowed(request)[0]["text"])
     require_accepted(body.notice)
     dev = device_or_404(device_id, request)
+    async with make_client(request, dev) as c:
+        try:
+            virtual = is_virtual(await c.info())
+        except WLEDError as e:
+            raise device_errors(e) from None
+    request.app.state.devices.mark_virtual(dev.id, virtual)
+    if virtual:
+        raise HTTPException(409, f"{dev.name} is a virtual device, a software copy of WLED for testing: "
+                                 "it has no other firmware to go back to, and can't be flashed or reverted.")
     if body.confirm != dev.name:
         raise HTTPException(400, "type the device's name to confirm")
     if _busy(request, dev.id):

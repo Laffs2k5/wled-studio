@@ -229,6 +229,11 @@ def room_for(request: Request, device_id: str) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def is_virtual(info: dict) -> bool:
+    """A virtual WLED says so in /json/info: arch "virtual" (wled-studio-builder's virtual device)."""
+    return info.get("arch") == "virtual"
+
+
 def device_errors(e: Exception) -> HTTPException:
     if isinstance(e, WLEDLocked):
         return HTTPException(423, str(e))
@@ -245,7 +250,8 @@ def health():
 @router.get("/devices")
 def list_devices(request: Request):
     ds = request.app.state.devices
-    return [{"id": d.id, "name": d.name, "host": d.host, "has_pin": ds.pin(d.id) is not None} for d in ds.list()]
+    return [{"id": d.id, "name": d.name, "host": d.host, "has_pin": ds.pin(d.id) is not None, "virtual": d.virtual}
+            for d in ds.list()]
 
 
 @router.post("/devices", status_code=201)
@@ -259,7 +265,7 @@ def add_device(body: DeviceIn, request: Request):
     dev = ds.add(body.name.strip(), host)
     if body.pin is not None:
         ds.set_pin(dev.id, body.pin.get_secret_value())
-    return {"id": dev.id, "name": dev.name, "host": dev.host, "has_pin": body.pin is not None}
+    return {"id": dev.id, "name": dev.name, "host": dev.host, "has_pin": body.pin is not None, "virtual": dev.virtual}
 
 
 @router.delete("/devices/{device_id}", status_code=204)
@@ -343,6 +349,7 @@ async def profile(device_id: str, request: Request):
             names, fxdata, pals = await c.effects(), await c.fxdata(), await c.palettes()
         except WLEDError as e:
             raise device_errors(e) from None
+    request.app.state.devices.mark_virtual(dev.id, is_virtual(info))
     fingerprint = hashlib.sha256(json.dumps([info.get("vid"), names, fxdata, pals]).encode()).hexdigest()
     leds = info.get("leds", {})
     return {

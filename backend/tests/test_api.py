@@ -14,7 +14,7 @@ def test_add_list_remove_device(client):
     body = r.json()
     assert body["has_pin"] is True and "pin" not in body
     listed = client.get("/api/devices").json()
-    assert listed == [{"id": "desk", "name": "Desk", "host": "wled.lan", "has_pin": True}]
+    assert listed == [{"id": "desk", "name": "Desk", "host": "wled.lan", "has_pin": True, "virtual": False}]
     assert "1234" not in json.dumps(listed)
     assert client.delete("/api/devices/desk", headers=CSRF).status_code == 204
     assert client.delete("/api/devices/desk", headers=CSRF).status_code == 404

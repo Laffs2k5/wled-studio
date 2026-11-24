@@ -167,6 +167,20 @@ def test_a_virtual_device_is_never_flashed(make, device):
     assert device.flashes == 0
 
 
+def test_a_virtual_device_is_never_reverted(make, device, tmp_path):
+    c, dev, s = make()
+    assert c.get("/api/devices").json()[0]["virtual"] is False
+    device.arch = "virtual"
+    r = c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk", "notice": NOTICE}, headers=CSRF)
+    assert r.status_code == 409
+    assert "virtual device" in r.json()["detail"] and "can't be flashed or reverted" in r.json()["detail"]
+    assert device.image == "stock" and not (s.data_dir / "flashes").exists()     # nothing started
+    assert c.get("/api/devices").json()[0]["virtual"] is True       # the app remembers what it saw
+    device.arch = "esp32"                                            # and notices a change
+    assert c.get(f"/api/devices/{dev}/profile").status_code == 200
+    assert c.get("/api/devices").json()[0]["virtual"] is False
+
+
 def test_an_image_that_isnt_the_gates_is_not_uploaded(make, device):
     c, dev, _ = make(sha="0" * 64)
     run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
