@@ -10,6 +10,15 @@ interface Props {
   onChange: (patch: Partial<Segment>) => void;
 }
 
+// WLED's names for the three colours when an effect gives none of its own (fxmeta's defaults)
+const DEFAULT_LABELS = ["Fx", "Bg", "Cs"];
+const PLAIN_LABELS = ["Colour 1 (effect)", "Colour 2 (background)", "Colour 3"];
+
+/** A colour's label: the effect's own, or a plain one for WLED's defaults. */
+export function colourLabel(label: string, i: number): string {
+  return label === DEFAULT_LABELS[i] ? PLAIN_LABELS[i] : label;
+}
+
 /** The controls an effect uses, labelled as the effect labels them (WLED's effect metadata). */
 export function EffectControls({ effect, segment, palettes, rgbw, onChange }: Props) {
   const sliders = effect.controls.filter((c) => c.kind === "slider");
@@ -47,7 +56,8 @@ export function EffectControls({ effect, segment, palettes, rgbw, onChange }: Pr
       )}
       {effect.colours.length > 0 && (
         <div className="colours">
-          {effect.colours.map((label, i) => {
+          {effect.colours.map((own, i) => {
+            const label = colourLabel(own, i);
             const col = segment.col?.[i] ?? [0, 0, 0, 0];
             return (
               <label key={i} className="colour">
@@ -55,7 +65,7 @@ export function EffectControls({ effect, segment, palettes, rgbw, onChange }: Pr
                 <input
                   type="color"
                   value={toHex(col)}
-                  aria-label={`Colour ${label}`}
+                  aria-label={label.startsWith("Colour") ? label : `Colour ${label}`}
                   onChange={(e) => {
                     const cols = [...(segment.col ?? [])];
                     cols[i] = fromHex(e.target.value, rgbw ? (col[3] ?? 0) : undefined);
@@ -63,20 +73,23 @@ export function EffectControls({ effect, segment, palettes, rgbw, onChange }: Pr
                   }}
                 />
                 {rgbw && (
-                  <input
-                    type="range"
-                    min={0}
-                    max={255}
-                    value={col[3] ?? 0}
-                    aria-label={`White ${label}`}
-                    title="White channel"
-                    onChange={(e) => {
-                      const cols = [...(segment.col ?? [])];
-                      const base = cols[i] ?? [0, 0, 0, 0];
-                      cols[i] = [base[0], base[1], base[2], Number(e.target.value)];
-                      onChange({ col: cols });
-                    }}
-                  />
+                  <span className="white" title="The strip's separate white LEDs (W of RGBW), 0-255">
+                    <span className="small">W</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={255}
+                      value={col[3] ?? 0}
+                      aria-label={`White of ${label}`}
+                      onChange={(e) => {
+                        const cols = [...(segment.col ?? [])];
+                        const base = cols[i] ?? [0, 0, 0, 0];
+                        cols[i] = [base[0], base[1], base[2], Number(e.target.value)];
+                        onChange({ col: cols });
+                      }}
+                    />
+                    <output className="small">{col[3] ?? 0}</output>
+                  </span>
                 )}
               </label>
             );

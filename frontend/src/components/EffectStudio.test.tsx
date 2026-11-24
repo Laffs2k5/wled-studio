@@ -44,7 +44,7 @@ test("lists the build's own effects with their controls, and sends changes to th
   m.sets.length = 0;
   fireEvent.change(screen.getByLabelText("Tail"), { target: { value: "50" } });
   expect(m.sets).toContainEqual([1, 50]);
-  fireEvent.input(screen.getByLabelText("Colour Fx"), { target: { value: "#00ff00" } });
+  fireEvent.input(screen.getByLabelText("Colour 1 (effect)"), { target: { value: "#00ff00" } });
   expect(m.sets).toContainEqual([9, 0x0000ff00]);
   fireEvent.change(select, { target: { value: "3" } });
   expect(screen.getByLabelText("Intensity")).toBeInTheDocument();

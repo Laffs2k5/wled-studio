@@ -56,6 +56,8 @@ label.slider input[type=range] { width: 100%; padding: 0; }
 .colours { display: flex; gap: 1rem; flex-wrap: wrap; }
 label.colour { display: flex; align-items: center; gap: .4rem; }
 label.colour input[type=color] { width: 3rem; height: 2rem; padding: 0; }
+label.colour .white { display: inline-flex; align-items: center; gap: .3rem; }
+label.colour .white input[type=range] { width: 6rem; padding: 0; }
 label.palette { display: flex; gap: .6rem; align-items: center; }
 .look-list { list-style: none; padding: 0; margin: .5rem 0; }
 .look-list li { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: center; padding: .25rem 0; border-bottom: 1px solid var(--line); }
