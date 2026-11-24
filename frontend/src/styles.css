@@ -2,8 +2,20 @@
 :root {
   --bg: #111317; --panel: #1a1d23; --line: #2a2e36; --text: #e6e8ec; --muted: #8b919c;
   --accent: #6ea8ff; --warn: #ffb347; --bad: #ff6b6b; --ok: #3ddc84;
+  --deep: #0b0d10; --hover: #22262e; --on-accent: #0b0d10;
+  --led-bg: #0b0d10;   /* behind the LED previews in both themes: LEDs read right against black */
+  --cm-focus: var(--accent);
   color-scheme: dark;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px;
+}
+/* the system's light mode: the same layout, light colours (the code editor follows on its own) */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --line: #d3d8e0; --text: #1b1e24; --muted: #5b6270;
+    --accent: #2f6fdb; --warn: #a85f00; --bad: #c62828; --ok: #18804a;
+    --deep: #eceff3; --hover: #e6e9ef; --on-accent: #ffffff;
+    color-scheme: light;
+  }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
@@ -14,7 +26,7 @@ button, input, select { font: inherit; color: inherit; background: var(--panel);
 button { cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .5; cursor: default; }
-button.primary { background: var(--accent); color: #0b0d10; border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 button.danger { color: var(--bad); }
 .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .4rem 0; }
 .grow { flex: 1; }
@@ -32,8 +44,8 @@ aside, main { background: var(--panel); border: 1px solid var(--line); border-ra
 .effect-list input[type=search] { width: 100%; }
 .effect-list ul { list-style: none; margin: .5rem 0; padding: 0; max-height: 65vh; overflow: auto; }
 .effect-list li { padding: .3rem .5rem; border-radius: 6px; cursor: pointer; }
-.effect-list li:hover { background: #22262e; }
-.effect-list li.selected { background: var(--accent); color: #0b0d10; }
+.effect-list li:hover { background: var(--hover); }
+.effect-list li.selected { background: var(--accent); color: var(--on-accent); }
 .controls { display: grid; gap: .6rem; }
 label.slider { display: grid; grid-template-columns: 8rem 1fr 3rem; align-items: center; gap: .6rem; }
 label.slider input[type=range] { width: 100%; padding: 0; }
@@ -67,13 +79,13 @@ label.num input { width: 5rem; }
 .state-passed td:last-child, .job .ok { color: var(--ok); }
 .state-failed td:last-child, .job .bad { color: var(--bad); }
 .job ul { list-style: none; padding: 0; }
-pre.log { background: #0b0d10; border: 1px solid var(--line); border-radius: 8px; padding: .75rem; max-height: 22rem; overflow: auto; font-size: .78rem; white-space: pre-wrap; }
-code { background: #0b0d10; padding: .1rem .3rem; border-radius: 4px; }
+pre.log { background: var(--deep); border: 1px solid var(--line); border-radius: 8px; padding: .75rem; max-height: 22rem; overflow: auto; font-size: .78rem; white-space: pre-wrap; }
+code { background: var(--deep); padding: .1rem .3rem; border-radius: 4px; }
 .studio { padding: 1rem 1.25rem; max-width: 64rem; }
-canvas.strip { width: 100%; height: 32px; background: #0b0d10; border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0; }
+canvas.strip { width: 100%; height: 32px; background: var(--led-bg); border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0; }
 .swatch { width: 4rem; height: 1rem; border-radius: 4px; border: 1px solid var(--line); }
 .gradient { height: 1.5rem; border-radius: 6px; border: 1px solid var(--line); margin: .5rem 0; }
 .code-editor { margin-top: 1.5rem; }
 .code { height: 32rem; margin-bottom: .75rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; resize: vertical; }
-canvas.room { width: 100%; max-height: 22rem; background: #0b0d10; border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0; }
+canvas.room { width: 100%; max-height: 22rem; background: var(--led-bg); border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0; }
 .room-editor { margin-top: 1rem; }

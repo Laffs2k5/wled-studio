@@ -110,6 +110,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
     our own (`indentGuides.ts`, about 80 lines).
   - **Dependencies:** CodeMirror is mostly one lead developer's work. In 2026 its repositories moved
     from GitHub to code.haverbeke.berlin (npm points there). Worth watching.
+- **The app follows the system's light or dark mode** (2026-11-24), the editor included. The LED
+  previews stay on black in both.
 
 - **Preset banks for a remote stay outside the app:** the home-automation system switches banks; the
   app builds the looks and writes them to the bank slots. A grid view of those slots may come later.
