@@ -16,7 +16,7 @@ function stub(routes: Record<string, () => Response>) {
 }
 const json = (b: unknown, status = 200) => () => new Response(JSON.stringify(b), { status });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 
 test("explains how to enable the builder", async () => {
   stub({ "GET /api/firmware/status": json({ enabled: false }) });
@@ -131,4 +131,49 @@ test("a virtual device gets one line instead of the flash step", async () => {
   expect(screen.getByRole("heading", { name: /Flash it to Desk/ })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /Before flashing: your looks on Desk with this image/ })).toBeInTheDocument();
   expect(screen.getByText(/The way back/)).toBeInTheDocument();
+});
+
+test("preselects the target that matches the header's device, and remembers a different choice", async () => {
+  const targets = [{ pins: "a-16.0.0.json", release: "a-16.0.0", target: "dig-next-2", verified: ["windows"] },
+    { pins: "a-16.0.1.json", release: "a-16.0.1", target: "board-one", verified: ["windows"] },
+    { pins: "a-16.0.1.json", release: "a-16.0.1", target: "dig-next-2", verified: ["windows"] }];
+  stub({
+    "GET /api/firmware/status": json({ enabled: true }),
+    "GET /api/firmware/targets": json(targets),
+    "GET /api/firmware/usermods": json(["my_fx"]),
+    "GET /api/firmware/jobs": json([]),
+    "GET /api/devices/desk/profile": json({ info: { release: "Dig-Next-2", product: "Dig-Next-2", ver: "16.0.1" } }),
+  });
+  const devices = [{ id: "desk", name: "Desk", host: "h", has_pin: false }];
+  const { unmount } = render(<Firmware notify={() => {}} devices={devices} device="desk" />);
+  const select = await screen.findByLabelText("Board and WLED release");
+  await waitFor(() => expect(select).toHaveValue("a-16.0.1.json|dig-next-2"));
+  expect(screen.getByText("Matches Desk (Dig-Next-2, WLED 16.0.1).")).toBeInTheDocument();
+  const labels = [...select.querySelectorAll("option")].map((o) => o.textContent);
+  expect(labels).toEqual(["dig-next-2 · a-16.0.0 (same board, other release)", "board-one · a-16.0.1 (different board)",
+    "dig-next-2 · a-16.0.1 (matches Desk)"]);
+  // another board: an amber line names the one that matches
+  fireEvent.change(select, { target: { value: "a-16.0.1.json|board-one" } });
+  expect(screen.getByText(/Not Desk's board: it runs Dig-Next-2, WLED 16.0.1. The one that matches is dig-next-2 · a-16.0.1/))
+    .toHaveClass("warn");
+  fireEvent.click(screen.getByLabelText("my_fx"));
+  unmount();
+  // the choice and the ticks are remembered
+  render(<Firmware notify={() => {}} devices={devices} device="desk" />);
+  await waitFor(() => expect(screen.getByLabelText("Board and WLED release")).toHaveValue("a-16.0.1.json|board-one"));
+  expect(await screen.findByLabelText("my_fx")).toBeChecked();
+  expect(screen.getByText("Your effect folders to include")).toBeInTheDocument();
+});
+
+test("a device whose board isn't among the targets: the first, with a line that says so", async () => {
+  stub({
+    "GET /api/firmware/status": json({ enabled: true }),
+    "GET /api/firmware/targets": json([{ pins: "a.json", release: "a-16.0.1", target: "board-one", verified: ["windows"] }]),
+    "GET /api/firmware/usermods": json([]),
+    "GET /api/firmware/jobs": json([]),
+    "GET /api/devices/desk/profile": json({ info: { release: "Fake", product: "FakeDevice", ver: "16.0.1" } }),
+  });
+  render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
+  expect(await screen.findByText(/Not Desk's board: it runs Fake, WLED 16.0.1. None of the builder's targets matches it./)).toBeInTheDocument();
+  expect(screen.getByLabelText("Board and WLED release")).toHaveValue("a.json|board-one");
 });

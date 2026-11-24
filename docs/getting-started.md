@@ -135,6 +135,12 @@ repository over SSH.
 2. it's rebuilt with your effects;
 3. only images whose sole difference is your code pass, and they must fit the firmware slot.
 
+Pick the **board and WLED release** and **your effect folders to include**, then **Build**. The
+target that matches the header's device is preselected and marked "matches"; an amber line says
+when the chosen one is another board or release than the device runs. The app tells them apart by
+what the device reports (`/json/info`: its release name or product, and its version). Your last
+choice per device and the ticked folders are remembered in the browser.
+
 Supported boards are those with a pins file in wled-studio-builder (today: QuinLED's 16.0.0 and
 16.0.1 releases). **Flashing from the app isn't built yet**, by design: a self-built image goes to
 a spare board first.

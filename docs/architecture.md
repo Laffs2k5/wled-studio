@@ -64,3 +64,7 @@ flowchart LR
 - **The firmware side** is [wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder):
   verified reproducible builds of vendor WLED images, with your own effects added. The app will run
   it as a separate service for build jobs (no Docker socket in the app container).
+- **A build target matches a device** (`frontend/src/targets.ts`) when the device's `release` or
+  `product` in `/json/info` (QuinLED's builds say `Dig-Next-2`) is the target's environment
+  (`dig-next-2`), ignoring case and punctuation, and the pins file's release (`quinled-16.0.1`)
+  ends in the device's `ver`. There is no other mapping; a vendor whose names differ needs one there.

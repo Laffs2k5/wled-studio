@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
 import { FlashPanel } from "./FlashPanel";
-import { firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
+import { api, firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
 import { gateLines } from "../gate";
 import type { Device } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { ChangeDevice } from "./ChangeDevice";
+import { remembered } from "../remember";
+import { boardName, matchingTarget, targetFit, targetKey, targetName, type Fit } from "../targets";
+
+/** The last target chosen, per device ("" without one), and the folders ticked: remembered here. */
+export const firmwareTarget = remembered<Record<string, string>>("wledstudio.firmware.target", {});
+export const firmwareFolders = remembered<string[]>("wledstudio.firmware.folders", []);
+
+const FIT_NOTE: Record<Fit, string> = { match: "matches", "other-release": "same board, other release", "other-board": "different board" };
 
 /** Build firmware with your own effects, through the gate (wled-studio-builder). */
 export function Firmware({ notify, devices = [], device = null }: {
@@ -18,8 +26,15 @@ export function Firmware({ notify, devices = [], device = null }: {
   const [targets, setTargets] = useState<FirmwareTarget[]>([]);
   const [usermods, setUsermods] = useState<string[]>([]);
   const [jobs, setJobs] = useState<FirmwareJob[]>([]);
-  const [target, setTarget] = useState("");
-  const [chosen, setChosen] = useState<string[]>([]);
+  const [target, setTargetState] = useState("");
+  const [chosen, setChosenState] = useState<string[]>(() => firmwareFolders.get());
+  const setChosen = (next: string[]) => { setChosenState(next); firmwareFolders.set(next); };
+  const setTarget = (key: string) => {
+    setTargetState(key);
+    firmwareTarget.set({ ...firmwareTarget.get(), [device ?? ""]: key });
+  };
+  // what the header's device runs (/json/info): undefined while reading, null if it can't be read
+  const [info, setInfo] = useState<Record<string, string | number | null> | null | undefined>(undefined);
   const [open, setOpen] = useState<FirmwareJob | null>(null);
   const [log, setLog] = useState("");
   const [preflight, setPreflight] = useState<Preflight | null>(null);
@@ -31,11 +46,28 @@ export function Firmware({ notify, devices = [], device = null }: {
     firmware.status().then((s) => {
       setEnabled(s.enabled);
       if (!s.enabled) return;
-      firmware.targets().then((t) => { setTargets(t); if (t[0]) setTarget(`${t[0].pins}|${t[0].target}`); });
-      firmware.usermods().then(setUsermods);
+      firmware.targets().then(setTargets);
+      firmware.usermods().then((u) => { setUsermods(u); setChosenState((c) => c.filter((x) => u.includes(x))); });
       reloadJobs();
     }).catch((e) => { setEnabled(false); notify(e.message, true); });
   }, [notify, reloadJobs]);
+
+  useEffect(() => {
+    setInfo(undefined);
+    if (!device) { setInfo(null); return; }
+    let stop = false;
+    api.profile(device).then((p) => { if (!stop) setInfo(p.info); }).catch(() => { if (!stop) setInfo(null); });
+    return () => { stop = true; };
+  }, [device]);
+
+  // the target: the one last chosen for this device, else the one that matches it, else the first
+  useEffect(() => {
+    if (!targets.length || info === undefined) return;
+    const keys = targets.map(targetKey);
+    const last = firmwareTarget.get()[device ?? ""];
+    const match = matchingTarget(targets, info);
+    setTargetState(last && keys.includes(last) ? last : match ? targetKey(match) : keys[0]);
+  }, [targets, info, device]);
 
   // follow the open job while it runs
   useEffect(() => {
@@ -72,6 +104,9 @@ export function Firmware({ notify, devices = [], device = null }: {
   const [pins, tgt] = target.split("|");
   const dev = devices.find((d) => d.id === device);
   const current = targets.find((t) => t.pins === pins && t.target === tgt);
+  const fitOf = (t: typeof targets[number]) => (dev && !dev.virtual ? targetFit(t, info) : null);
+  const fit = current ? fitOf(current) : null;
+  const match = dev && !dev.virtual ? matchingTarget(targets, info) : undefined;
   return (
     <section className="firmware">
       <h2>Build firmware with your effects</h2>
@@ -79,25 +114,52 @@ export function Firmware({ notify, devices = [], device = null }: {
         Each build runs the gate: the vendor's stock image is rebuilt and checked first, then rebuilt with your
         usermods; only images whose sole change is your code pass.
       </p>
-      <form className="row" onSubmit={(e) => {
+      <form className="build-form" onSubmit={(e) => {
         e.preventDefault();
         firmware.submit(pins, tgt, chosen).then((j) => { setOpen(j); reloadJobs(); notify("Build queued"); })
           .catch((er) => notify(er.message, true));
       }}>
-        <select value={target} aria-label="Target" onChange={(e) => setTarget(e.target.value)}>
-          {targets.map((t) => (
-            <option key={`${t.pins}|${t.target}`} value={`${t.pins}|${t.target}`}>
-              {t.release} · {t.target}{t.verified.length ? "" : " (not verified yet)"}
-            </option>
-          ))}
-        </select>
-        {usermods.map((u) => (
-          <label key={u} className="small">
-            <input type="checkbox" checked={chosen.includes(u)}
-              onChange={(e) => setChosen(e.target.checked ? [...chosen, u] : chosen.filter((x) => x !== u))} /> {u}
-          </label>
+        <label className="field">
+          Board and WLED release
+          <select value={target} onChange={(e) => setTarget(e.target.value)}>
+            {targets.map((t) => {
+              const f = fitOf(t);
+              return (
+                <option key={targetKey(t)} value={targetKey(t)}>
+                  {targetName(t)}{f ? ` (${FIT_NOTE[f]}${f === "match" ? ` ${dev!.name}` : ""})` : ""}
+                  {t.verified.length ? "" : " (not verified yet)"}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        {dev && current && (dev.virtual ? (
+          <p className="muted small">{dev.name} is a virtual device and can't be flashed: pick the board you'll flash.</p>
+        ) : info === undefined ? null : fit === "match" ? (
+          <p className="ok small">Matches {dev.name} ({boardName(info)}).</p>
+        ) : fit === null ? (
+          <p className="muted small">{dev.name} doesn't say which board it is, so nothing is preselected.</p>
+        ) : (
+          <p className="warn small">
+            Not {dev.name}'s {fit === "other-release" ? "release" : "board"}: it runs {boardName(info)}.{" "}
+            {match ? <>The one that matches is {targetName(match)}.</> : "None of the builder's targets matches it."}{" "}
+            An image built for another board or release doesn't belong on it.
+          </p>
         ))}
-        <button className="primary" disabled={!chosen.length || !current}>Build</button>
+        <fieldset className="choice">
+          <legend>Your effect folders to include</legend>
+          <div className="row">
+            {usermods.map((u) => (
+              <label key={u} className="small">
+                <input type="checkbox" checked={chosen.includes(u)}
+                  onChange={(e) => setChosen(e.target.checked ? [...chosen, u] : chosen.filter((x) => x !== u))} /> {u}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div className="row">
+          <button className="primary" disabled={!chosen.length || !current}>Build</button>
+        </div>
       </form>
       {current && !current.verified.length && <p className="warn small">This target has no verified result yet, so its gate will fail.</p>}
       <table className="jobs">
