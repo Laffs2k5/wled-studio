@@ -63,7 +63,7 @@ export function App() {
         </nav>
         {devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify} />}
       </header>
-      {view === "slots" ? <SlotGrid notify={notify} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} /> : view === "studio" ? <EffectStudio notify={notify} device={current} /> :
+      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={devices?.find((d) => d.id === current)?.name} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} /> : view === "studio" ? <EffectStudio notify={notify} device={current} /> :
         current ? <DevicePanel key={current} deviceId={current} notify={notify} onVirtual={(v) => {
           // the list says what the device was when last read; a different answer now: list again
           if (Boolean(devices?.find((d) => d.id === current)?.virtual) !== v) reload();

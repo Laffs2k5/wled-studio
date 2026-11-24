@@ -15,6 +15,7 @@ import { SessionBar } from "./SessionBar";
 import { Looks } from "./Looks";
 import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
+import { WriteBar } from "./WriteBar";
 
 interface Props {
   deviceId: string;
@@ -35,6 +36,8 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
   const [segId, setSegId] = useState(0);
   const [room, setRoom] = useState<Room | null>(null);
+  // bumped whenever the library is read again after a change: the write bar checks the device again
+  const [version, setVersion] = useState(0);
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -42,7 +45,7 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
   const reloadLooks = useCallback(() => Promise.all([
     api.looks(), api.playlists(), api.palettes(),
     api.check(deviceId).catch(() => [] as CheckItem[]), // the device may be unreachable; the lists still load
-  ]).then(([l, p, c, k]) => { setLooks(l); setPlaylists(p); setPalettes(c); setChecks(k); })
+  ]).then(([l, p, c, k]) => { setLooks(l); setPlaylists(p); setPalettes(c); setChecks(k); setVersion((v) => v + 1); })
     .catch((e) => notify(e.message, true)), [deviceId, notify]);
   const closeEditor = useCallback((saved: boolean) => {
     setEditing(null);
@@ -162,7 +165,7 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
   const ids = state.seg.map((s) => s.id);
   const place = ids.indexOf(segment.id);
 
-  return (
+  return (<>
     <div className="device-panel">
       <aside>
         {editing ? <p className="muted small">Editing a saved look: pick its effects in the editor.</p> : (
@@ -255,5 +258,6 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
         <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
       </aside>
     </div>
-  );
+    <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} />
+  </>);
 }

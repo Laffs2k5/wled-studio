@@ -127,6 +127,8 @@ export interface PushResult {
   backup: string | null;
   reason: string | null;
   duplicates?: DuplicateId[] | null;
+  /** When the app last wrote this device's presets (ISO 8601), if it has. */
+  last_write?: string | null;
 }
 
 export interface PlaylistEntry { look: string; duration: number; transition: number }

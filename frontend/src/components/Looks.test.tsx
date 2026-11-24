@@ -69,14 +69,6 @@ test("a saved look clears the preset id; a failed save keeps the name and id", a
   expect(screen.getByLabelText("Look name")).toHaveValue("");
 });
 
-test("Check what would change opens the write plan", async () => {
-  stubFetch({ "POST /api/devices/desk/push": { done: false, drift: false, changed_ids: ["3"], backup: null, reason: "dry run",
-    report: [{ look: "Evening", preset_id: 3, status: "ok", notes: [], written: true, changed: true, on_device: null }] } });
-  render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
-  fireEvent.click(screen.getByText("Check what would change"));
-  expect(await screen.findByRole("button", { name: "Write 1 preset to desk" })).toBeEnabled();
-});
-
 test("show a look live; delete asks first", async () => {
   const calls = stubFetch({ "POST /api/devices/desk/apply/": { status: "ok", notes: [] }, "DELETE /api/looks/": null });
   const onApplied = vi.fn();

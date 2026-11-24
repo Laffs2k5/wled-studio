@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
 import { api, slots as slotsApi, type SlotCell, type SlotGridShape, type Slots } from "../api";
+import { WriteBar } from "./WriteBar";
 
 const DEFAULT: SlotGridShape = { rows: 3, cols: 4, first: 101, row_step: 10, col_step: 1, name: "R{row}·{col} {name}" };
 
@@ -8,13 +9,19 @@ const idOf = (g: SlotGridShape, row: number, col: number) => g.first + (row - 1)
 
 /** Preset ids as a grid (a remote's banks, say): which look sits in each slot, and filling slots
  * from the library. Writing to a device is the usual write. */
-export function SlotGrid({ notify }: { notify: (msg: string, error?: boolean) => void }) {
+export function SlotGrid({ notify, deviceId = null, deviceName }: {
+  notify: (msg: string, error?: boolean) => void;
+  /** The header's device: the write bar compares its presets with the library. */
+  deviceId?: string | null;
+  deviceName?: string;
+}) {
   const [data, setData] = useState<Slots | null>(null);
   const [looks, setLooks] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<string[]>([]);
   const [editing, setEditing] = useState<SlotGridShape | null>(null);
   const [picked, setPicked] = useState<SlotCell | null>(null);
   const [source, setSource] = useState("");
+  const [version, setVersion] = useState(0);   // bumped after every change: the write bar checks again
 
   const load = useCallback(() => Promise.all([slotsApi.get(), api.looks(), api.playlists()]).then(([s, l, p]) => {
     setData(s);
@@ -26,6 +33,7 @@ export function SlotGrid({ notify }: { notify: (msg: string, error?: boolean) =>
 
   const done = (s: Slots, msg: string) => {
     setData(s);
+    setVersion((v) => v + 1);
     setPicked((p) => (p ? s.cells.find((c) => c.preset_id === p.preset_id) ?? null : null));
     notify(msg + (s.freed?.length ? ` (${s.freed.join(", ")} left the slot, kept in the library)` : ""));
     api.looks().then((l) => setLooks(l.map((x) => x.name).sort())).catch(() => {});
@@ -34,6 +42,7 @@ export function SlotGrid({ notify }: { notify: (msg: string, error?: boolean) =>
   const fail = (e: unknown) => notify((e as Error).message, true);
 
   if (!data) return null;
+  const bar = deviceId && <WriteBar key={deviceId} deviceId={deviceId} deviceName={deviceName ?? deviceId} notify={notify} version={version} />;
   if (editing) {
     const g = editing;
     const set = (k: keyof SlotGridShape) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -72,12 +81,12 @@ export function SlotGrid({ notify }: { notify: (msg: string, error?: boolean) =>
   const at = (r: number, c: number): SlotCell => data.cells.find((x) => x.row === r && x.col === c)
     ?? { row: r, col: c, preset_id: idOf(g, r, c), kind: null, name: null, base: null, notes: [] };
   const rows = Array.from({ length: g.rows }, (_, i) => i + 1), cols = Array.from({ length: g.cols }, (_, i) => i + 1);
-  return (
+  return (<>
     <section className="slots">
       <h2>Slot grid</h2>
       <p className="muted small">
         Presets {g.first}–{idOf(g, g.rows, g.cols)}. Pick a slot, then a look or playlist to copy into it; it takes the
-        slot's preset id and name. Write to the device as usual from Looks &amp; effects.
+        slot's preset id and name. The bar at the bottom says when the device is out of date, and writes to it.
       </p>
       <table className="slot-grid" aria-label="Slot grid">
         <thead><tr><th />{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
@@ -129,5 +138,6 @@ export function SlotGrid({ notify }: { notify: (msg: string, error?: boolean) =>
         <span className="muted small">Removing the grid changes no look; it only hides this view's shape.</span>
       </div>
     </section>
-  );
+    {bar}
+  </>);
 }

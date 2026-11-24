@@ -23,6 +23,10 @@ function stub(initial: object) {
     if (key === "PUT /api/slots/grid") { state = { grid: JSON.parse(String(init!.body)), cells: cells({}) }; return reply(state); }
     if (key === "PUT /api/slots/41") return reply({ grid: GRID, cells: cells({ 40: "G1-1 Calm", 41: "G1-2 Fire" }), filled: "G1-2 Fire", freed: [] });
     if (key === "DELETE /api/slots/40") return reply({ grid: GRID, cells: cells({}), freed: ["G1-1 Calm"] });
+    if (key === "POST /api/devices/desk/push") {
+      const n = calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).length;
+      return reply({ done: false, drift: false, changed_ids: n > 1 ? ["41"] : [], backup: null, reason: "dry run", report: [] });
+    }
     return new Response(JSON.stringify({ detail: "no" }), { status: 404 });
   }));
   return calls;
@@ -52,4 +56,16 @@ test("shows what sits where, and fills and empties slots", async () => {
   fireEvent.click(screen.getByLabelText("Slot 1·1, preset 40: G1-1 Calm"));
   fireEvent.click(screen.getByText("Empty the slot"));
   await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringContaining("G1-1 Calm left the slot")));
+});
+
+test("the write bar: the header's device checked on open and again after a slot is filled", async () => {
+  const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) });
+  render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" />);
+  expect(await screen.findByText("Desk is up to date", undefined, { timeout: 2000 })).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("Slot 1·2, preset 41: empty"));
+  fireEvent.change(screen.getByLabelText("Look or playlist to put here"), { target: { value: "l:Fire" } });
+  fireEvent.click(screen.getByText("Put here"));
+  expect(await screen.findByText("Desk: 1 preset differs from the library", undefined, { timeout: 2000 })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Review and write" })).toBeInTheDocument();
+  expect(calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).every((c) => c.includes('"dry_run":true'))).toBe(true);
 });

@@ -372,13 +372,16 @@ def test_the_plan_says_what_the_device_holds_now(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
     client.post(f"/api/devices/{dev_id}/capture/B?preset_id=2", headers=CSRF)
     client.post(f"/api/devices/{dev_id}/capture/C?preset_id=3", headers=CSRF)
-    rows = {x["look"]: x for x in client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()["report"]}
+    dry = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert dry["last_write"] is None   # never written by the app
+    rows = {x["look"]: x for x in dry["report"]}
     assert rows["A"]["on_device"] == "Old one" and rows["A"]["changed"] is True
     assert rows["B"]["on_device"] == "Preset 2"     # stored without a name
     assert rows["C"]["on_device"] is None           # empty
     assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]
     again = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
     assert again["changed_ids"] == []
+    assert again["last_write"] and again["last_write"].endswith("+00:00")   # when it was written
     assert all(x["changed"] is False and x["written"] for x in again["report"])   # already the same
     assert {x["look"]: x["on_device"] for x in again["report"]} == {"A": "A", "B": "B", "C": "C"}
 

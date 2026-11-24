@@ -27,7 +27,8 @@ docker compose up -d                    # http://localhost:8080
 on your network; public addresses are refused unless you allow them.
 
 The **Device** select in the header picks the device you work on, in every view: Looks & effects,
-the Effect studio's preview and room map, and the device Firmware checks and flashes. The browser remembers it across reloads. Headings that name the device have a
+the Slot grid's write bar, the Effect studio's preview and room map, and the device Firmware
+checks and flashes. The browser remembers it across reloads. Headings that name the device have a
 **Change device** link back to it.
 
 If the device has a **settings PIN** (WLED → Security), set it with the **PIN** button. It's needed
@@ -45,10 +46,14 @@ read from WLED's effect metadata. Changes go to the strip at once.
   preset number) if you give one; without one the look stays in the library only. The mic follows
   the look: on for a sound-reactive effect, off for any other.
 - **Show** plays a look on the strip without saving anything on the device.
-- **Check what would change** shows the write plan, grouped by what will happen: **Will be
-  written** (with what the device holds at that preset id now), **Already the same**, **Skipped:
-  not on this device**, **Needs your decision: effect changed** (tick the ones to write anyway),
-  and **Two looks want the same preset id**, which blocks the write until each has its own.
+- **The write bar** at the bottom of Looks & effects and the Slot grid compares the header's device
+  with the library: "Desk: 3 presets differ from the library", or "Desk is up to date (written
+  22:30)". It checks (a dry run that writes nothing) when the view opens, shortly after each change
+  to the library, and on **Check again**; it never polls. **Review and write** opens the write
+  plan, grouped by what will happen: **Will be written** (with what the device holds at that
+  preset id now), **Already the same**, **Skipped: not on this device**, **Needs your decision:
+  effect changed** (tick the ones to write anyway), and **Two looks want the same preset id**,
+  which blocks the write until each has its own.
   Then **Write N presets to** the device:
   - the device's `presets.json` is backed up;
   - the write stops if someone changed the presets in the meantime (in WLED's own UI, say), unless

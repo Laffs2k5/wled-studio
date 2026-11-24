@@ -80,7 +80,16 @@ label.num input { width: 5rem; }
 .plan-group.blocking h3 { color: var(--warn); }
 .plan-group ul { margin: .2rem 0; padding-left: 1.2rem; }
 .plan-summary { margin: .6rem 0 .2rem; }
-.toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: .6rem 1rem; max-width: 30rem; }
+/* the write bar: sticky at the bottom of Looks & effects and the Slot grid; the plan opens above it */
+.write-dock { position: sticky; bottom: 0; z-index: 5; background: var(--panel); border-top: 2px solid var(--line); padding: .3rem 1.25rem; }
+.write-dock.differ { border-top-color: var(--accent); }
+.write-dock.blocked, .write-dock.error { border-top-color: var(--warn); }
+.write-dock.same { border-top-color: var(--ok); }
+.write-dock .write-bar { margin: .2rem 0; }
+.write-dock .plan { max-height: 55vh; overflow: auto; padding: .25rem 0 .5rem; border-bottom: 1px solid var(--line); }
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+.app > .write-dock { margin-top: auto; }
+.toast { position: fixed; bottom: 4.5rem; z-index: 10; right: 1rem; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: .6rem 1rem; max-width: 30rem; }
 .toast.error { border-color: var(--bad); }
 .token-prompt { max-width: 24rem; margin: 3rem auto; display: grid; gap: .6rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; }
 .firmware { padding: 1rem 1.25rem; max-width: 60rem; }

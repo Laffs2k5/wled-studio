@@ -48,7 +48,9 @@ flowchart LR
 
   Entries the library doesn't manage are kept as they are. The plan's rows say what the device
   holds at each id now (`on_device`: its name, or none) and whether writing changes it
-  (`changed`); "review" looks are written when accepted, all at once or by name.
+  (`changed`); "review" looks are written when accepted, all at once or by name. The UI's write
+  bar runs the dry run when a view opens and, debounced, after library changes (never on a timer),
+  and shows when the app last wrote the device (`last_write`, kept with the hash in `state/`).
 - **The fake device** (`wledstudio.fakewled`) implements the API subset with made-up effects; it
   backs the tests and `docker compose --profile demo`.
 - **The virtual device** (`docker compose --profile virtual`) is wled-studio-builder's

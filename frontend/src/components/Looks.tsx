@@ -3,9 +3,8 @@ import { deviceLabel } from "../devices";
 import { useCallback, useEffect, useState } from "react";
 import { api, type DeviceSet } from "../api";
 import { folders, groupByFolder, moveWithin, sortWithin } from "../organise";
-import type { CheckItem, Device, Look, Playlist, PushResult } from "../types";
+import type { CheckItem, Device, Look, Playlist } from "../types";
 import { ACCEPTABLE, explain, StatusBadge } from "./StatusBadge";
-import { WritePlan } from "./WritePlan";
 
 interface Props {
   deviceId: string;
@@ -30,7 +29,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const showable = (name: string) => status.get(name)?.status !== "unavailable";
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
-  const [plan, setPlan] = useState<PushResult | null>(null);
   const [keepLayout, setKeepLayout] = useState(false);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -68,7 +66,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   }
   function changeSet(f: () => Promise<DeviceSet>, ok: string) {
     setBusy(true);
-    f().then((s) => { setSet(s); notify(ok); }).catch((e) => notify((e as Error).message, true)).finally(() => setBusy(false));
+    // what goes on the device changed: the lists (and the write bar) are read again
+    f().then((s) => { setSet(s); notify(ok); onChanged(); }).catch((e) => notify((e as Error).message, true)).finally(() => setBusy(false));
   }
   function copySelected() {
     const target = others.find((d) => d.id === copyTo);
@@ -262,14 +261,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       })}
       {looks.length === 0 && <p className="muted">No looks yet. Import the device's presets, or save what it shows.</p>}
 
-      <h2>Write to device</h2>
-      <div className="row">
-        <button disabled={busy} onClick={() => run(() => api.push(deviceId, { dry_run: true })).then((p) => p && setPlan(p))}>
-          Check what would change
-        </button>
-      </div>
-      {plan && <WritePlan deviceId={deviceId} deviceName={deviceName} plan={plan} notify={notify}
-        onWritten={(r) => { if (r.done) setPlan(null); }} />}
     </section>
   );
 }

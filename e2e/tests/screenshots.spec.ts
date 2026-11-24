@@ -24,7 +24,7 @@ test("screenshots", async ({ page }) => {
   await page.getByLabel("Look name").fill("Evening");
   await page.getByLabel("Preset id", { exact: true }).fill("2");
   await page.getByRole("button", { name: "Save current" }).click();
-  await page.getByRole("button", { name: "Check what would change" }).click();
+  await page.getByRole("button", { name: "Review and write" }).click();
   await expect(page.getByRole("region", { name: "Will be written" })).toBeVisible();
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${OUT}/look-studio.png` });

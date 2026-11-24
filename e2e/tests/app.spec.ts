@@ -40,7 +40,9 @@ test("look studio: add the device, live control, save a look and write it", asyn
   await page.getByLabel("Preset id", { exact: true }).fill("7");
   await page.getByRole("button", { name: "Save current" }).click();
   await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E look")).toBeVisible();
-  await page.getByRole("button", { name: "Check what would change" }).click();
+  // the write bar at the bottom sees the device is out of date, and opens the plan
+  await expect(page.getByText(/presets? differs? from the library/)).toBeVisible();
+  await page.getByRole("button", { name: "Review and write" }).click();
   await expect(page.getByRole("region", { name: "Will be written" }).getByRole("row", { name: /E2E look 7/ })).toBeVisible();
   await page.getByRole("button", { name: /^Write \d+ presets? to / }).click();
   // (the sliders' <output> values have the status role too, so target the toast)

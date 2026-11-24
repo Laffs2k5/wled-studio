@@ -43,7 +43,14 @@ class StateStore:
 
     def record_push(self, device_id: str, text: str) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
-        (self.dir / f"{device_id}.json").write_text(json.dumps({"presets_sha256": sha256(text)}) + "\n")
+        written = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        (self.dir / f"{device_id}.json").write_text(
+            json.dumps({"presets_sha256": sha256(text), "written": written}) + "\n")
+
+    def last_written(self, device_id: str) -> str | None:
+        """When wled-studio last wrote this device's presets (ISO 8601, UTC); None if unknown."""
+        p = self.dir / f"{device_id}.json"
+        return json.loads(p.read_text()).get("written") if p.exists() else None
 
     def backup(self, device_id: str, text: str) -> Path:
         d = self.backups / device_id
@@ -83,6 +90,7 @@ class PushResult:
     reason: str | None = None
     palettes: list | None = None
     duplicates: list | None = None   # preset ids wanted by more than one item: they block the write
+    last_write: str | None = None    # when the app last wrote this device's presets
 
 
 async def fetch_lists(client: WLEDClient, custom: dict[str, int] | None = None) -> DeviceLists:
@@ -97,10 +105,16 @@ def diff_ids(before: dict, after: dict) -> list[str]:
     return sorted((k for k in keys if before.get(k) != after.get(k)), key=lambda k: int(k) if k.isdigit() else -1)
 
 
-async def push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, *,
-               dry_run: bool = False, adopt_drift: bool = False, accept_review: bool | list[str] = False,
-               playlists: list[dict] | None = None, palettes: list[dict] | None = None,
-               room: dict | None = None) -> PushResult:
+async def push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, **kw) -> PushResult:
+    res = await _push(client, device_id, looks, state, **kw)
+    res.last_write = state.last_written(device_id)
+    return res
+
+
+async def _push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, *,
+                dry_run: bool = False, adopt_drift: bool = False, accept_review: bool | list[str] = False,
+                playlists: list[dict] | None = None, palettes: list[dict] | None = None,
+                room: dict | None = None) -> PushResult:
     dups = duplicate_ids(looks, playlists or [])
     if dups and not dry_run:   # refused before the device is touched
         raise DuplicatePresetIds(duplicates_message(dups))
