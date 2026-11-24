@@ -167,7 +167,7 @@ def compare_library(request: Request, device_id: str, today, names: list[str], m
 
     flashed = DeviceLists(names, metas, today.palettes, today.custom, today.max_segments)
     lib = request.app.state.library
-    looks, playlists = list(lib.looks().values()), list(lib.playlists().values())
+    looks, playlists, _ = lib.for_device(device_id)
     room = room_for(request, device_id)
     now = {(r.get("look"), r.get("playlist")): r for r in check_library(looks, playlists, today, room)}
     rows = []

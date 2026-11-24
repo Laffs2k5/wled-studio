@@ -266,6 +266,66 @@ def add_device(body: DeviceIn, request: Request):
 def remove_device(device_id: str, request: Request):
     if not request.app.state.devices.remove(device_id):
         raise HTTPException(404, "no such device")
+    request.app.state.library.put_set(device_id, None)   # its set goes with it
+
+
+class SetIn(Strict):
+    looks: list[str] | None = Field(default=None, max_length=500)       # None: everything
+    playlists: list[str] = Field(default_factory=list, max_length=200)
+
+
+class SetChangeIn(Strict):
+    looks: list[str] = Field(default_factory=list, max_length=500)
+    playlists: list[str] = Field(default_factory=list, max_length=200)
+
+
+def _set_view(request: Request, device_id: str) -> dict:
+    lib: LibraryStore = request.app.state.library
+    s = lib.device_set(device_id)
+    looks, playlists, notes = lib.for_device(device_id)
+    return {"all": s is None, "looks": s["looks"] if s else [], "playlists": s["playlists"] if s else [], "brought": notes,
+            "on_device": {"looks": [lk["name"] for lk in looks], "playlists": [pl["name"] for pl in playlists]}}
+
+
+@router.get("/devices/{device_id}/set")
+def get_set(device_id: str, request: Request):
+    """Which looks and playlists go on this device: all (no set), or a chosen set. Taking a look
+    out of a set doesn't delete its preset from the device; writing never deletes."""
+    device_or_404(device_id, request)
+    return _set_view(request, device_id)
+
+
+@router.put("/devices/{device_id}/set")
+def put_set(device_id: str, body: SetIn, request: Request):
+    device_or_404(device_id, request)
+    try:
+        request.app.state.library.put_set(device_id, body.looks, body.playlists)
+    except KeyError as e:
+        raise HTTPException(404, f"no such item: {e.args[0]!r}") from None
+    return _set_view(request, device_id)
+
+
+@router.post("/devices/{device_id}/set/add")
+def add_to_set(device_id: str, body: SetChangeIn, request: Request):
+    """Copy looks and playlists to this device: into its set (a device without one has them)."""
+    device_or_404(device_id, request)
+    try:
+        request.app.state.library.add_to_set(device_id, body.looks, body.playlists)
+    except KeyError as e:
+        raise HTTPException(404, f"no such item: {e.args[0]!r}") from None
+    return _set_view(request, device_id)
+
+
+@router.post("/devices/{device_id}/set/remove")
+def remove_from_set(device_id: str, body: SetChangeIn, request: Request):
+    """Take looks and playlists out of this device's set (from "all", the set becomes the rest)."""
+    device_or_404(device_id, request)
+    lib: LibraryStore = request.app.state.library
+    s = lib.device_set(device_id)
+    looks = s["looks"] if s else list(lib.looks())
+    playlists = s["playlists"] if s else list(lib.playlists())
+    lib.put_set(device_id, [n for n in looks if n not in body.looks], [n for n in playlists if n not in body.playlists])
+    return _set_view(request, device_id)
 
 
 @router.put("/devices/{device_id}/pin", status_code=204)
@@ -748,8 +808,8 @@ async def check_looks(device_id: str, request: Request):
             lists = await lists_for(c, request, dev.id)
         except WLEDError as e:
             raise device_errors(e) from None
-    return check_library(list(lib.looks().values()), list(lib.playlists().values()), lists,
-                         room_for(request, dev.id))
+    looks, playlists, _ = lib.for_device(dev.id)
+    return check_library(looks, playlists, lists, room_for(request, dev.id))
 
 
 @router.post("/devices/{device_id}/accept/{name}")
@@ -778,8 +838,7 @@ async def accept_look(device_id: str, name: str, request: Request):
 @router.post("/devices/{device_id}/push")
 async def push_looks(device_id: str, body: PushIn, request: Request):
     dev = device_or_404(device_id, request)
-    looks = list(request.app.state.library.looks().values())
-    playlists = list(request.app.state.library.playlists().values())
+    looks, playlists, set_notes = request.app.state.library.for_device(dev.id)
     palettes = list(request.app.state.library.palettes().values())
     async with make_client(request, dev) as c:
         try:
@@ -788,7 +847,7 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
                              palettes=palettes, room=room_for(request, dev.id))
         except WLEDError as e:
             raise device_errors(e) from None
-    return res.__dict__
+    return {**res.__dict__, "set_notes": set_notes}
 
 
 @router.get("/devices/{device_id}/room")

@@ -565,10 +565,11 @@ class LibraryStore:
 
     def load(self) -> dict:
         if not self.path.exists():
-            return {"looks": {}, "playlists": {}, "palettes": {}}
+            return {"looks": {}, "playlists": {}, "palettes": {}, "sets": {}}
         lib = json.loads(self.path.read_text(encoding="utf-8"))
         lib.setdefault("playlists", {})
         lib.setdefault("palettes", {})
+        lib.setdefault("sets", {})
         return lib
 
     def save(self, lib: dict) -> None:
@@ -598,6 +599,8 @@ class LibraryStore:
                     e["look"] = new
             if pl.get("end") == old:
                 pl["end"] = new
+        for s in lib["sets"].values():
+            s["looks"] = [new if n == old else n for n in s.get("looks", [])]
         self.save(lib)
         return look
 
@@ -616,6 +619,8 @@ class LibraryStore:
         lib = self.load()
         if lib["looks"].pop(name, None) is None:
             return False
+        for s in lib["sets"].values():
+            s["looks"] = [n for n in s.get("looks", []) if n != name]
         self.save(lib)
         return True
 
@@ -695,5 +700,55 @@ class LibraryStore:
         lib = self.load()
         if lib["playlists"].pop(name, None) is None:
             return False
+        for s in lib["sets"].values():
+            s["playlists"] = [n for n in s.get("playlists", []) if n != name]
         self.save(lib)
         return True
+
+    # --- per-device sets: which looks and playlists go on which device ---
+    def device_set(self, device_id: str) -> dict | None:
+        """The device's set ({"looks": [...], "playlists": [...]}), or None: everything goes on it."""
+        return self.load()["sets"].get(device_id)
+
+    def put_set(self, device_id: str, looks: list[str] | None, playlists: list[str] | None = None) -> dict | None:
+        """Set a device's set; looks None means everything (no set). Names must exist."""
+        lib = self.load()
+        if looks is None:
+            lib["sets"].pop(device_id, None)
+            self.save(lib)
+            return None
+        for kind, names in (("looks", looks), ("playlists", playlists or [])):
+            missing = [n for n in names if n not in lib[kind]]
+            if missing:
+                raise KeyError(missing[0])
+        order_l, order_p = list(lib["looks"]), list(lib["playlists"])
+        s = {"looks": sorted(set(looks), key=order_l.index), "playlists": sorted(set(playlists or []), key=order_p.index)}
+        lib["sets"][device_id] = s
+        self.save(lib)
+        return s
+
+    def add_to_set(self, device_id: str, looks: list[str], playlists: list[str]) -> dict | None:
+        """Add looks and playlists to a device's set; a device without a set has them already."""
+        s = self.device_set(device_id)
+        if s is None:
+            return None
+        return self.put_set(device_id, s["looks"] + looks, s["playlists"] + playlists)
+
+    def for_device(self, device_id: str) -> tuple[list[dict], list[dict], list[str]]:
+        """The looks and playlists that go on a device, in library order, and notes: a playlist
+        in the set brings the looks it plays (they must be on the device for it to work)."""
+        lib = self.load()
+        s = lib["sets"].get(device_id)
+        if s is None:
+            return list(lib["looks"].values()), list(lib["playlists"].values()), []
+        pls = [lib["playlists"][n] for n in lib["playlists"] if n in s.get("playlists", [])]
+        wanted = set(s.get("looks", []))
+        notes = []
+        for pl in pls:
+            needs = [e.get("look") for e in pl.get("entries", [])] + ([pl["end"]] if pl.get("end") else [])
+            extra = [n for n in needs if n and n not in wanted and n in lib["looks"]]
+            if extra:
+                notes.append(f"{pl['name']} brings {', '.join(dict.fromkeys(extra))}")
+                wanted.update(extra)
+        looks = [lk for n, lk in lib["looks"].items() if n in wanted]
+        return looks, pls, notes
