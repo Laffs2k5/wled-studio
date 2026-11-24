@@ -126,9 +126,16 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    `virtual_twin`: the twin runs every effect, its effect list is the image's, and no effect
    crashes that doesn't crash stock. A failure fails the gate, so the image can't be flashed. In
    CI on wled-studio-effects' real gate: the build's 68 flags gave the engine's 13, and 165
-   effects ran, none crashing. The stock twin's 220 effects equal the real controller's. Left:
-   phase 3, a virtual device the app can use like any device (Looks & effects with WLED's real
-   effects, no hardware); phase 4, polish.
+   effects ran, none crashing. The stock twin's 220 effects equal the real controller's.
+   **Phase 3 built (2026-11-24): the virtual device.** The twin now also compiles WLED's state
+   code (presets, playlists, transitions, `json.cpp`'s state functions), and wled-studio-builder's
+   `virtual/server` puts it behind WLED's HTTP JSON API and websocket: the app adds it like any
+   device (`docker compose --profile virtual`, host `virtual-device:8080`). WLED's own code applies
+   states, saves and recalls presets, runs playlists and checks the PIN; the server keeps the
+   device's files between restarts. It reports `arch: "virtual"`, so the flash plan blocks it. Not
+   in it: WLED's config code, DDP and other realtime input, firmware updates. Left: phase 4,
+   polish (the Effect studio streaming to it, the app knowing a virtual device by name, linking a
+   real device to its twin).
 
    **A virtual device is always one firmware** (owner, 2026-11-24): built from that firmware's
    exact sources and build settings, the ones the builder already uses to reproduce it.

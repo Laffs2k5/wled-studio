@@ -1,5 +1,8 @@
 # docker compose up                  -> http://localhost:8080
 # docker compose --profile demo up   -> also a fake WLED device; add it as host "demo-device:8081"
+# docker compose --profile virtual up
+#                                    -> also a virtual WLED (WLED's own code, built from
+#                                       wled-studio-builder); add it as host "virtual-device:8080"
 # WLEDSTUDIO_BUILDER_URL=http://builder:8090 docker compose --profile firmware up
 #                                    -> also the firmware builder (wled-studio-builder); your own
 #                                       effects (usermod folders) go in ./effects (git-ignored)
@@ -48,6 +51,25 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
+  # A virtual WLED device: a twin of QuinLED's 16.0.1 (WLED's own effects, presets, playlists and
+  # API, compiled to WebAssembly) built from wled-studio-builder's virtual/Dockerfile. No network
+  # of its own beyond the app's; it can't be flashed. VIRTUAL_LEDS: LEDs per output, e.g. 124,126.
+  virtual-device:
+    profiles: [virtual]
+    image: wled-virtual:local
+    build:
+      context: https://github.com/Laffs2k5/wled-studio-builder.git#main
+      dockerfile: virtual/Dockerfile
+    environment:
+      LEDS: ${VIRTUAL_LEDS:-60}
+      NAME: ${VIRTUAL_NAME:-Virtual WLED}
+    volumes:
+      - virtual-device-data:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
   builder:
     profiles: [firmware]
     image: ghcr.io/laffs2k5/wled-studio-builder:${BUILDER_TAG:-edge}
@@ -90,5 +112,6 @@ networks:
 
 volumes:
   wled-studio-data:
+  virtual-device-data:
   builder-work:
   builder-out:

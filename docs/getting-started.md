@@ -12,6 +12,11 @@ docker compose up -d                    # http://localhost:8080
 
 - **To try it without a device:** `docker compose --profile demo up -d`, then add the device
   `demo-device:8081` (a fake WLED with made-up effects).
+- **To try it on a virtual WLED:** `docker compose --profile virtual up -d`, then add the device
+  `virtual-device:8080`. It runs WLED's own code (QuinLED's 16.0.1: its effects, presets, playlists
+  and API) with no hardware, so looks, presets and playlists behave as on a device. The first start
+  builds it (several minutes). It can't be flashed, and the Effect studio's DDP stream doesn't
+  reach it.
 - **To use it from another machine:** read [security.md](security.md#using-it-from-other-machines)
   first. In short, publish the port, add the name you browse to to `WLEDSTUDIO_ALLOWED_HOSTS`, and
   set `WLEDSTUDIO_TOKEN`.

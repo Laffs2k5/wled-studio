@@ -47,6 +47,9 @@ flowchart LR
   Entries the library doesn't manage are kept as they are.
 - **The fake device** (`wledstudio.fakewled`) implements the API subset with made-up effects; it
   backs the tests and `docker compose --profile demo`.
+- **The virtual device** (`docker compose --profile virtual`) is wled-studio-builder's
+  `virtual/`: WLED's own code compiled to WebAssembly behind WLED's API, a twin of a firmware. It
+  reports `arch: "virtual"`, which the flash plan blocks.
 - **The firmware side** is [wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder):
   verified reproducible builds of vendor WLED images, with your own effects added. The app will run
   it as a separate service for build jobs (no Docker socket in the app container).

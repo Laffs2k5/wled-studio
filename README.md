@@ -43,13 +43,15 @@ building blocks everything here sits on.
   - compile them to WebAssembly and watch them on a strip, with their own controls, and **stream
     the preview to the real strip** (DDP) before any firmware is built;
   - then build them into firmware through the gate.
-- A fake WLED device for tests and a demo mode.
+- A fake WLED device for tests and a demo mode, and a **virtual WLED** (WLED's own code, no
+  hardware) to try looks, presets and playlists on.
 
 ## Run it
 
 ```bash
 docker compose up                    # http://localhost:8080
 docker compose --profile demo up     # also starts a fake WLED device at demo-device:8081
+docker compose --profile virtual up  # also a virtual WLED at virtual-device:8080 (built on first start)
 WLEDSTUDIO_BUILDER_URL=http://builder:8090 docker compose --profile firmware up
                                      # also the firmware builder; your effects go in ./effects
 ```
