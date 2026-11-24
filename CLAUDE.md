@@ -65,6 +65,14 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
 - Check the editor's styling in more than Chromium when it changes: Firefox and WebKit run in
   Playwright here (WebKit needed `playwright install-deps webkit`, done 2026-11-24).
 - Don't `pkill -f` the dev servers: the pattern matches your own shell. Kill by PID.
+- **Flashes and reverts run as background tasks.** A test must enter the `TestClient`
+  (`with TestClient(app) as c` or `c.__enter__()`), or each request gets its own event loop and
+  the task dies with it. `app.state.flash_timing` shortens the reboot polling in tests.
+- **The fake device is a plain ASGI middleware for its reboot window**, not `@app.middleware`:
+  Starlette's `BaseHTTPMiddleware` delayed another request enough to break the stream test.
+- WLED's `/update` and `/update?revert` answer with small HTML pages, not JSON; `wled.page_text()`
+  takes the words out. `/cfg.json` is readable without the PIN (WLED keeps the secrets in
+  `wsec.json`); `/json/cfg` is the PIN-protected one.
 - **Pin commits by SHAs taken from `git rev-parse`, never typed from memory:** the Dockerfile's
   `BUILDER_COMMIT` once held a mistyped SHA, and the image build failed with "not our ref".
 - The effect preview's compiler shim lives in wled-studio-builder (`preview/`); the Dockerfile's
