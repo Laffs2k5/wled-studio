@@ -5,6 +5,7 @@ import { api, type DeviceSet } from "../api";
 import { folders, groupByFolder, moveWithin, sortWithin } from "../organise";
 import type { CheckItem, Device, Look, Playlist } from "../types";
 import { ACCEPTABLE, explain, StatusBadge } from "./StatusBadge";
+import { PresetIdEdit } from "./PresetIdEdit";
 
 interface Props {
   deviceId: string;
@@ -197,7 +198,14 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                     : <span className="badge" title="On this device because a playlist in its set plays it">via playlist</span>)
                   : <button className="small" disabled={busy} aria-label={`Add ${l.name} to this device`} title={`Add it to ${deviceName}'s set`}
                       onClick={() => changeSet(() => api.addToSet(deviceId, [l.name]), `Added “${l.name}” to ${deviceName}'s set`)}>＋</button>)}
-                <span className="muted small">{l.preset_id ? `preset ${l.preset_id}` : "no preset id"}</span>
+                <PresetIdEdit look={l} looks={looks} playlists={playlists} disabled={busy}
+                  onSave={(pid) => api.setPresetId(l.name, pid).then((r) => {
+                    notify((pid ? `“${l.name}” now has preset ${pid}` : `“${l.name}” has no preset id now`)
+                      + " (in the library; write presets to put it on the device)"
+                      + (r.shared_with.length ? `. Preset ${pid} is also used by ${r.shared_with.join(", ")}: nothing can be written until one changes.` : ""),
+                      r.shared_with.length > 0);
+                    onChanged();
+                  }, (e) => { notify((e as Error).message, true); throw e; })} />
                 {l.segments.some((s) => s.wall) && (
                   <span className="muted small" title="Follows these walls of the room model">
                     {[...new Set(l.segments.map((s) => s.wall).filter(Boolean))].join(" · ")}

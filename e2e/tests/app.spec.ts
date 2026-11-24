@@ -85,7 +85,7 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
   expect((await request.post(`/api/devices/${id}/state`, { data: { seg: reset }, headers: { "X-WLED-Studio": "1" } })).ok()).toBe(true);
   await expect.poll(async () => (await segs()).map((s: { id: number }) => s.id)).toEqual([0]);
   await page.reload();
-  await page.getByLabel("Device").selectOption(id);
+  await page.getByLabel("Device", { exact: true }).selectOption(id);
   await expect(page.getByRole("button", { name: /^Segment 0 / })).toBeVisible();
 
   // an editing session remembers this state, to put it back at the end
@@ -158,7 +158,7 @@ test("segments: duplicate, restack, name, and drag on the map", async ({ page, r
     ...Array.from({ length: 30 }, (_, i) => ({ id: i + 2, stop: 0 }))];
   await request.post(`/api/devices/${id}/state`, { data: { seg: reset }, headers: { "X-WLED-Studio": "1" } });
   await page.reload();
-  await page.getByLabel("Device").selectOption(id);
+  await page.getByLabel("Device", { exact: true }).selectOption(id);
   await page.getByRole("button", { name: /^Segment 1 / }).click();
 
   // a copy on top, then lowered under segment 1

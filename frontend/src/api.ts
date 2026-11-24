@@ -211,6 +211,8 @@ export const api = {
   removeFromSet: (id: string, looks: string[], playlists: string[] = []) =>
     request<DeviceSet>("POST", `/api/devices/${enc(id)}/set/remove`, { looks, playlists }),
   deleteLook: (name: string) => request<null>("DELETE", `/api/looks/${enc(name)}`),
+  setPresetId: (name: string, presetId: number | null) =>
+    request<{ look: Look; shared_with: string[] }>("PUT", `/api/looks/${enc(name)}/preset-id`, { preset_id: presetId }),
   renameLook: (name: string, to: string) => request<Look>("POST", `/api/looks/${enc(name)}/rename`, { to }),
   palettes: () => request<Palette[]>("GET", "/api/palettes"),
   putPalette: (p: Palette) => request<Palette>("PUT", `/api/palettes/${enc(p.name)}`, p),

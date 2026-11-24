@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Room } from "../room";
-import type { CheckItem, Profile, Segment } from "../types";
+import type { CheckItem, Look, Playlist, Profile, Segment } from "../types";
+import { parsePresetId, presetUsers, takenWarning } from "../presets";
 import { EffectControls } from "./EffectControls";
 import { SegmentLayout, SOUND_SIMULATIONS } from "./SegmentLayout";
 import { SegmentMap } from "./SegmentMap";
@@ -30,6 +31,9 @@ interface Props {
   room: Room | null;
   notify: (msg: string, error?: boolean) => void;
   onClose: (saved: boolean) => void;
+  /** The library, to warn when the preset id is another item's. */
+  looks?: Look[];
+  playlists?: Playlist[];
 }
 
 /** A segment with display defaults filled in. `_set` lists the fields it really has: the ones it
@@ -43,12 +47,13 @@ const filled = (s: Partial<Segment>, ledCount: number, all = false): Segment => 
 const fieldsOf = (s: Segment) => new Set((s._set as string[] | undefined) ?? SEGMENT_KEYS);
 
 /** A saved look, edited in the library: nothing is sent to the strip. */
-export function LookEditor({ deviceId, name, profile, room, notify, onClose }: Props) {
+export function LookEditor({ deviceId, name, profile, room, notify, onClose, looks = [], playlists = [] }: Props) {
   const [look, setLook] = useState<EditedLook | null>(null);
   const [segs, setSegs] = useState<Segment[]>([]);
   const [bri, setBri] = useState(128);
   const [segId, setSegId] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [pidText, setPidText] = useState("");
   const count = profile.leds.count;
 
   useEffect(() => {
@@ -57,10 +62,13 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
       setSegs(l.state.seg.map((s) => filled(s, count)));
       setBri(l.state.bri ?? 128);
       setSegId(Number(l.state.seg[0]?.id ?? 0));
+      setPidText(l.preset_id ? String(l.preset_id) : "");
     }).catch((e) => { notify((e as Error).message, true); onClose(false); });
   }, [deviceId, name, count, notify, onClose]);
 
   if (!look) return <p className="muted">Loading “{name}”…</p>;
+  const pid = parsePresetId(pidText);
+  const pidUsers = typeof pid === "number" ? presetUsers(pid, looks, playlists, name) : [];
   const segment = segs.find((s) => s.id === segId) ?? segs[0];
   const place = segs.indexOf(segment);
   const effect = profile.effects.find((e) => e.id === segment.fx) ?? profile.effects[0];
@@ -85,6 +93,8 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
         seg, bri, ...(look!.state.on !== undefined ? { on: look!.state.on } : {}),
         ...(look!.state.transition !== undefined ? { transition: look!.state.transition } : {}),
         owns_layout: look!.owns_layout, ids: look!.ids,
+        // the preset id as the field has it: a number, or none (cleared)
+        ...(typeof pid === "number" ? { preset_id: pid } : { keep_slot: false }),
       });
       notify(`Saved “${name}” in the library (not shown on the strip, not on the device yet)`);
       onClose(true);
@@ -99,8 +109,15 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
     <section className="look-editor" aria-label={`Editing ${name}`}>
       <h2>
         Editing “{name}” <StatusBadge item={{ look: name, status: look.status, notes: look.notes }} />
-        <span className="muted small"> {look.preset_id ? `preset ${look.preset_id}` : "no preset id"} · not shown on the strip</span>
+        <span className="muted small"> · not shown on the strip</span>
       </h2>
+      <label className="field preset-field">
+        <span>Preset id (empty: none; the look then stays in the library only)</span>
+        <input value={pidText} inputMode="numeric" className="slot" placeholder="none" aria-label="Preset id"
+          onChange={(e) => setPidText(e.target.value)} />
+      </label>
+      {pid === "bad" && <p className="warn small">A preset id is a whole number from 1 to 250.</p>}
+      {typeof pid === "number" && pidUsers.length > 0 && <p className="warn small">{takenWarning(pid, pidUsers)}</p>}
       <label className="slider">
         <span>Brightness</span>
         <input type="range" min={1} max={255} value={bri} aria-label="Look brightness" onChange={(e) => setBri(Number(e.target.value))} />
@@ -158,7 +175,7 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose }: P
       )}
       <EffectControls effect={effect} segment={segment} palettes={profile.palettes} rgbw={profile.leds.rgbw} onChange={change} />
       <div className="row">
-        <button className="primary" disabled={busy} onClick={save}>Save “{name}”</button>
+        <button className="primary" disabled={busy || pid === "bad"} onClick={save}>Save “{name}”</button>
         <button disabled={busy} onClick={() => onClose(false)}>Cancel</button>
       </div>
       {!look.bounds && <p className="muted small">This look leaves the layout alone: it sets effects and colours on the segments the strip has.</p>}

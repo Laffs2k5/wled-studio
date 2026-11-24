@@ -177,7 +177,7 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
       <main>
         {editing ? (
           <LookEditor key={editing} deviceId={deviceId} name={editing} profile={profile} room={room} notify={notify}
-            onClose={closeEditor} />
+            onClose={closeEditor} looks={looks} playlists={playlists} />
         ) : (<>
         <p className="live-banner small" aria-label="Where changes go">
           <strong>Live on {profile.device.name}</strong>

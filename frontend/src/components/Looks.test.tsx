@@ -41,6 +41,51 @@ test("import calls the API and refreshes", async () => {
   expect(screen.queryByText("Save current")).toBeNull();              // saving is under the live controls now
 });
 
+test("a look's preset id is changed on its row, with a warning when it's taken", async () => {
+  const calls = stubFetch({ "PUT /api/looks/Loose/preset-id": { look: { name: "Loose", preset_id: 3, segments: [] }, shared_with: ["Evening"] } });
+  const onChanged = vi.fn();
+  const notify = vi.fn();
+  render(<Looks deviceId="desk" looks={looks} onChanged={onChanged} onApplied={() => {}} notify={notify} />);
+  fireEvent.click(screen.getByRole("button", { name: "Preset id of Loose: no preset id" }));
+  const field = screen.getByLabelText("New preset id for Loose");
+  expect(screen.getByText("No preset id: the look stays in the library only.")).toBeInTheDocument();
+  fireEvent.change(field, { target: { value: "0" } });
+  expect(screen.getByText(/whole number from 1 to 250/)).toBeInTheDocument();
+  fireEvent.change(field, { target: { value: "3" } });
+  expect(screen.getByText(/^Preset 3 is used by “Evening”: saving gives two looks the same id/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  expect(JSON.parse(calls.find((c) => c.key === "PUT /api/looks/Loose/preset-id")!.body!)).toEqual({ preset_id: 3 });
+  expect(notify).toHaveBeenCalledWith(expect.stringMatching(/^“Loose” now has preset 3 \(in the library; .*also used by Evening/), true);
+  expect(screen.queryByLabelText("New preset id for Loose")).toBeNull();
+});
+
+test("a preset id cleared on the row; Escape cancels", async () => {
+  const calls = stubFetch({ "PUT /api/looks/Evening/preset-id": { look: { name: "Evening", segments: [] }, shared_with: [] } });
+  const notify = vi.fn();
+  render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={notify} />);
+  fireEvent.click(screen.getByRole("button", { name: "Preset id of Evening: preset 3" }));
+  fireEvent.keyDown(screen.getByLabelText("New preset id for Evening"), { key: "Escape" });
+  expect(screen.queryByLabelText("New preset id for Evening")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Preset id of Evening: preset 3" }));
+  fireEvent.change(screen.getByLabelText("New preset id for Evening"), { target: { value: "" } });
+  fireEvent.keyDown(screen.getByLabelText("New preset id for Evening"), { key: "Enter" });
+  await waitFor(() => expect(notify).toHaveBeenCalledWith(
+    "“Evening” has no preset id now (in the library; write presets to put it on the device)", false));
+  expect(JSON.parse(calls.find((c) => c.key === "PUT /api/looks/Evening/preset-id")!.body!)).toEqual({ preset_id: null });
+});
+
+test("a refused preset id keeps the field open", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "no such look" }), { status: 404 })));
+  const notify = vi.fn();
+  render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={notify} />);
+  fireEvent.click(screen.getByRole("button", { name: "Preset id of Evening: preset 3" }));
+  fireEvent.change(screen.getByLabelText("New preset id for Evening"), { target: { value: "4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("no such look", true));
+  expect(screen.getByLabelText("New preset id for Evening")).toHaveValue("4");
+});
+
 test("show a look live; delete asks first", async () => {
   const calls = stubFetch({ "POST /api/devices/desk/apply/": { status: "ok", notes: [] }, "DELETE /api/looks/": null });
   const onApplied = vi.fn();

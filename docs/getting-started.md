@@ -50,6 +50,9 @@ read from WLED's effect metadata. Changes go to the strip at once.
   segments the strip has). The mic follows the look: on for a sound-reactive effect, off for any
   other.
 - **Show** plays a look on the strip without saving anything on the device.
+- **A look's preset id** can be changed later: click "preset 6" (or "no preset id") on its row, or
+  use the field at the top of the look editor. It changes the library; the next write puts the look
+  at its new id (the old preset stays on the device: writing never deletes presets).
 - **The write bar** at the bottom of Looks & effects and the Slot grid compares the header's device
   with the library: "Desk: 3 presets differ from the library", or "Desk is up to date (written
   22:30)". It checks (a dry run that writes nothing) when the view opens, shortly after each change

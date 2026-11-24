@@ -26,7 +26,7 @@ test("edits a saved look and saves it, without the strip", async () => {
   const onClose = vi.fn();
   render(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={() => {}} onClose={onClose} />);
   expect(await screen.findByText(/Editing “Calm”/)).toBeInTheDocument();
-  expect(screen.getByText(/preset 6/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Preset id")).toHaveValue("6");
   fireEvent.change(screen.getByLabelText("Tail"), { target: { value: "200" } });             // Comet's control
   fireEvent.click(screen.getByRole("button", { name: /^Segment 1/ }));
   expect(screen.queryByLabelText("Sound simulation")).toBeNull();
@@ -90,4 +90,29 @@ test("editing one control saves only the look's own fields plus that one, not th
   const body = JSON.parse(calls.find((c) => c.key.startsWith("POST"))!.body!);
   expect(body.seg).toEqual([{ id: 0, frz: false, fx: 8, sx: 200, pal: 0 }]);
   expect(body).toMatchObject({ owns_layout: false, ids: false });
+});
+
+test("the preset id is changed in the editor, with a warning when another look has it; cleared, the look has none", async () => {
+  const calls = stub(base);
+  const onClose = vi.fn();
+  const looks = [{ name: "Calm", preset_id: 6, segments: [] }, { name: "Plain orange", preset_id: 7, segments: [] }];
+  render(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={() => {}} onClose={onClose}
+    looks={looks} playlists={[]} />);
+  const field = await screen.findByLabelText("Preset id");
+  fireEvent.change(field, { target: { value: "7" } });
+  expect(screen.getByText(/^Preset 7 is used by “Plain orange”: saving gives two looks the same id/)).toBeInTheDocument();
+  fireEvent.change(field, { target: { value: "999" } });
+  expect(screen.getByRole("button", { name: "Save “Calm”" })).toBeDisabled();
+  fireEvent.change(field, { target: { value: "12" } });
+  expect(screen.queryByText(/is used by/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Save “Calm”" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledWith(true));
+  const posts = () => calls.filter((c) => c.key === "POST /api/devices/desk/looks/Calm").map((c) => JSON.parse(c.body!));
+  expect(posts()[0]).toMatchObject({ preset_id: 12 });
+  expect(posts()[0].keep_slot).toBeUndefined();
+  fireEvent.change(field, { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save “Calm”" }));
+  await waitFor(() => expect(posts().length).toBe(2));
+  expect(posts()[1]).toMatchObject({ keep_slot: false });
+  expect(posts()[1].preset_id).toBeUndefined();
 });

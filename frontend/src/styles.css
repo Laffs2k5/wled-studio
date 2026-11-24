@@ -64,6 +64,9 @@ label.palette { display: flex; gap: .6rem; align-items: center; }
 .look-list li { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: center; padding: .25rem 0; border-bottom: 1px solid var(--line); }
 .look-list .name { flex: 1 1 9rem; min-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 input.slot { width: 4.5rem; }
+button.preset-link { color: var(--muted); }
+.preset-edit { display: inline-flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.preset-edit .note { flex-basis: 100%; }
 input.preset-id { width: 11rem; }
 .save-look { margin-top: .9rem; }
 .save-look-form { margin-top: .9rem; border: 1px solid var(--accent); border-radius: 8px; padding: .5rem .9rem; display: grid; gap: .45rem; }
