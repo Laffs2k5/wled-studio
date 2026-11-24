@@ -99,3 +99,16 @@ canvas.room { width: 100%; max-height: 22rem; background: var(--led-bg); border:
 .notice-text { overflow: auto; max-height: 50vh; font-size: .85rem; line-height: 1.45; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; padding: .75rem; }
 button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .notice-text p { margin: 0 0 .6rem; }
+.grid-form { display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
+.grid-form label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; }
+.grid-form input[type=number] { width: 6rem; }
+.slot-grid { border-collapse: separate; border-spacing: .35rem; }
+.slot-grid th { color: var(--muted); font-weight: 500; font-size: .85rem; }
+button.slot { width: 9.5rem; min-height: 3.2rem; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; }
+button.slot.empty { color: var(--muted); border-style: dashed; }
+button.slot.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.slot-name { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.slot-id { font-size: .72rem; color: var(--muted); }
+.slot-edit { margin: .75rem 0; }
+@media (max-width: 700px) { button.slot { width: 6.5rem; } }
+.slots { padding: 1rem 1.25rem; max-width: 64rem; }

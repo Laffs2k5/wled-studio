@@ -4,6 +4,7 @@ import { api, ApiError } from "./api";
 import { DeviceBar } from "./components/DeviceBar";
 import { DevicePanel } from "./components/DevicePanel";
 import { EffectStudio } from "./components/EffectStudio";
+import { SlotGrid } from "./components/SlotGrid";
 import { Firmware } from "./components/Firmware";
 import { TokenPrompt } from "./components/TokenPrompt";
 import type { Device } from "./types";
@@ -13,7 +14,7 @@ export function App() {
   const [current, setCurrent] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
   const [needToken, setNeedToken] = useState(false);
-  const [view, setView] = useState<"looks" | "studio" | "firmware">("looks");
+  const [view, setView] = useState<"looks" | "slots" | "studio" | "firmware">("looks");
 
   const notify = useCallback((msg: string, error = false) => {
     setToast({ msg, error });
@@ -49,12 +50,13 @@ export function App() {
         <h1>wled-studio</h1>
         <nav className="row" aria-label="Views">
           <button className={view === "looks" ? "primary" : ""} onClick={() => setView("looks")}>Looks &amp; effects</button>
+          <button className={view === "slots" ? "primary" : ""} onClick={() => setView("slots")}>Slot grid</button>
           <button className={view === "studio" ? "primary" : ""} onClick={() => setView("studio")}>Effect studio</button>
           <button className={view === "firmware" ? "primary" : ""} onClick={() => setView("firmware")}>Firmware</button>
         </nav>
         {view === "looks" && devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify} />}
       </header>
-      {view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} /> : view === "studio" ? <EffectStudio notify={notify} /> :
+      {view === "slots" ? <SlotGrid notify={notify} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} /> : view === "studio" ? <EffectStudio notify={notify} /> :
         current ? <DevicePanel key={current} deviceId={current} notify={notify} /> : devices && <p className="muted">Add a WLED device to start.</p>}
       {toast && <div role="status" className={`toast ${toast.error ? "error" : ""}`}>{toast.msg}</div>}
     </div>

@@ -102,6 +102,19 @@ export interface FlashPlan {
   busy: boolean;
 }
 
+/** The slot grid: preset ids as rows and columns (e.g. a remote's banks), filled from the library. */
+export interface SlotGridShape { rows: number; cols: number; first: number; row_step: number; col_step: number; name: string }
+export interface SlotCell { row: number; col: number; preset_id: number; kind: "look" | "playlist" | null; name: string | null; base: string | null; notes: string[] }
+export interface Slots { grid: SlotGridShape | null; cells: SlotCell[]; filled?: string; freed?: string[] }
+
+export const slots = {
+  get: () => request<Slots>("GET", "/api/slots"),
+  setGrid: (g: SlotGridShape) => request<Slots>("PUT", "/api/slots/grid", g),
+  removeGrid: () => request<Slots>("DELETE", "/api/slots/grid"),
+  fill: (pid: number, item: { look: string } | { playlist: string }) => request<Slots>("PUT", `/api/slots/${pid}`, item),
+  clear: (pid: number) => request<Slots>("DELETE", `/api/slots/${pid}`),
+};
+
 /** The notice accepted before flashing or reverting (no warranty, no liability, no support). */
 export interface FlashNotice { version: string; title: string; text: string; remembered: boolean; accepted: string | null }
 

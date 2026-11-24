@@ -130,7 +130,11 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   previews stay on black in both.
 
 - **Preset banks for a remote stay outside the app:** the home-automation system switches banks; the
-  app builds the looks and writes them to the bank slots. A grid view of those slots may come later.
+  app builds the looks and writes them to the bank slots. **The slot grid** (2026-11-24) is a view
+  for that: a block of preset ids as rows and columns, shaped by the user (rows, columns, first id,
+  steps, a name pattern), showing which look or playlist sits in each slot and filling a slot by
+  copying one in, with the slot's id and name. Whatever held the slot keeps its name and loses the
+  id: nothing is deleted. No remote, bank or cue logic in the app.
 - **Editing sessions and home automation:** the user flags "editing" in the home-automation system
   by hand; the app holds no token for it.
 - **Access:** on the LAN with the bearer token; a reverse proxy with client certificates (mTLS)
