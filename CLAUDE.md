@@ -73,6 +73,9 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
 - WLED's `/update` and `/update?revert` answer with small HTML pages, not JSON; `wled.page_text()`
   takes the words out. `/cfg.json` is readable without the PIN (WLED keeps the secrets in
   `wsec.json`); `/json/cfg` is the PIN-protected one.
+- **A read-only container needs a `/tmp` tmpfs to take uploads over 1 MB:** Starlette spools them
+  to a temporary file. Without it the parse fails as "There was an error parsing the body"
+  (the demo device and a 1.3 MB firmware image, 2026-11-24).
 - **Pin commits by SHAs taken from `git rev-parse`, never typed from memory:** the Dockerfile's
   `BUILDER_COMMIT` once held a mistyped SHA, and the image build failed with "not our ref".
 - The effect preview's compiler shim lives in wled-studio-builder (`preview/`); the Dockerfile's
