@@ -650,6 +650,27 @@ class LibraryStore:
     def looks(self) -> dict:
         return self.load()["looks"]
 
+    def set_preset_id(self, name: str, preset_id: int | None) -> dict:
+        """Give a look another preset id (None: none, library only). Nothing else changes: its name,
+        folder, sets and the playlists that play it stay; the slot grid follows the id. Another item
+        on the same id is allowed here; the write refuses until one of them moves."""
+        lib = self.load()
+        look = lib["looks"].get(name)
+        if look is None:
+            raise KeyError(name)
+        if preset_id is None:
+            look.pop("preset_id", None)
+        else:
+            look["preset_id"] = preset_id
+        self.save(lib)
+        return look
+
+    def preset_users(self, preset_id: int, but: str | None = None) -> list[str]:
+        """The looks (by name) and playlists ("playlist <name>") that want this preset id."""
+        lib = self.load()
+        return ([n for n, lk in lib["looks"].items() if lk.get("preset_id") == preset_id and n != but]
+                + [f"playlist {n}" for n, pl in lib["playlists"].items() if pl.get("preset_id") == preset_id])
+
     def put(self, look: dict) -> dict:
         look["name"] = check_name(look["name"])
         lib = self.load()

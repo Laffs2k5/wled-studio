@@ -85,3 +85,16 @@ def test_clear_and_errors(client):
     assert client.put("/api/slots/40", json={}, headers=CSRF).status_code == 422
     assert client.put("/api/slots/40", json={"look": "a", "playlist": "b"}, headers=CSRF).status_code == 422
     assert client.delete("/api/slots/grid", headers=CSRF).json() == {"grid": None, "cells": []}
+
+
+def test_a_looks_new_preset_id_moves_it_in_the_grid(client):
+    setup(client, [look("Calm", 40)])
+    r = client.put("/api/looks/Calm/preset-id", json={"preset_id": 46}, headers=CSRF)
+    assert r.status_code == 200
+    slots = client.get("/api/slots").json()
+    assert cell(slots, 1, 1)["name"] is None
+    assert cell(slots, 2, 2)["name"] == "Calm" and cell(slots, 2, 2)["base"] == "Calm"
+    # a slot look given another slot's id is flagged, not renamed
+    client.put("/api/slots/40", json={"look": "Calm"}, headers=CSRF)        # G1-1 Calm, a copy
+    client.put("/api/looks/G1-1%20Calm/preset-id", json={"preset_id": 41}, headers=CSRF)
+    assert cell(client.get("/api/slots").json(), 1, 2)["notes"] == ["its name is another slot's"]

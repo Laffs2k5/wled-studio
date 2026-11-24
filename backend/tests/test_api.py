@@ -386,6 +386,47 @@ def test_the_plan_says_what_the_device_holds_now(client, dev_id, device):
     assert {x["look"]: x["on_device"] for x in again["report"]} == {"A": "A", "B": "B", "C": "C"}
 
 
+def test_a_looks_preset_id_can_be_changed(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/B?preset_id=2", headers=CSRF)
+    pl = {"name": "Mix", "preset_id": 9, "entries": [{"look": "A"}], "folder": "Evenings"}
+    client.put("/api/playlists/Mix", json=pl, headers=CSRF)
+    client.post("/api/library/looks/folder", json={"names": ["A"], "folder": "Calm"}, headers=CSRF)
+    r = client.put("/api/looks/A/preset-id", json={"preset_id": 7}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["shared_with"] == []
+    a = r.json()["look"]
+    assert a["preset_id"] == 7 and a["folder"] == "Calm" and a["segments"]   # the rest is untouched
+    assert client.get("/api/playlists").json()[0]["entries"][0]["look"] == "A"
+    # the next write puts it at 7; the old preset stays on the device (writing never deletes)
+    assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]
+    assert device.presets["7"]["n"] == "A" and device.presets["9"]["playlist"]["ps"] == [7]
+    # another item's id: accepted, and named, and the write is refused until one moves
+    r = client.put("/api/looks/A/preset-id", json={"preset_id": 2}, headers=CSRF).json()
+    assert r["shared_with"] == ["B"]
+    assert client.put("/api/looks/B/preset-id", json={"preset_id": 9}, headers=CSRF).json()["shared_with"] == ["playlist Mix"]
+    assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).status_code == 409
+    # none: the look stays in the library only
+    r = client.put("/api/looks/B/preset-id", json={"preset_id": None}, headers=CSRF).json()
+    assert "preset_id" not in r["look"] and r["shared_with"] == []
+    assert client.put("/api/looks/A/preset-id", json={"preset_id": 251}, headers=CSRF).status_code == 422
+    assert client.put("/api/looks/A/preset-id", json={}, headers=CSRF).status_code == 422
+    assert client.put("/api/looks/Nope/preset-id", json={"preset_id": 3}, headers=CSRF).status_code == 404
+    # a renamed look keeps its new id
+    client.post("/api/looks/A/rename", json={"to": "A2"}, headers=CSRF)
+    assert {lk["name"]: lk.get("preset_id") for lk in client.get("/api/looks").json()} == {"A2": 2, "B": None}
+
+
+def test_the_look_editor_changes_or_clears_the_preset_id(client, dev_id):
+    client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
+    seg = client.get(f"/api/devices/{dev_id}/looks/A/edit").json()["state"]["seg"]
+    r = client.post(f"/api/devices/{dev_id}/looks/A", json={"seg": seg, "preset_id": 12}, headers=CSRF).json()
+    assert r["preset_id"] == 12
+    r = client.post(f"/api/devices/{dev_id}/looks/A", json={"seg": seg}, headers=CSRF).json()
+    assert r["preset_id"] == 12            # kept when not given
+    r = client.post(f"/api/devices/{dev_id}/looks/A", json={"seg": seg, "keep_slot": False}, headers=CSRF).json()
+    assert "preset_id" not in r
+
+
 def test_looks_crud(client):
     look = {"name": "Calm", "preset_id": 5, "segments": [{"start": 0, "stop": 10, "effect": "Glow", "sx": 3}]}
     assert client.put("/api/looks/Calm", json=look, headers=CSRF).status_code == 200

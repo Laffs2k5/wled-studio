@@ -36,6 +36,11 @@ flowchart LR
   or writing the look takes the LEDs from the room model at that time, so correcting a boundary
   there moves every look on that wall or zone, with a note in the write plan. A look on a wall or
   zone the model no longer has is unavailable. Without a room model the saved LEDs are used.
+- **A look's preset id** can be changed after saving (`PUT /api/looks/<name>/preset-id`, or the
+  look editor's save); it's a library change, written on the next write. The old preset stays on
+  the device, since writing never deletes. An id another item has is accepted and named
+  (`shared_with`), and the write refuses until one of them moves. The slot grid shows whatever
+  has its ids, so a look moved onto a slot's id appears there under its own name.
 - **A look saved without the layout** (`layout=false` on capture) keeps no bounds and doesn't own
   the layout: shown, it changes only the segments it names, by position.
 - **Writing** replaces `presets.json` as a whole (`push.py`):

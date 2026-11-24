@@ -568,6 +568,23 @@ def rename_look(name: str, body: RenameIn, request: Request):
         raise HTTPException(409 if "exists" in str(e) else 422, str(e)) from None
 
 
+class PresetIdIn(Strict):
+    preset_id: int | None = Field(ge=1, le=250)    # null: no preset id (the look stays in the library)
+
+
+@router.put("/looks/{name}/preset-id")
+def set_look_preset_id(name: str, body: PresetIdIn, request: Request):
+    """Change a look's preset id, in the library only (the next write puts it there). An id another
+    look or playlist has is accepted, and named in `shared_with`: the write refuses until one moves."""
+    lib: LibraryStore = request.app.state.library
+    try:
+        look = lib.set_preset_id(name, body.preset_id)
+    except KeyError:
+        raise HTTPException(404, "no such look") from None
+    shared = lib.preset_users(body.preset_id, but=name) if body.preset_id is not None else []
+    return {"look": look, "shared_with": shared}
+
+
 class FolderIn(Strict):
     names: list[str] = Field(min_length=1, max_length=500)
     folder: str | None = Field(default=None, max_length=40)
