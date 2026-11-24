@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, effects, type EffectFolder } from "../api";
+import { GitPanel } from "./GitPanel";
 
 // CodeMirror loads when a file is first opened, not with the page
 const Code = lazy(() => import("./Code").then((m) => ({ default: m.Code })));
@@ -18,6 +19,7 @@ export function CodeEditor({ notify, onSaved }: { notify: (msg: string, error?: 
   const [template, setTemplate] = useState<"wave" | "room">("wave");
   const [devices, setDevices] = useState<Device[]>([]);
   const [mapFor, setMapFor] = useState("");
+  const [saves, setSaves] = useState(0);      // refreshes the git panel after a save
   useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
 
   const reload = useCallback(() => effects.list().then(setFolders).catch(() => setFolders(null)), []);
@@ -49,11 +51,15 @@ export function CodeEditor({ notify, onSaved }: { notify: (msg: string, error?: 
           try {
             await effects.save(file!.folder, file!.name, text);
             setDirty(false);
+            setSaves((n) => n + 1);
             notify(`Saved ${file!.folder}/${file!.name}`);
             onSaved?.(file!.folder);
           } catch (e) { notify((e as Error).message, true); }
         }}>Save</button>
       </div>
+      {(file?.folder ?? folders[0]?.folder) && (
+        <GitPanel folder={file?.folder ?? folders[0].folder} version={saves} notify={notify} />
+      )}
       {file && devices.length > 0 && (
         <div className="row small">
           <select value={mapFor} aria-label="Room map device" onChange={(e) => setMapFor(e.target.value)}>

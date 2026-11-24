@@ -120,3 +120,8 @@ button.slot.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 .bulk { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .35rem .6rem; }
 .look-list li.off-device .name { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
 .device-set { margin: .25rem 0 .5rem; gap: .4rem .6rem; }
+
+/* the effect folder's version control (GitPanel) */
+.git-panel { margin: 0.5rem 0; }
+.git-changes { margin: 0.25rem 0; padding-left: 1.2rem; }
+.git-diff { max-height: 24rem; overflow: auto; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--deep); white-space: pre; }

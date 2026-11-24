@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__, netcheck
 from .api import router
 from .effects import router as effects_router
+from .effects_git import router as effects_git_router
 from .live import default_live_url
 from .live import router as live_router
 from .stream import router as stream_router
@@ -58,6 +59,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.include_router(flash_router)
     app.include_router(notice_router)
     app.include_router(slots_router)
+    app.include_router(effects_git_router)   # before effects: its GET /{folder}/git would match /{folder}/{name}
     app.include_router(effects_router)
     app.include_router(stream_router)
     app.include_router(live_router)

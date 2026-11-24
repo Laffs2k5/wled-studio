@@ -147,6 +147,20 @@ export interface Preflight {
 
 export interface EffectFolder { folder: string; files: string[] }
 
+/** An effect folder's git state (effects_git.py); repo false: not a clone. */
+export interface GitState {
+  repo: boolean;
+  branch?: string | null;
+  upstream?: string | null;
+  ahead?: number;
+  behind?: number;
+  changes?: { status: string; path: string }[];
+  last?: { sha: string; subject: string; when: string } | null;
+  remote?: string | null;
+  can_commit?: boolean;
+  can_push?: boolean;
+}
+
 export const effects = {
   list: () => request<EffectFolder[]>("GET", "/api/effects"),
   read: (folder: string, name: string) =>
@@ -157,6 +171,13 @@ export const effects = {
     request<EffectFolder>("POST", "/api/effects", { folder, title, effect_id, template }),
   roomMap: (folder: string, device: string) =>
     request<{ leds: number }>("POST", `/api/effects/${encodeURIComponent(folder)}/room-map`, { device }),
+  git: (folder: string) => request<GitState>("GET", `/api/effects/${encodeURIComponent(folder)}/git`),
+  gitDiff: (folder: string) =>
+    request<{ diff: string; truncated: boolean; new_files: string[] }>("GET", `/api/effects/${encodeURIComponent(folder)}/git/diff`),
+  commit: (folder: string, message: string) =>
+    request<GitState>("POST", `/api/effects/${encodeURIComponent(folder)}/git/commit`, { message }),
+  push: (folder: string) => request<GitState>("POST", `/api/effects/${encodeURIComponent(folder)}/git/push`),
+  pull: (folder: string) => request<GitState>("POST", `/api/effects/${encodeURIComponent(folder)}/git/pull`),
 };
 
 export const api = {

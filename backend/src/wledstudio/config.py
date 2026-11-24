@@ -28,6 +28,12 @@ class Settings:
     builder_token: str | None = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_BUILDER_TOKEN") or None)
     # Your effect usermods (one folder each), editable from the Effect studio; unset = off.
     effects_dir: Path | None = field(default_factory=lambda: Path(p) if (p := os.environ.get("WLEDSTUDIO_EFFECTS_DIR")) else None)
+    # Committing in an effect folder that is a git repository: off unless "on". Pushing also needs
+    # an SSH key file (a GitHub deploy key with write access to that one repository).
+    effects_git: bool = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_EFFECTS_GIT", "") == "on")
+    effects_git_key: Path | None = field(default_factory=lambda: Path(p) if (p := os.environ.get("WLEDSTUDIO_EFFECTS_GIT_KEY")) else None)
+    effects_git_author: str = field(default_factory=lambda: os.environ.get(
+        "WLEDSTUDIO_EFFECTS_GIT_AUTHOR") or "wled-studio <wled-studio@localhost>")
     # Flashing firmware to devices: off unless set to "on". Turn it on only behind the client-
     # certificate (mTLS) proxy (docs/security.md): a flash replaces what runs on the device.
     flashing: bool = field(default_factory=lambda: os.environ.get("WLEDSTUDIO_FLASHING", "") == "on")

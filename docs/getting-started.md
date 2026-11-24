@@ -81,6 +81,25 @@ The builder has no internet of its own: it fetches WLED and the toolchain throug
 proxy. The first preview installs Emscripten (a few minutes); the first firmware build downloads
 the ESP32 toolchain.
 
+**Keep your effects in git and work in the app alone.** Clone your effects repository into
+`./effects` (the repository's root, or each folder in it, being one effect usermod). The app then
+shows that folder's changes under the editor: **Show changes**, **Commit** with a message,
+**Push** and **Pull**. A push first takes the remote's new commits under yours; if the same lines
+changed on both sides, nothing is pushed and the app says so. Turn it on with:
+
+```bash
+WLEDSTUDIO_EFFECTS_GIT=on                          # committing
+WLEDSTUDIO_EFFECTS_GIT_KEY=/run/secrets/effects_key # pushing: an SSH key, mounted read-only
+WLEDSTUDIO_EFFECTS_GIT_AUTHOR="Your Name <you@users.noreply.github.com>"   # the commits' author
+```
+
+Make the key a GitHub **deploy key with write access** to that one repository
+(`ssh-keygen -t ed25519 -N "" -f effects_key`, then the repository's Settings → Deploy keys, or
+`gh repo deploy-key add effects_key.pub --allow-write`). It can push to that repository and
+nothing else. Give it to uid 10001 with mode 600, or ssh refuses it. Only GitHub remotes are
+pushed to, over SSH with GitHub's host key pinned; a clone made over HTTPS is pushed to the same
+repository over SSH.
+
 ## 6. Firmware with your effects
 
 **Firmware** builds an image through the **gate**
