@@ -69,33 +69,12 @@ test("a saved look clears the preset id; a failed save keeps the name and id", a
   expect(screen.getByLabelText("Look name")).toHaveValue("");
 });
 
-test("check, then write; drift must be acknowledged", async () => {
-  const plan = {
-    done: false, drift: true, changed_ids: ["3"], backup: null, reason: "dry run",
-    report: [{ look: "Evening", preset_id: 3, status: "review", notes: ["'Comet': metadata changed (review)"], written: false }],
-  };
-  const calls = stubFetch({ "POST /api/devices/desk/push": plan });
+test("Check what would change opens the write plan", async () => {
+  stubFetch({ "POST /api/devices/desk/push": { done: false, drift: false, changed_ids: ["3"], backup: null, reason: "dry run",
+    report: [{ look: "Evening", preset_id: 3, status: "ok", notes: [], written: true, changed: true, on_device: null }] } });
   render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
   fireEvent.click(screen.getByText("Check what would change"));
-  expect(await screen.findByText(/changed since the last write/)).toBeInTheDocument();
-  const write = screen.getByText("Write 1 preset to desk");
-  expect(screen.getByText("review")).toBeInTheDocument();
-  expect(write).toBeDisabled();
-  fireEvent.click(screen.getByLabelText(/Write anyway/));
-  fireEvent.click(screen.getByLabelText(/marked “review” too/));
-  expect(write).toBeEnabled();
-  fireEvent.click(write);
-  const pushes = () => calls.filter((c) => c.key.includes("/push"));
-  await waitFor(() => expect(pushes().length).toBe(2));
-  expect(JSON.parse(pushes()[1].body!)).toEqual({ dry_run: false, adopt_drift: true, accept_review: true });
-});
-
-test("the plan says a look the device can't show is not on it", async () => {
-  stubFetch({ "POST /api/devices/desk/push": { done: false, drift: false, changed_ids: [], backup: null, reason: "dry run",
-    report: [{ look: "Evening", preset_id: 3, status: "unavailable", notes: ["effect 'Glow' isn't on this device"], written: false }] } });
-  render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
-  fireEvent.click(screen.getByText("Check what would change"));
-  expect(await screen.findByRole("cell", { name: "not on this device" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Write 1 preset to desk" })).toBeEnabled();
 });
 
 test("show a look live; delete asks first", async () => {

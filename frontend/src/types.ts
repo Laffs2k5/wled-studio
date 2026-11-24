@@ -98,7 +98,14 @@ export interface PushReportItem {
   status: "ok" | "remapped" | "check" | "review" | "unavailable";
   notes: string[];
   written?: boolean;
+  /** Whether writing changes the device's preset at this id. */
+  changed?: boolean;
+  /** What the device holds at this id now: its name, or null when nothing is stored there. */
+  on_device?: string | null;
 }
+
+/** A preset id more than one look or playlist wants: it blocks the write. */
+export interface DuplicateId { preset_id: number; looks: string[]; playlists: string[] }
 
 /** An editing session on a device: its state when editing started is put back at the end. */
 export interface EditingSession { active: boolean; started: number | null }
@@ -119,6 +126,7 @@ export interface PushResult {
   changed_ids: string[];
   backup: string | null;
   reason: string | null;
+  duplicates?: DuplicateId[] | null;
 }
 
 export interface PlaylistEntry { look: string; duration: number; transition: number }

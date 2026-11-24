@@ -5,6 +5,7 @@ import { api, type DeviceSet } from "../api";
 import { folders, groupByFolder, moveWithin, sortWithin } from "../organise";
 import type { CheckItem, Device, Look, Playlist, PushResult } from "../types";
 import { ACCEPTABLE, explain, StatusBadge } from "./StatusBadge";
+import { WritePlan } from "./WritePlan";
 
 interface Props {
   deviceId: string;
@@ -30,8 +31,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
   const [plan, setPlan] = useState<PushResult | null>(null);
-  const [adopt, setAdopt] = useState(false);
-  const [acceptReview, setAcceptReview] = useState(false);
   const [keepLayout, setKeepLayout] = useState(false);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -269,35 +268,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
           Check what would change
         </button>
       </div>
-      {plan && (
-        <div className="plan">
-          {plan.drift && <p className="warn">The device's presets changed since the last write (another tool or WLED's own UI).</p>}
-          <table>
-            <thead><tr><th>Look</th><th>Preset</th><th>Status</th><th>Notes</th></tr></thead>
-            <tbody>
-              {plan.report.map((r) => (
-                <tr key={r.look ?? `pl:${r.playlist}`} className={`status-${r.status}`}>
-                  <td>{r.look ?? `▶ ${r.playlist}`}</td><td>{r.preset_id ?? ""}</td><td>{r.status === "unavailable" ? "not on this device" : r.status}</td><td>{r.notes.join("; ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="small">Presets that would change: {plan.changed_ids.length ? plan.changed_ids.join(", ") : "none"}</p>
-          {plan.palettes && plan.palettes.length > 0 && (
-            <p className="small">Palettes to upload: {plan.palettes.map((p) => `${p.palette} (id ${p.id})`).join(", ")}</p>
-          )}
-          {plan.drift && <label className="small"><input type="checkbox" checked={adopt} onChange={(e) => setAdopt(e.target.checked)} /> Write anyway (keeps the other changes)</label>}
-          {plan.report.some((r) => r.status === "review") && <label className="small"><input type="checkbox" checked={acceptReview} onChange={(e) => setAcceptReview(e.target.checked)} /> Write looks marked “review” too</label>}
-          <div className="row">
-            <button className="primary" disabled={busy || (plan.changed_ids.length === 0 && !plan.palettes?.length) || (plan.drift && !adopt)}
-              onClick={() => run(() => api.push(deviceId, { dry_run: false, adopt_drift: adopt, accept_review: acceptReview }),
-                (r) => (r.done ? `Written to ${deviceName} and verified (backup ${r.backup})` : `Not written to ${deviceName}: ${r.reason}`))
-                .then((r) => r && setPlan(null))}>
-              Write {plan.changed_ids.length} preset{plan.changed_ids.length === 1 ? "" : "s"} to {deviceName}
-            </button>
-          </div>
-        </div>
-      )}
+      {plan && <WritePlan deviceId={deviceId} deviceName={deviceName} plan={plan} notify={notify}
+        onWritten={(r) => { if (r.done) setPlan(null); }} />}
     </section>
   );
 }

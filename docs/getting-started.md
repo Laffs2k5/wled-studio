@@ -45,7 +45,11 @@ read from WLED's effect metadata. Changes go to the strip at once.
   preset number) if you give one; without one the look stays in the library only. The mic follows
   the look: on for a sound-reactive effect, off for any other.
 - **Show** plays a look on the strip without saving anything on the device.
-- **Check what would change**, then **Write N presets to** the device:
+- **Check what would change** shows the write plan, grouped by what will happen: **Will be
+  written** (with what the device holds at that preset id now), **Already the same**, **Skipped:
+  not on this device**, **Needs your decision: effect changed** (tick the ones to write anyway),
+  and **Two looks want the same preset id**, which blocks the write until each has its own.
+  Then **Write N presets to** the device:
   - the device's `presets.json` is backed up;
   - the write stops if someone changed the presets in the meantime (in WLED's own UI, say), unless
     you say to go ahead;
