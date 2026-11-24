@@ -87,6 +87,24 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    instead of the stand-ins.
 4. **Bulk tools** for the library: folders, reorder, copying between devices. (Renaming, with
    playlists following, and where a look is used: done 2026-11-23.)
+5. **A real code editor in the Effect studio** (asked for 2026-11-24): syntax highlighting, indent
+   guides, code folding and the rest, close enough to VS Code that its users feel at home. Today
+   it's a plain textarea. To research first; the requirements:
+   - widely used, and actively maintained and developed: nothing abandoned;
+   - a licence that fits an EUPL-1.2 app, checked for the package and everything it bundles, with
+     its notices carried in the build;
+   - it works offline in the app's own bundle (no CDN), within the content security policy.
+
+   The obvious candidates: Monaco, the editor component of VS Code, and CodeMirror 6. Weigh bundle
+   size, its web workers under the CSP, C++ highlighting quality, and mobile use.
+
+**Known bugs, found 2026-11-24:**
+- The code editor lists only effect folders named `[a-z][a-z0-9_]`, while the builder accepts
+  hyphens (`[A-Za-z0-9_-]`). A folder such as `wled-studio-effects` compiles but doesn't show in
+  the editor. Align the app's folder rule with the builder's for existing folders (keep the
+  stricter rule for new ones if wanted), with a test.
+- Run outside the container (no bundled default preview), the Effect studio shows only the compile
+  box until the first compile, and the code editor is hidden too. Show the editor regardless.
 
 ## Decided design
 
