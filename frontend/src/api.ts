@@ -57,8 +57,12 @@ export interface FirmwareJob {
   target: string;
   usermods: string[];
   created: number;
-  report?: { passed: boolean; checks?: Record<string, boolean>; error?: string;
-    custom?: { firmware_size: number }; objects?: { added: string[]; unexpected: string[] } };
+  /** The builder's gate report, passed through as it is (wled-studio-builder: studio/gate.py). */
+  report?: { passed: boolean; checks?: Record<string, boolean>; error?: string | null;
+    app_slot_bytes?: number | null;
+    stock?: { toolchain_host?: string; check?: string[] | null };
+    custom?: { firmware_size: number }; objects?: { added: string[]; unexpected: string[]; added_from_usermods?: string[] };
+    virtual?: { effects_run?: number; crashed?: string[]; error?: string | null } | null };
 }
 
 export const firmware = {

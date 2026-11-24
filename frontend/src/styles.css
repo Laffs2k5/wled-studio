@@ -85,6 +85,8 @@ label.num input { width: 5rem; }
 .state-passed td:last-child, .job .ok { color: var(--ok); }
 .state-failed td:last-child, .job .bad { color: var(--bad); }
 .job ul { list-style: none; padding: 0; }
+.gate-checks li { margin: .3rem 0; }
+.gate-checks .meaning { display: block; margin-left: 1.2rem; }
 pre.log { background: var(--deep); border: 1px solid var(--line); border-radius: 8px; padding: .75rem; max-height: 22rem; overflow: auto; font-size: .78rem; white-space: pre-wrap; }
 code { background: var(--deep); padding: .1rem .3rem; border-radius: 4px; }
 .studio { padding: 1rem 1.25rem; max-width: 64rem; }

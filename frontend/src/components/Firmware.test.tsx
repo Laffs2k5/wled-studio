@@ -42,7 +42,7 @@ test("starts a gate build and shows its checks and log", async () => {
   expect(build).toBeDisabled();
   fireEvent.click(await screen.findByLabelText("my_fx"));
   fireEvent.click(build);
-  expect(await screen.findByText(/Only your usermods' code was added/)).toBeInTheDocument();
+  expect(await screen.findByText("✓ Only your effect code was added", { exact: false })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByLabelText("Build log")).toHaveTextContent("GATE PASSED"));
   const post = calls.find((c) => c.key === "POST /api/firmware/jobs")!;
   expect(JSON.parse(post.body!)).toEqual({ pins: "q.json", target: "board", usermods: ["my_fx"] });

@@ -2,14 +2,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlashPanel } from "./FlashPanel";
 import { firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
+import { gateLines } from "../gate";
 import type { Device } from "../types";
 import { StatusBadge } from "./StatusBadge";
-
-const CHECK_LABELS: Record<string, string> = {
-  stock_matches_verified: "Stock build matches the verified result",
-  only_usermod_objects_changed: "Only your usermods' code was added",
-  fits_app_slot: "Fits the firmware slot, with margin",
-};
 
 /** Build firmware with your own effects, through the gate (wled-studio-builder). */
 export function Firmware({ notify, devices = [], device = null }: {
@@ -119,9 +114,12 @@ export function Firmware({ notify, devices = [], device = null }: {
         <div className="job">
           <h2>Build {open.id.slice(0, 8)}: {open.state}</h2>
           {open.report?.checks && (
-            <ul>
-              {Object.entries(open.report.checks).map(([k, v]) => (
-                <li key={k} className={v ? "ok" : "bad"}>{v ? "✓" : "✗"} {CHECK_LABELS[k] ?? k}</li>
+            <ul className="gate-checks" aria-label="Gate checks">
+              {gateLines(open.report).map((c, i) => (
+                <li key={i} className={c.ok ? "ok" : "bad"}>
+                  {c.ok ? "✓" : "✗"} {c.text}
+                  {c.meaning && <span className="small muted meaning">{c.meaning}</span>}
+                </li>
               ))}
             </ul>
           )}
