@@ -13,7 +13,12 @@ Behaviour modelled on WLED 16:
   minutes; a PIN check within 3 s of the previous one is ignored;
 - GET /settings/lock locks again;
 - `busy` makes the next N state requests answer {"error": 3}, as WLED does when
-  its JSON buffer is in use.
+  its JSON buffer is in use;
+- firmware (WLED's /update): POST /update takes an image while unlocked and the OTA
+  lock is off, refuses one without the ESP32 image magic, then "reboots" (every
+  route answers 503 for `reboot_seconds`, uptime restarts) running it; the image's
+  effect list is `flash_effects` if a test set one. GET /update?revert boots the
+  previous image again. /cfg.json has the boot preset and the OTA lock.
 """
 from __future__ import annotations
 
@@ -62,6 +67,19 @@ class FakeDevice:
     palette_files: dict = field(default_factory=dict)
     ws_connections: int = 0
     audio_enabled: bool = False
+    effects: list = field(default_factory=lambda: list(EFFECTS))
+    # firmware
+    ota_lock: bool = False
+    boot_preset: int = 0
+    image: str = "stock"
+    previous: tuple | None = None          # (image, effects) in the other OTA slot
+    flash_effects: list | None = None      # what a flashed image registers (tests)
+    flash_heap: int | None = None          # its free heap (tests)
+    reboot_seconds: float = 0.0
+    booted_at: float = 0.0
+    rebooting_until: float = 0.0
+    freeheap: int = 150000
+    flashes: int = 0
 
     def __post_init__(self):
         if not self.state:
@@ -123,15 +141,20 @@ class FakeDevice:
             if "ps" not in body:
                 self.state["ps"] = -1
 
-    def info(self) -> dict:
+    def reboot(self, now: float) -> None:
+        self.booted_at = now + self.reboot_seconds
+        self.rebooting_until = now + self.reboot_seconds
+        self.unlocked_until = 0.0
+
+    def info(self, now: float = 0.0) -> dict:
         return {
             "ver": "16.0.1", "vid": 2605010, "name": "Fake WLED", "brand": "WLED", "product": "FakeDevice",
             "release": "Fake", "arch": "esp32", "mac": "000000000000",
             "leds": {"count": self.led_count, "rgbw": True, "maxseg": 32, "maxpwr": 0},
-            "fxcount": len(EFFECTS), "palcount": len(PALETTES),
+            "fxcount": len(self.effects), "palcount": len(PALETTES),
             "cpalcount": (max(self.palette_files) + 1) if self.palette_files else 0,
             "fs": {"u": 8, "t": 983, "pmt": 0}, "u": {"AudioReactive": ["off" if not self.audio_enabled else "on"]},
-            "live": False, "uptime": 1,
+            "live": False, "uptime": max(1, int(now - self.booted_at)), "freeheap": self.freeheap,
         }
 
     def live_frame(self) -> bytes:
@@ -162,17 +185,71 @@ def create_app(device: FakeDevice | None = None, clock=time.monotonic) -> FastAP
             return JSONResponse({"error": 3}, status_code=503)
         return None
 
+    class Rebooting:
+        """While the device "reboots", every HTTP request gets 503 (a plain ASGI middleware:
+        Starlette's BaseHTTPMiddleware would delay other requests)."""
+        def __init__(self, inner):
+            self.inner = inner
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] == "http" and clock() < dev.rebooting_until:
+                await PlainTextResponse("rebooting", status_code=503)(scope, receive, send)
+                return
+            await self.inner(scope, receive, send)
+
+    app.add_middleware(Rebooting)
+
     @app.get("/json/info")
     def info():
-        return dev.info()
+        return dev.info(clock())
 
     @app.get("/json/eff")
     def eff():
-        return [n for n, _ in EFFECTS]
+        return [n for n, _ in dev.effects]
 
     @app.get("/json/fxdata")
     def fxdata():
-        return [m for _, m in EFFECTS]
+        return [m for _, m in dev.effects]
+
+    @app.get("/cfg.json")
+    def cfg():
+        return {"def": {"ps": dev.boot_preset, "on": True, "bri": 128},
+                "ota": {"lock": dev.ota_lock, "lock-wifi": False, "aota": True, "same-subnet": True}}
+
+    def page(code: int, title: str, text: str) -> Response:
+        # WLED answers /update with a small HTML message page
+        return Response(f"<html><body><h2>{title}</h2>{text}</body></html>", status_code=code, media_type="text/html")
+
+    @app.post("/update")
+    async def update(update: UploadFile):
+        if dev.locked(clock()):
+            return page(401, "Access Denied", "Please unlock settings using PIN code!")
+        if dev.ota_lock:
+            return page(401, "Access Denied", "Please unlock OTA in security settings!")
+        content = await update.read()
+        if content[:1] != b"\xe9":
+            return page(500, "Update failed!", "This firmware file is missing compatibility metadata.")
+        dev.previous = (dev.image, dev.effects)
+        dev.image = f"flashed-{len(content)}"
+        if dev.flash_effects is not None:
+            dev.effects = list(dev.flash_effects)
+        if dev.flash_heap is not None:
+            dev.freeheap = dev.flash_heap
+        dev.flashes += 1
+        dev.reboot(clock())
+        return page(200, "Update successful!", "Rebooting...")
+
+    @app.get("/update")
+    def update_page(request: Request):
+        if dev.locked(clock()):
+            return page(401, "PIN required", "Please enter settings PIN code")
+        if "revert" not in request.query_params:
+            return page(200, "WLED Software Update", "")
+        if dev.previous is None:
+            return page(500, "Rollback failed!", "Please reboot and retry.")
+        (dev.image, dev.effects), dev.previous = dev.previous, (dev.image, dev.effects)
+        dev.reboot(clock())
+        return page(200, "Reverted to previous version!", "Rebooting...")
 
     @app.get("/json/pal")
     def pal():
@@ -199,7 +276,7 @@ def create_app(device: FakeDevice | None = None, clock=time.monotonic) -> FastAP
 
     @app.get("/json")
     def everything():
-        return {"state": dev.public_state(), "info": dev.info(), "effects": [n for n, _ in EFFECTS],
+        return {"state": dev.public_state(), "info": dev.info(clock()), "effects": [n for n, _ in dev.effects],
                 "palettes": PALETTES}
 
     @app.get("/presets.json")

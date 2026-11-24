@@ -147,17 +147,14 @@ def test_looks_on_a_wall_follow_the_room_model(client, dev_id, device):
     assert on_l2["segments"][0]["wall"] == "L2"
 
 
-def test_check_and_accept_after_a_firmware_change(client, dev_id, device, monkeypatch):
-    from wledstudio.fakewled import app as fake
+def test_check_and_accept_after_a_firmware_change(client, dev_id, device):
     client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 8, "ix": 99}]}, headers=CSRF)
     client.post(f"/api/devices/{dev_id}/capture/Tail?preset_id=3", headers=CSRF)
     rows = client.get(f"/api/devices/{dev_id}/check").json()
     assert next(r for r in rows if r.get("look") == "Tail")["status"] == "ok"
 
     # new firmware: Comet lost its Tail slider, which the look sets
-    effects = list(fake.EFFECTS)
-    effects[8] = ("Comet", "!;!;!;1;sx=128")
-    monkeypatch.setattr(fake, "EFFECTS", effects)
+    device.effects[8] = ("Comet", "!;!;!;1;sx=128")
     row = next(r for r in client.get(f"/api/devices/{dev_id}/check").json() if r.get("look") == "Tail")
     assert row == {"look": "Tail", "status": "review", "notes": ["'Comet' changed: Tail (ix) is gone"]}
 
@@ -168,7 +165,7 @@ def test_check_and_accept_after_a_firmware_change(client, dev_id, device, monkey
     assert client.post(f"/api/devices/{dev_id}/accept/Nope", headers=CSRF).status_code == 404
 
     # an effect that's gone can't be accepted
-    effects[8] = ("RSVD", "")
+    device.effects[8] = ("RSVD", "")
     assert client.post(f"/api/devices/{dev_id}/accept/Tail", headers=CSRF).status_code == 409
 
 
