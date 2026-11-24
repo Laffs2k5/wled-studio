@@ -101,12 +101,16 @@ follow() {  # follow <run json>: wait for a flash or revert to finish, print its
   done
   python3 -c 'import json,sys; r = json.load(sys.stdin); print(r["state"]); [print(" ", s["name"], s["state"], s["detail"]) for s in r["steps"]]' <<< "$run"
 }
-flash=$(curl -fsS "${W[@]}" "${C[@]}" -d "{\"device\":\"$did\",\"confirm\":\"e2e\"}" "$B/api/firmware/jobs/$gid/flash" | follow)
+# the flashing notice: without its accepted version the backend refuses (428)
+notice=$(curl -fsS "$B/api/notices/flash" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+code=$(curl -sS -o /dev/null -w '%{http_code}' "${W[@]}" "${C[@]}" -d "{\"device\":\"$did\",\"confirm\":\"e2e\"}" "$B/api/firmware/jobs/$gid/flash")
+[[ $code == 428 ]] || { echo "flash without the notice: HTTP $code, expected 428"; exit 1; }
+flash=$(curl -fsS "${W[@]}" "${C[@]}" -d "{\"device\":\"$did\",\"confirm\":\"e2e\",\"notice\":\"$notice\"}" "$B/api/firmware/jobs/$gid/flash" | follow)
 echo "$flash"
 # the demo device keeps its made-up effects after a flash, so the effect-list check warns
 grep -q '^warnings$' <<< "$flash" && grep -q 'upload ok Update successful' <<< "$flash" && grep -q 'image ok' <<< "$flash" \
   || { echo "flash: not as expected"; exit 1; }
-revert=$(curl -fsS "${W[@]}" "${C[@]}" -d '{"confirm":"e2e"}' "$B/api/devices/$did/revert" | follow)
+revert=$(curl -fsS "${W[@]}" "${C[@]}" -d "{\"confirm\":\"e2e\",\"notice\":\"$notice\"}" "$B/api/devices/$did/revert" | follow)
 echo "$revert"
 grep -q '^done$' <<< "$revert" || { echo "revert: not as expected"; exit 1; }
 echo "firmware end-to-end passed"
