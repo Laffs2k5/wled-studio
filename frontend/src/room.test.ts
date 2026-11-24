@@ -77,3 +77,12 @@ test("a room narrower than the canvas is drawn in the middle", async () => {
   const xs = ledPositions(12, 400, 100, tall).map((p) => p.x);
   expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(200, 0);
 });
+
+test("the gap: where the walls end, against where they start", async () => {
+  const { gap, gapText } = await import("./room");
+  const closed = { edges: [{ direction: "right", pixels: 5 }, { direction: "down", pixels: 3 }, { direction: "left", pixels: 5 }, { direction: "up", pixels: 3 }] } as const;
+  expect(gap(closed as never)).toEqual([0, 0]);
+  expect(gapText(closed as never)).toBe("");
+  const open = { edges: [{ direction: "right", pixels: 2 }, { direction: "down", pixels: 7 }, { direction: "left", pixels: 7 }, { direction: "up", pixels: 2 }] } as const;
+  expect(gapText(open as never)).toBe("The walls end 5 to the left and 5 down of where they start (in LEDs)");
+});

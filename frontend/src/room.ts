@@ -24,6 +24,24 @@ export function layout(room: Room): { points: [number, number][]; min: [number, 
   return { points, min: [Math.min(0, ...xs), Math.min(0, ...ys)], max: [Math.max(0, ...xs), Math.max(0, ...ys)] };
 }
 
+/** Where the walls end, relative to where they start, in LEDs: [0, 0] when they close round. */
+export function gap(room: Room): [number, number] {
+  let x = 0, y = 0;
+  for (const e of room.edges) {
+    const [dx, dy] = STEP[e.direction];
+    x += dx * e.pixels; y += dy * e.pixels;
+  }
+  return [x, y];
+}
+
+/** In words, how far the walls end from their start; "" when they close round. */
+export function gapText(room: Room): string {
+  const [x, y] = gap(room);
+  const parts = [x > 0 ? `${x} to the right` : x < 0 ? `${-x} to the left` : "", y > 0 ? `${y} down` : y < 0 ? `${-y} up` : ""]
+    .filter(Boolean);
+  return parts.length ? `The walls end ${parts.join(" and ")} of where they start (in LEDs)` : "";
+}
+
 export function totalPixels(room: Room): number {
   return room.edges.reduce((n, e) => n + e.pixels, 0);
 }

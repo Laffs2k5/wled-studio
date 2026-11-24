@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useEffect, useState } from "react";
 import { request } from "../api";
-import { totalPixels, type Direction, type Room, type RoomEdge, type RoomZone } from "../room";
+import { gapText, totalPixels, type Direction, type Room, type RoomEdge, type RoomZone } from "../room";
 
 /** The strip's shape: edges in LED index order. Used to draw the live view and previews. */
 export function RoomEditor({ deviceId, ledCount, onSaved, notify }: {
@@ -59,6 +59,11 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify }: {
           Add wall
         </button>
         <span className={`small ${total === ledCount ? "muted" : "warn"}`}>{total} of {ledCount} LEDs</span>
+        {edges.length > 1 && gapText({ edges }) && (
+          <span className="small warn" title="Fine for a strip along some walls only; round a whole room, opposite walls have the same LED count">
+            {gapText({ edges })}: round a whole room, opposite walls need the same count.
+          </span>
+        )}
         <button className="primary" disabled={!edges.length} onClick={() =>
           request<Room>("PUT", `/api/devices/${encodeURIComponent(deviceId)}/room`, zones.length ? { edges, zones } : { edges })
             .then((r) => { onSaved(r); notify("Room shape saved"); }).catch((e) => notify(e.message, true))}>
