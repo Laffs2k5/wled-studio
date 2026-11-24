@@ -59,6 +59,7 @@ test("check, then write; drift must be acknowledged", async () => {
   fireEvent.click(screen.getByText("Check what would change"));
   expect(await screen.findByText(/changed since the last write/)).toBeInTheDocument();
   const write = screen.getByText("Write 1 preset to desk");
+  expect(screen.getByText("review")).toBeInTheDocument();
   expect(write).toBeDisabled();
   fireEvent.click(screen.getByLabelText(/Write anyway/));
   fireEvent.click(screen.getByLabelText(/marked “review” too/));
@@ -67,6 +68,14 @@ test("check, then write; drift must be acknowledged", async () => {
   const pushes = () => calls.filter((c) => c.key.includes("/push"));
   await waitFor(() => expect(pushes().length).toBe(2));
   expect(JSON.parse(pushes()[1].body!)).toEqual({ dry_run: false, adopt_drift: true, accept_review: true });
+});
+
+test("the plan says a look the device can't show is not on it", async () => {
+  stubFetch({ "POST /api/devices/desk/push": { done: false, drift: false, changed_ids: [], backup: null, reason: "dry run",
+    report: [{ look: "Evening", preset_id: 3, status: "unavailable", notes: ["effect 'Glow' isn't on this device"], written: false }] } });
+  render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
+  fireEvent.click(screen.getByText("Check what would change"));
+  expect(await screen.findByRole("cell", { name: "not on this device" })).toBeInTheDocument();
 });
 
 test("show a look live; delete asks first", async () => {
@@ -100,11 +109,21 @@ test("a look's change-check status shows, with an Accept that takes a new snapsh
   expect(notify).toHaveBeenCalledWith("Accepted “Evening” (now ok)");
 });
 
-test("an unavailable look can't be accepted", () => {
+test("a look whose effect the device lacks: not on this device, can't be accepted, shown or edited", () => {
   const checks = [{ look: "Evening", status: "unavailable" as const, notes: ["effect 'Comet' isn't on this device"] }];
-  render(<Looks deviceId="desk" looks={looks} checks={checks} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
-  expect(screen.getByText("unavailable")).toBeInTheDocument();
+  render(<Looks deviceId="desk" looks={looks} checks={checks} onChanged={() => {}} onApplied={() => {}} notify={() => {}}
+    onEdit={() => {}} />);
+  const why = "Uses effect “Comet”, which desk does not have.";
+  expect(screen.getByText("not on this device")).toHaveAttribute("title", why);
+  expect(screen.queryByText("unavailable")).toBeNull();
   expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+  const [show, other] = screen.getAllByRole("button", { name: "Show" });
+  expect(show).toBeDisabled();
+  expect(show).toHaveAttribute("title", why);
+  expect(other).toBeEnabled();                                     // "Loose" is fine
+  expect(screen.getByRole("button", { name: "Edit Evening" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Edit Evening" })).toHaveAttribute("title", why);
+  expect(screen.getByRole("button", { name: "Edit Loose" })).toBeEnabled();
 });
 
 test("a look can be saved without the layout", async () => {

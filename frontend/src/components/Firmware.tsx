@@ -155,7 +155,7 @@ export function Firmware({ notify, devices = [], device = null }: {
                         <tr key={r.look ?? `pl:${r.playlist}`}>
                           <td>{r.look ?? `▶ ${r.playlist}`}</td>
                           <td>{r.today}</td>
-                          <td>{r.status === "ok" ? "ok" : <StatusBadge item={r} />}</td>
+                          <td>{r.status === "ok" ? "ok" : <StatusBadge item={r} image />}</td>
                           <td className="small">{r.notes.join("; ")}</td>
                         </tr>
                       ))}

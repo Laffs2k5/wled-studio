@@ -25,6 +25,8 @@ test("errors carry the backend's message", async () => {
   await expect(api.addDevice("x", "http://bad")).rejects.toThrow("a device host is a name or IP address");
   mockFetch(422, { detail: [{ msg: "too long" }, { msg: "bad" }] });
   await expect(request("POST", "/api/x", {})).rejects.toThrow("too long; bad");
+  mockFetch(409, { detail: { status: "unavailable", notes: ["effect 'Glow' isn't on this device"] } });
+  await expect(request("POST", "/api/x", {})).rejects.toThrow(/^effect 'Glow' isn't on this device$/);
   mockFetch(502, null);
   const err = (await request("GET", "/api/x").catch((e: unknown) => e)) as ApiError;
   expect(err).toBeInstanceOf(ApiError);

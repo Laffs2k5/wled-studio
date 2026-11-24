@@ -35,7 +35,7 @@ button.danger { color: var(--bad); }
 .badge { margin-left: .4rem; font-size: .8rem; color: var(--accent); }
 .badge.check-remapped, .badge.check-check { color: var(--muted); }
 .badge.check-review { color: var(--warn); }
-.badge.check-unavailable { color: var(--bad); }
+.badge.check-unavailable { color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; }
 .warn { color: var(--warn); }
 .live-banner { margin: 0 0 .5rem; padding: .3rem .6rem; border-left: 3px solid var(--accent); }
 .library-line { margin: -.25rem 0 .5rem; }

@@ -13,6 +13,8 @@ function detail(body: unknown, fallback: string): string {
     const d = (body as { detail: unknown }).detail;
     if (typeof d === "string") return d;
     if (Array.isArray(d)) return d.map((x) => (x && typeof x === "object" && "msg" in x ? String(x.msg) : String(x))).join("; ");
+    // a look the device can't show: {status, notes}; the notes are the reason, not the JSON
+    if (d && typeof d === "object" && "notes" in d && Array.isArray(d.notes) && d.notes.length) return d.notes.map(String).join("; ");
     return JSON.stringify(d);
   }
   return fallback;

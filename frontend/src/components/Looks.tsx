@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type DeviceSet } from "../api";
 import { folders, groupByFolder, moveWithin, sortWithin } from "../organise";
 import type { CheckItem, Device, Look, Playlist, PushResult } from "../types";
-import { ACCEPTABLE, StatusBadge } from "./StatusBadge";
+import { ACCEPTABLE, explain, StatusBadge } from "./StatusBadge";
 
 interface Props {
   deviceId: string;
@@ -24,6 +24,8 @@ interface Props {
 export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [] }: Props) {
   const usedIn = (name: string) => playlists.filter((p) => p.entries.some((e) => e.look === name) || p.end === name).map((p) => p.name);
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
+  // a look whose effect (or palette, or wall) this device lacks can't be shown or edited here
+  const showable = (name: string) => status.get(name)?.status !== "unavailable";
   const [name, setName] = useState("");
   const [slot, setSlot] = useState("");
   const [plan, setPlan] = useState<PushResult | null>(null);
@@ -223,7 +225,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                 {usedIn(l.name).length > 0 && (
                   <span className="badge" title={`In ${usedIn(l.name).join(", ")}`}>▶{usedIn(l.name).length}</span>
                 )}
-                <StatusBadge item={status.get(l.name)} />
+                <StatusBadge item={status.get(l.name)} where={deviceName} />
                 {ACCEPTABLE.has(status.get(l.name)?.status ?? "ok") && (
                   <button disabled={busy} title="Take the device's version of this look's effects as the new reference"
                     onClick={() => confirm(`Accept the device's version of the effects in “${l.name}”?\n\n${status.get(l.name)?.notes.join("\n")}`)
@@ -231,11 +233,13 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                     Accept
                   </button>
                 )}
-                <button disabled={busy} onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” on ${deviceName}${r.status === "ok" ? "" : ` (${r.status})`}`).then(onApplied)}>
+                <button disabled={busy || !showable(l.name)} title={showable(l.name) ? "Show it on the strip now" : explain(status.get(l.name), deviceName)}
+                  onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” on ${deviceName}${r.status === "ok" ? "" : ` (${r.status})`}`).then(onApplied)}>
                   Show
                 </button>
                 {onEdit && (
-                  <button disabled={busy} aria-label={`Edit ${l.name}`} title="Edit it in the library, without showing it"
+                  <button disabled={busy || !showable(l.name)} aria-label={`Edit ${l.name}`}
+                    title={showable(l.name) ? "Edit it in the library, without showing it" : explain(status.get(l.name), deviceName)}
                     onClick={() => onEdit(l.name)}>Edit</button>
                 )}
                 <button disabled={busy} aria-label={`Rename ${l.name}`} title="Rename; playlists that use it follow"
@@ -270,7 +274,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
             <tbody>
               {plan.report.map((r) => (
                 <tr key={r.look ?? `pl:${r.playlist}`} className={`status-${r.status}`}>
-                  <td>{r.look ?? `▶ ${r.playlist}`}</td><td>{r.preset_id ?? ""}</td><td>{r.status}</td><td>{r.notes.join("; ")}</td>
+                  <td>{r.look ?? `▶ ${r.playlist}`}</td><td>{r.preset_id ?? ""}</td><td>{r.status === "unavailable" ? "not on this device" : r.status}</td><td>{r.notes.join("; ")}</td>
                 </tr>
               ))}
             </tbody>
