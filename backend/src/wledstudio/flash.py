@@ -170,7 +170,12 @@ def plan_checks(request: Request, g: dict) -> tuple[list[dict], dict]:
         checks.append({"id": "size", "level": "ok" if image["size"] <= image["slot"] else "block",
                        "text": f"The image is {image['size']:,} bytes; the app slot holds {image['slot']:,}."})
     info = g["info"]
-    if info.get("arch") and info.get("arch") != "esp32":
+    if info.get("arch") == "virtual":
+        what = (info.get("virtual") or {}).get("firmware") or "a WLED firmware"
+        checks.append({"id": "arch", "level": "block",
+                       "text": f"This is a virtual device (a twin of {what}): it runs the firmware it was built from, "
+                               "and can't be flashed."})
+    elif info.get("arch") and info.get("arch") != "esp32":
         checks.append({"id": "arch", "level": "block", "text": f"The device is an {info['arch']}, not a classic ESP32."})
     ota = (g["cfg"].get("ota") or {})
     checks.append({"id": "ota-lock", "level": "block" if ota.get("lock") else "ok",

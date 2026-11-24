@@ -72,6 +72,7 @@ class FakeDevice:
     ota_lock: bool = False
     boot_preset: int = 0
     image: str = "stock"
+    arch: str = "esp32"
     previous: tuple | None = None          # (image, effects) in the other OTA slot
     flash_effects: list | None = None      # what a flashed image registers (tests)
     flash_heap: int | None = None          # its free heap (tests)
@@ -149,7 +150,7 @@ class FakeDevice:
     def info(self, now: float = 0.0) -> dict:
         return {
             "ver": "16.0.1", "vid": 2605010, "name": "Fake WLED", "brand": "WLED", "product": "FakeDevice",
-            "release": "Fake", "arch": "esp32", "mac": "000000000000",
+            "release": "Fake", "arch": self.arch, "mac": "000000000000",
             "leds": {"count": self.led_count, "rgbw": True, "maxseg": 32, "maxpwr": 0},
             "fxcount": len(self.effects), "palcount": len(PALETTES),
             "cpalcount": (max(self.palette_files) + 1) if self.palette_files else 0,

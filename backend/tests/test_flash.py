@@ -156,6 +156,17 @@ def test_ota_lock_and_a_failed_gate_block(make, device):
     assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).status_code == 409
 
 
+def test_a_virtual_device_is_never_flashed(make, device):
+    c, dev, _ = make()
+    device.arch = "virtual"
+    plan = c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()
+    assert "arch" in blocks(plan)
+    assert "virtual device" in next(x["text"] for x in plan["checks"] if x["id"] == "arch")
+    assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE},
+                  headers=CSRF).status_code == 409
+    assert device.flashes == 0
+
+
 def test_an_image_that_isnt_the_gates_is_not_uploaded(make, device):
     c, dev, _ = make(sha="0" * 64)
     run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
