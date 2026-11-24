@@ -101,8 +101,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 **Known bugs, found 2026-11-24:**
 - ~~The code editor hid effect folders with hyphens in their names~~ (fixed 2026-11-24): existing
   folders follow the builder's rule (`[A-Za-z0-9_-]`); a new one must still be a C identifier.
-- Run outside the container (no bundled default preview), the Effect studio shows only the compile
-  box until the first compile, and the code editor is hidden too. Show the editor regardless.
+- ~~Without a bundled preview the code editor was hidden until the first compile~~ (fixed
+  2026-11-24).
 
 ## Decided design
 

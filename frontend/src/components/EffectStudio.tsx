@@ -170,12 +170,21 @@ export function EffectStudio({ notify, load = Preview.load }: {
     return () => cancelAnimationFrame(raf);
   }, [preview, effect, room]);
 
+  // the code editor works with or without a preview: without one, it's how the first preview starts
+  const editor = (
+    <CodeEditor notify={notify} onSaved={(folder) => {
+      if (mine && !mine.includes(folder)) setMine([...mine, folder]);
+      setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
+    }} />
+  );
+
   if (error) {
     return (
       <section className="studio">
         <h2>Effect studio</h2>
         <p>This build has no effect preview ({error}). Previews are compiled with Emscripten by wled-studio-builder.</p>
         {compileBox}
+        {editor}
       </section>
     );
   }
@@ -242,10 +251,7 @@ export function EffectStudio({ notify, load = Preview.load }: {
           )}
         </div>
       )}
-      <CodeEditor notify={notify} onSaved={(folder) => {
-        if (mine && !mine.includes(folder)) setMine([...mine, folder]);
-        setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
-      }} />
+      {editor}
     </section>
   );
 }

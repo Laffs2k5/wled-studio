@@ -55,6 +55,17 @@ test("explains a build without a preview", async () => {
   expect(await screen.findByText(/has no effect preview/)).toBeInTheDocument();
 });
 
+test("shows the code editor before there is a preview", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/api/effects"
+    ? new Response(JSON.stringify([{ folder: "my-fx", files: ["fx.cpp"] }]), { status: 200 })
+    : url === "/api/devices" ? new Response("[]", { status: 200 })
+    : new Response(JSON.stringify({ enabled: false }), { status: 200 })));
+  render(<EffectStudio notify={() => {}} load={async () => { throw new Error("404"); }} />);
+  expect(await screen.findByText(/has no effect preview/)).toBeInTheDocument();
+  const files = await screen.findByLabelText("Effect file");
+  expect([...files.querySelectorAll("option")].map((o) => o.textContent)).toContain("my-fx/fx.cpp");
+});
+
 test("compiles your effects with the builder and previews them", async () => {
   const JID = "c".repeat(32);
   let polls = 0;
