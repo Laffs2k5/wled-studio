@@ -11,9 +11,11 @@ const OUT = "../docs/screenshots";
 
 test("screenshots", async ({ page }) => {
   await page.goto("/");
-  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  // first run: the card asks for a device; later, the header's Add device opens the form
+  await expect(page.getByLabel("Address (IP or host name)").or(page.getByRole("button", { name: "Add device" })).first()).toBeVisible();
+  if (await page.getByLabel("Address (IP or host name)").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
   await page.getByLabel("Device name").fill("Living room");
-  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByLabel("Address (IP or host name)").fill(DEVICE_HOST);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("option", { name: "Spectrum Bars" }).click();
   await expect(page.getByRole("heading", { name: /Spectrum Bars/ })).toBeVisible();

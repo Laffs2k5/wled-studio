@@ -84,6 +84,15 @@ input.preset-id { width: 11rem; }
 .save-look-form h3 { margin: .2rem 0; font-size: .95rem; }
 .save-look-form p { margin: 0; }
 label.field { display: grid; gap: .2rem; font-size: .9rem; }
+/* the first-run card: one device to add, fields above each other, each with a line of help */
+.first-run { display: flex; justify-content: center; }
+.add-device-card { width: 100%; max-width: 32rem; margin-top: 2rem; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 1rem 1.25rem; display: grid; gap: .75rem; }
+.add-device-card h2 { margin: 0; font-size: 1.15rem; }
+.add-device-card p { margin: 0; }
+.add-device-card .field { display: grid; gap: .25rem; }
+.add-device-card .field input { width: 100%; }
+.add-device-bar input { min-width: 12rem; }
 label.field input:not(.preset-id) { max-width: 22rem; }
 fieldset.choice { border: none; padding: 0; margin: 0; display: grid; gap: .3rem; font-size: .9rem; }
 fieldset.choice legend { padding: 0; margin-bottom: .2rem; }

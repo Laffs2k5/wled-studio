@@ -31,17 +31,23 @@ test("sets the PIN of the current device; the PIN is write-only", async () => {
   expect(JSON.parse(calls[0].body!)).toEqual({ pin: "4321" });
 });
 
-test("adds a device", async () => {
+test("adds a device from the header; a pasted URL is taken as its host", async () => {
   const calls = stub();
   const onSelect = vi.fn();
   render(<DeviceBar devices={devices} current="desk" onSelect={onSelect} onChanged={() => {}} notify={() => {}} />);
   fireEvent.click(screen.getByText("Add device"));
+  expect(screen.getByText("Adding only reads the device.")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Device name"), { target: { value: "New" } });
-  fireEvent.change(screen.getByLabelText("Device host"), { target: { value: "x.lan" } });
-  fireEvent.change(screen.getByLabelText("Settings PIN"), { target: { value: "1" } });
+  fireEvent.change(screen.getByLabelText("Address (IP or host name)"), { target: { value: "http://x.lan/" } });
+  fireEvent.change(screen.getByLabelText("Settings PIN (optional)"), { target: { value: "1" } });
   fireEvent.click(screen.getByText("Add"));
   await waitFor(() => expect(onSelect).toHaveBeenCalledWith("new"));
   expect(JSON.parse(calls[0].body!)).toEqual({ name: "New", host: "x.lan", pin: "1" });
+});
+
+test("no Add device in the header while the first-run card asks for one", () => {
+  render(<DeviceBar devices={[]} current={null} onSelect={() => {}} onChanged={() => {}} notify={() => {}} hideAdd />);
+  expect(screen.queryByText("Add device")).toBeNull();
 });
 
 test("a virtual device is marked in the picker", () => {

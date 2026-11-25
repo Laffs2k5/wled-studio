@@ -18,10 +18,13 @@ test("look studio: add the device, live control, save a look and write it", asyn
   await expect(page.getByRole("heading", { name: "wled-studio" })).toBeVisible();
 
   const name = `E2E ${Date.now() % 100000}`;
-  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  // first run: the card asks for a device; later, the header's Add device opens the form
+  await expect(page.getByLabel("Address (IP or host name)").or(page.getByRole("button", { name: "Add device" })).first()).toBeVisible();
+  if (await page.getByLabel("Address (IP or host name)").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
   await page.getByLabel("Device name").fill(name);
-  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByLabel("Address (IP or host name)").fill(DEVICE_HOST);
   await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator(".toast")).toContainText(/Found: WLED .*, \d+ LEDs/);   // the connection test after adding
   await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
 
   // pick an effect: its own controls appear, with its labels
@@ -71,9 +74,11 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
   const problems = watchCsp(page);
   await page.goto("/");
   const name = `E2E seg ${Date.now() % 100000}`;
-  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  // first run: the card asks for a device; later, the header's Add device opens the form
+  await expect(page.getByLabel("Address (IP or host name)").or(page.getByRole("button", { name: "Add device" })).first()).toBeVisible();
+  if (await page.getByLabel("Address (IP or host name)").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
   await page.getByLabel("Device name").fill(name);
-  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByLabel("Address (IP or host name)").fill(DEVICE_HOST);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
   const devices = await (await request.get("/api/devices")).json();
@@ -145,9 +150,11 @@ test("segments: duplicate, restack, name, and drag on the map", async ({ page, r
   const problems = watchCsp(page);
   await page.goto("/");
   const name = `E2E stack ${Date.now() % 100000}`;
-  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  // first run: the card asks for a device; later, the header's Add device opens the form
+  await expect(page.getByLabel("Address (IP or host name)").or(page.getByRole("button", { name: "Add device" })).first()).toBeVisible();
+  if (await page.getByLabel("Address (IP or host name)").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
   await page.getByLabel("Device name").fill(name);
-  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByLabel("Address (IP or host name)").fill(DEVICE_HOST);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
   const devices = await (await request.get("/api/devices")).json();
@@ -190,9 +197,11 @@ test("a saved look is edited in the library, not on the strip", async ({ page, r
   const problems = watchCsp(page);
   await page.goto("/");
   const name = `E2E edit ${Date.now() % 100000}`;
-  if (await page.getByLabel("Device host").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
+  // first run: the card asks for a device; later, the header's Add device opens the form
+  await expect(page.getByLabel("Address (IP or host name)").or(page.getByRole("button", { name: "Add device" })).first()).toBeVisible();
+  if (await page.getByLabel("Address (IP or host name)").count() === 0) await page.getByRole("button", { name: "Add device" }).click();
   await page.getByLabel("Device name").fill(name);
-  await page.getByLabel("Device host").fill(DEVICE_HOST);
+  await page.getByLabel("Address (IP or host name)").fill(DEVICE_HOST);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
   const devices = await (await request.get("/api/devices")).json();

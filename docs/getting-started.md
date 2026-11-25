@@ -23,8 +23,14 @@ docker compose up -d                    # http://localhost:8080
 
 ## 2. Add a device
 
-**Add device**, with a name and the host (`wled-kitchen.local`, `192.168.1.40`, …). Hosts must be
-on your network; public addresses are refused unless you allow them.
+On first start, Looks & effects shows a card **Add your WLED controller**: a name, the address
+(`wled-kitchen.local`, `192.168.1.40`, with `:port` if it isn't 80; a pasted `http://…/` is fine)
+and, only if you set one in WLED under Security, the settings PIN. Later devices are added with
+**Add device** in the header. Addresses must be on your network; public addresses are refused
+unless you allow them.
+
+Adding only reads the device: the app stores it, then reads it once and says what it found
+("Added Kitchen. Found: WLED 16.0.1, 250 LEDs."), or that it doesn't answer at that address.
 
 The **Device** select in the header picks the device you work on, in every view: Looks & effects,
 the Slot grid's write bar, the Effect studio's preview and room map, and the device Firmware

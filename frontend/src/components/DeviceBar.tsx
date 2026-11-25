@@ -3,6 +3,7 @@ import { DEVICE_SELECT_ID, deviceLabel } from "../devices";
 import { useState } from "react";
 import { api } from "../api";
 import type { Device } from "../types";
+import { AddDevice } from "./AddDevice";
 
 interface Props {
   devices: Device[];
@@ -10,13 +11,12 @@ interface Props {
   onSelect: (id: string) => void;
   onChanged: () => void;
   notify: (msg: string, error?: boolean) => void;
+  /** Hide "Add device": the first-run card below asks for the first device. */
+  hideAdd?: boolean;
 }
 
-export function DeviceBar({ devices, current, onSelect, onChanged, notify }: Props) {
-  const [adding, setAdding] = useState(devices.length === 0);
-  const [name, setName] = useState("");
-  const [host, setHost] = useState("");
-  const [pin, setPin] = useState("");
+export function DeviceBar({ devices, current, onSelect, onChanged, notify, hideAdd = false }: Props) {
+  const [adding, setAdding] = useState(false);
   const [pinFor, setPinFor] = useState<string | null>(null);
   const [newPin, setNewPin] = useState("");
   const cur = devices.find((d) => d.id === current);
@@ -54,26 +54,9 @@ export function DeviceBar({ devices, current, onSelect, onChanged, notify }: Pro
           <button className="primary">Save PIN</button>
         </form>
       )}
-      <button onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "Add device"}</button>
-      {adding && (
-        <form className="row" onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            const d = await api.addDevice(name.trim(), host.trim(), pin || undefined);
-            setName(""); setHost(""); setPin(""); setAdding(false);
-            onChanged();
-            onSelect(d.id);
-            notify(`Added ${d.name}`);
-          } catch (err) {
-            notify((err as Error).message, true);
-          }
-        }}>
-          <input placeholder="Name" value={name} required maxLength={64} aria-label="Device name" onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Host (wled.local or 192.168.x.y)" value={host} required aria-label="Device host" onChange={(e) => setHost(e.target.value)} />
-          <input placeholder="Settings PIN (optional)" value={pin} type="password" autoComplete="off" maxLength={16}
-            aria-label="Settings PIN" onChange={(e) => setPin(e.target.value)} />
-          <button className="primary">Add</button>
-        </form>
+      {!hideAdd && <button onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "Add device"}</button>}
+      {adding && !hideAdd && (
+        <AddDevice variant="bar" notify={notify} onAdded={(d) => { setAdding(false); onChanged(); onSelect(d.id); }} />
       )}
     </div>
   );

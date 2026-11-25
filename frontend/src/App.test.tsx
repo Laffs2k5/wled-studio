@@ -20,11 +20,14 @@ function backend(routes: Record<string, Route>) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-test("first run asks for a device", async () => {
+test("first run asks for a device in a card of its own", async () => {
   backend({ "GET /api/devices": () => [] });
   render(<App />);
-  expect(await screen.findByText("Add a WLED device to start.")).toBeInTheDocument();
-  expect(screen.getByLabelText("Device host")).toBeInTheDocument();
+  const card = await screen.findByRole("form", { name: "Add your WLED controller" });
+  expect(within(card).getByLabelText("Address (IP or host name)")).toHaveAccessibleDescription(/192\.168\.1\.50 or wled\.local/);
+  expect(within(card).getByLabelText("Settings PIN (optional)")).toHaveAccessibleDescription(/Only if you set one in WLED under Security/);
+  expect(within(card).getByText(/Adding only reads the device/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Add device" })).toBeNull();   // the card asks; the header doesn't
 });
 
 test("shows the device's effect with its own controls, and sends live changes", async () => {
@@ -76,7 +79,7 @@ test("asks for the token when the backend wants one, then sends it", async () =>
   const input = await screen.findByLabelText("Access token");
   fireEvent.change(input, { target: { value: "tok-123" } });
   fireEvent.click(screen.getByText("Continue"));
-  expect(await screen.findByText("Add a WLED device to start.")).toBeInTheDocument();
+  expect(await screen.findByRole("form", { name: "Add your WLED controller" })).toBeInTheDocument();
   expect(authorised).toBe(true);
   expect(sessionStorage.getItem("wledstudio.token")).toBe("tok-123");
 });
