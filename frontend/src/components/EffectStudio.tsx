@@ -31,9 +31,11 @@ function initialSegment(e: Effect): Segment {
 }
 
 /** Your own effects, running in the browser (WebAssembly), drawn on a strip. */
-export function EffectStudio({ notify, load = Preview.load, device = null }: {
+export function EffectStudio({ notify, load = Preview.load, device = null, onBuild }: {
   notify: (msg: string, error?: boolean) => void;
   load?: (url?: string, length?: number) => Promise<Preview>;
+  /** Build firmware with these folders (opens the Firmware view with them ticked). */
+  onBuild?: (folders: string[]) => void;
   /** The header's device: the preview takes its shape, and streams to it, unless another is picked here. */
   device?: string | null;
 }) {
@@ -324,6 +326,12 @@ export function EffectStudio({ notify, load = Preview.load, device = null }: {
             </label>
           )}
         </div>
+      )}
+      {shown && onBuild && (
+        <p className="next-step small">
+          Happy with it? To run it on the controller it must be built into firmware.{" "}
+          <button className="link" onClick={() => onBuild(shown.folders)}>Build firmware with {shown.folders.join(", ")} →</button>
+        </p>
       )}
       {editor}
     </section>

@@ -172,3 +172,4 @@ button.code-place { font: inherit; text-align: left; }
 .build-form select { max-width: 100%; }
 .build-form p { margin: 0; }
 .firmware .ok { color: var(--ok); }
+.next-step { margin: .8rem 0 0; padding: .4rem .7rem; border-left: 3px solid var(--accent); }

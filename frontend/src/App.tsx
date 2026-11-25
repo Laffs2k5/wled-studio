@@ -17,7 +17,10 @@ export function App() {
   const setCurrent = useCallback((id: string | null) => { setCurrentState(id); rememberedDevice.set(id); }, []);
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
   const [needToken, setNeedToken] = useState(false);
-  const [view, setView] = useState<"looks" | "slots" | "studio" | "firmware">("looks");
+  const [view, setViewState] = useState<"looks" | "slots" | "studio" | "firmware">("looks");
+  // the Effect studio's "Build firmware with these effects": the folders the Firmware view opens with
+  const [buildRequest, setBuildRequest] = useState<{ folders: string[]; seq: number } | null>(null);
+  const setView = (v: typeof view) => { setBuildRequest(null); setViewState(v); };
 
   const notify = useCallback((msg: string, error = false) => {
     setToast({ msg, error });
@@ -63,7 +66,9 @@ export function App() {
         </nav>
         {devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify} />}
       </header>
-      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={devices?.find((d) => d.id === current)?.name} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} /> : view === "studio" ? <EffectStudio notify={notify} device={current} /> :
+      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={devices?.find((d) => d.id === current)?.name} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} request={buildRequest} /> : view === "studio" ? (
+        <EffectStudio notify={notify} device={current} onBuild={(folders) => { setViewState("firmware"); setBuildRequest({ folders, seq: Date.now() }); }} />
+      ) :
         current ? <DevicePanel key={current} deviceId={current} notify={notify} onVirtual={(v) => {
           // the list says what the device was when last read; a different answer now: list again
           if (Boolean(devices?.find((d) => d.id === current)?.virtual) !== v) reload();

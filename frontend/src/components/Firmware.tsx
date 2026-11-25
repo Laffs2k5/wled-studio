@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FlashPanel } from "./FlashPanel";
 import { api, firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
 import { gateLines } from "../gate";
@@ -16,11 +16,13 @@ export const firmwareFolders = remembered<string[]>("wledstudio.firmware.folders
 const FIT_NOTE: Record<Fit, string> = { match: "matches", "other-release": "same board, other release", "other-board": "different board" };
 
 /** Build firmware with your own effects, through the gate (wled-studio-builder). */
-export function Firmware({ notify, devices = [], device = null }: {
+export function Firmware({ notify, devices = [], device = null, request = null }: {
   notify: (msg: string, error?: boolean) => void;
   /** The devices, and the one picked in the header: the library is checked, and images flashed, for it. */
   devices?: Device[];
   device?: string | null;
+  /** From the Effect studio: build with these folders, for the target that matches the device. */
+  request?: { folders: string[]; seq: number } | null;
 }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [targets, setTargets] = useState<FirmwareTarget[]>([]);
@@ -60,14 +62,25 @@ export function Firmware({ notify, devices = [], device = null }: {
     return () => { stop = true; };
   }, [device]);
 
+  // from the Effect studio: its folders ticked, and the matching target before the last choice
+  const preferMatch = useRef(false);
+  useEffect(() => {
+    if (!request) return;
+    setChosen(request.folders);
+    preferMatch.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.seq]);
+
   // the target: the one last chosen for this device, else the one that matches it, else the first
   useEffect(() => {
     if (!targets.length || info === undefined) return;
     const keys = targets.map(targetKey);
     const last = firmwareTarget.get()[device ?? ""];
     const match = matchingTarget(targets, info);
-    setTargetState(last && keys.includes(last) ? last : match ? targetKey(match) : keys[0]);
-  }, [targets, info, device]);
+    const preferred = preferMatch.current && match ? targetKey(match) : last;
+    preferMatch.current = false;
+    setTargetState(preferred && keys.includes(preferred) ? preferred : match ? targetKey(match) : keys[0]);
+  }, [targets, info, device, request?.seq]);
 
   // follow the open job while it runs
   useEffect(() => {

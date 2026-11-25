@@ -96,6 +96,9 @@ watch them run, and build them in.
 3. **On the strip:** **Stream to the strip** sends the preview to the header's device (or another
    one picked under **Preview on**) live (DDP); its own effect comes back a few seconds after you
    stop.
+4. **Into firmware:** once the preview shows your effects, **Build firmware with …** under it opens
+   **Firmware** with those folders ticked and the board that matches the header's device picked
+   (see 6).
 
 Compiling needs the firmware builder:
 

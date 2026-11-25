@@ -35,6 +35,12 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 
+test("no way on to firmware while the preview shows the built-in example", async () => {
+  render(<EffectStudio notify={() => {}} onBuild={() => {}} load={async () => new Preview(fakeModule() as never)} />);
+  await screen.findByLabelText("Preview effect");
+  expect(screen.queryByText(/Build firmware with/)).toBeNull();
+});
+
 test("lists the build's own effects with their controls, and sends changes to the preview", async () => {
   const m = fakeModule();
   render(<EffectStudio notify={() => {}} load={async () => new Preview(m as never)} />);
@@ -91,7 +97,8 @@ test("compiles your effects with the builder and previews them", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   const loads: (string | undefined)[] = [];
   const load = async (url?: string) => { loads.push(url); return new Preview(fakeModule() as never); };
-  render(<EffectStudio notify={() => {}} load={load} />);
+  const onBuild = vi.fn();
+  render(<EffectStudio notify={() => {}} load={load} onBuild={onBuild} />);
   expect(await screen.findByLabelText("What the preview shows")).toHaveTextContent(
     "Showing: the built-in example effect, not your code. Compile your own effects to see them.");
   expect(screen.getByText("Effect folders to compile:")).toBeInTheDocument();
@@ -102,6 +109,9 @@ test("compiles your effects with the builder and previews them", async () => {
   await vi.advanceTimersByTimeAsync(2500);
   await waitFor(() => expect(loads).toContain(`/api/firmware/jobs/${JID}/preview/preview.mjs`));
   await waitFor(() => expect(screen.getByLabelText("What the preview shows")).toHaveTextContent(/^Showing: my_fx, compiled \d\d:\d\d\.$/));
+  // the way on: build firmware with what the preview shows
+  fireEvent.click(screen.getByRole("button", { name: "Build firmware with my_fx →" }));
+  expect(onBuild).toHaveBeenCalledWith(["my_fx"]);
   vi.useRealTimers();
 });
 

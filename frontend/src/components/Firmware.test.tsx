@@ -177,3 +177,20 @@ test("a device whose board isn't among the targets: the first, with a line that 
   expect(await screen.findByText(/Not Desk's board: it runs Fake, WLED 16.0.1. None of the builder's targets matches it./)).toBeInTheDocument();
   expect(screen.getByLabelText("Board and WLED release")).toHaveValue("a.json|board-one");
 });
+
+test("from the Effect studio: its folders ticked, and the matching target over the last choice", async () => {
+  localStorage.setItem("wledstudio.firmware.target", JSON.stringify({ desk: "a.json|board-one" }));
+  stub({
+    "GET /api/firmware/status": json({ enabled: true }),
+    "GET /api/firmware/targets": json([{ pins: "a.json", release: "a-16.0.1", target: "board-one", verified: ["windows"] },
+      { pins: "a.json", release: "a-16.0.1", target: "dig-next-2", verified: ["windows"] }]),
+    "GET /api/firmware/usermods": json(["my_fx", "other_fx"]),
+    "GET /api/firmware/jobs": json([]),
+    "GET /api/devices/desk/profile": json({ info: { release: "Dig-Next-2", ver: "16.0.1" } }),
+  });
+  render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk"
+    request={{ folders: ["other_fx"], seq: 1 }} />);
+  await waitFor(() => expect(screen.getByLabelText("Board and WLED release")).toHaveValue("a.json|dig-next-2"));
+  expect(await screen.findByLabelText("other_fx")).toBeChecked();
+  expect(screen.getByLabelText("my_fx")).not.toBeChecked();
+});
