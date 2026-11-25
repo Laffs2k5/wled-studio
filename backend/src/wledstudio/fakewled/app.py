@@ -67,6 +67,7 @@ class FakeDevice:
     palette_files: dict = field(default_factory=dict)
     ws_connections: int = 0
     audio_enabled: bool = False
+    playlist: dict | None = None           # the last playlist sent as an object
     effects: list = field(default_factory=lambda: list(EFFECTS))
     # firmware
     ota_lock: bool = False
@@ -102,6 +103,11 @@ class FakeDevice:
     def apply(self, body: dict, now: float) -> None:
         if "pin" in body:
             self.check_pin(str(body["pin"]), now)
+        if isinstance(body.get("playlist"), dict) and isinstance(body["playlist"].get("ps"), list) and body["playlist"]["ps"]:
+            # a playlist sent as an object: kept, and its first preset shown (no timer runs here)
+            self.playlist = body["playlist"]
+            self.apply({"ps": body["playlist"]["ps"][0]}, now)
+            self.state["pl"] = 0
         if "ps" in body:
             p = self.presets.get(str(body["ps"]))
             if p:

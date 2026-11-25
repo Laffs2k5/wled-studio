@@ -14,7 +14,7 @@ from . import fxmeta, netcheck
 from .devices import Device, DeviceStore
 from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
                       import_presets, mic_for,
-                      playlist_from_preset, resolve_look, segment_from_state, tag_areas)
+                      playlist_from_preset, resolve_look, resolve_playlist, segment_from_state, tag_areas)
 from .push import DuplicatePresetIds, StateStore, fetch_lists, push
 from .session import SEG_RESTORE, Sessions, restore_payload
 from .wled import WLEDClient, WLEDError, WLEDLocked
@@ -856,6 +856,34 @@ async def apply_look(device_id: str, name: str, request: Request):
             payload = {k: v for k, v in r.preset.items() if k != "n"}
             await c.set_state(payload)
         except WLEDError as e:
+            raise device_errors(e) from None
+    return {"status": r.status, "notes": r.notes}
+
+
+@router.post("/devices/{device_id}/play/{name}")
+async def play_playlist(device_id: str, name: str, request: Request):
+    """Play a library playlist on the device now: its looks' presets, as stored on the device, in
+    turn. Refused when a preset it plays isn't on the device as the library has it (write first).
+    Sends only WLED's playlist object (preset ids and times); nothing is saved on the device."""
+    dev = device_or_404(device_id, request)
+    lib: LibraryStore = request.app.state.library
+    pl = lib.playlists().get(name)
+    if pl is None:
+        raise HTTPException(404, "no such playlist")
+    looks = lib.looks()
+    r = resolve_playlist(pl, looks)
+    if r.preset is None:
+        raise HTTPException(409, {"status": r.status, "notes": r.notes})
+    async with make_client(request, dev) as c:
+        try:
+            stored = json.loads(await c.presets_text() or "{}")
+            missing = [f"preset {looks[e['look']]['preset_id']} (“{e['look']}”)" for e in pl["entries"]
+                       if (stored.get(str(looks[e["look"]]["preset_id"])) or {}).get("n") != e["look"]]
+            if missing:
+                raise HTTPException(409, f"Not on {dev.name} yet: {', '.join(dict.fromkeys(missing))}. "
+                                         "Write presets first, then show the playlist.")
+            await c.set_state({"playlist": r.preset["playlist"]})
+        except (WLEDError, json.JSONDecodeError) as e:
             raise device_errors(e) from None
     return {"status": r.status, "notes": r.notes}
 

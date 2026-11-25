@@ -271,3 +271,9 @@ button.code-place { font: inherit; text-align: left; }
 .preflight-summary { font-weight: 600; margin: .5rem 0 .2rem; }
 .preflight-summary.ok { color: var(--ok); }
 .preflight .plan-group table { margin-top: .2rem; }
+/* the playlist form: labelled fields, entries with their seconds and ▲/▼ */
+.playlist-form .field { display: grid; gap: .2rem; font-size: .9rem; }
+.playlist-entries { padding-left: 1.4rem; margin: .4rem 0; }
+.playlist-entries li { margin: .15rem 0; }
+.playlist-entries button { padding: .1rem .45rem; }
+.look-list li > .action-result { flex-basis: 100%; }

@@ -267,6 +267,8 @@ export const api = {
     request<{ id: number }>("POST", `/api/devices/${enc(id)}/segments/${seg}/duplicate`),
   apply: (id: string, name: string) =>
     request<{ status: string; notes: string[] }>("POST", `/api/devices/${enc(id)}/apply/${enc(name)}`),
+  play: (id: string, playlist: string) =>
+    request<{ status: string; notes: string[] }>("POST", `/api/devices/${enc(id)}/play/${enc(playlist)}`),
   check: (id: string) => request<CheckItem[]>("GET", `/api/devices/${enc(id)}/check`),
   session: (id: string) => request<EditingSession>("GET", `/api/devices/${enc(id)}/session`),
   startSession: (id: string) => request<EditingSession>("POST", `/api/devices/${enc(id)}/session`),

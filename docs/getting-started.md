@@ -112,7 +112,12 @@ confirmations show for a few seconds at the top right; errors stay there until y
 (×).
 
 **Playlists** (looks in a row, with times and shuffle) and **palettes** (a gradient editor) live in
-the library too, and are written with the looks.
+the library too, and are written with the looks. A playlist plays its looks' presets, so only looks
+with a preset id can be in one (the others are listed greyed out, with the reason). In its form,
+each look has its own seconds and ▲/▼ to reorder; **Fade between looks** sets the transition, and
+the total time is shown. **Edit** on a playlist's row loads it into the form (its name stays);
+**Show on strip** plays it on the device now, from the presets stored there, so it's refused, with
+the presets it lacks, until they are written.
 
 ## 4. The room's shape
 

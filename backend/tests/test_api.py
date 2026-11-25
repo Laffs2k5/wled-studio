@@ -547,6 +547,34 @@ def test_playlists(client, dev_id, device):
     assert client.delete("/api/playlists/Party", headers=CSRF).status_code == 404
 
 
+def test_a_playlist_is_edited_by_name_and_played_on_the_device(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/state", json={"seg": [{"id": 0, "fx": 8}]}, headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/B?preset_id=2", headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/capture/Loose", headers=CSRF)
+    pl = {"name": "Mix", "preset_id": 10, "entries": [{"look": "A", "duration": 300}, {"look": "B", "duration": 50}]}
+    assert client.put("/api/playlists/Mix", json=pl, headers=CSRF).status_code == 200
+    assert client.post("/api/library/playlists/folder", json={"names": ["Mix"], "folder": "Evening"}, headers=CSRF).status_code == 200
+    # saving under the same name replaces it (an edit), and keeps its folder
+    edited = {**pl, "entries": [{"look": "B", "duration": 100, "transition": 20}, {"look": "A", "duration": 300, "transition": 20}]}
+    assert client.put("/api/playlists/Mix", json=edited, headers=CSRF).status_code == 200
+    stored = client.get("/api/playlists").json()
+    assert len(stored) == 1 and stored[0]["entries"][0] == {"look": "B", "duration": 100, "transition": 20}
+    assert stored[0]["folder"] == "Evening"
+    # playing it before its looks' presets are on the device: refused, saying which
+    r = client.post(f"/api/devices/{dev_id}/play/Mix", headers=CSRF)
+    assert r.status_code == 409 and "preset 2 (“B”), preset 1 (“A”)" in r.json()["detail"] and "Write presets first" in r.json()["detail"]
+    assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]
+    r = client.post(f"/api/devices/{dev_id}/play/Mix", headers=CSRF)
+    assert r.status_code == 200, r.text
+    assert device.state["pl"] == 0 and device.playlist == {"ps": [2, 1], "dur": [100, 300], "transition": [20, 20], "repeat": 0, "r": False, "end": 0}
+    # a playlist with a look that has no preset id can't play; an unknown one is 404
+    client.put("/api/playlists/Bad", json={"name": "Bad", "entries": [{"look": "Loose"}]}, headers=CSRF)
+    r = client.post(f"/api/devices/{dev_id}/play/Bad", headers=CSRF)
+    assert r.status_code == 409 and "no preset id" in r.json()["detail"]["notes"][0]
+    assert client.post(f"/api/devices/{dev_id}/play/Nope", headers=CSRF).status_code == 404
+
+
 def test_unchanged_playlist_isnt_rewritten(client, dev_id, device):
     device.presets = {"0": {}, "3": {"n": "Evening", "seg": [{"id": 0, "start": 0, "stop": 60, "fx": 8}]},
                       "9": {"n": "Mix", "playlist": {"ps": [3], "dur": [100]}}}

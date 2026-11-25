@@ -224,7 +224,9 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
     <aside>
       <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
         beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName} />
-      <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks} />
+      <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
+        deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
+        onShown={reloadState} />
       <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
     </aside>
   );
