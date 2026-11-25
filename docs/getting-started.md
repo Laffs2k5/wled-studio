@@ -137,8 +137,10 @@ watch them run, and build them in.
 1. **Write:** in *Your effects' code*, **＋ New effect** opens a form: the folder name, the name
    shown in WLED, the effect id (200-254, fixed for good because presets store it; the next free
    one is suggested and the ones in use are listed) and what to start from: a wave along the strip,
-   or a room-aware wave that uses each LED's position (**Write room map** puts the positions from
-   your room shape next to it). After **Create** the code opens, its folder is ticked for
+   or a room-aware wave that uses each LED's position. Such an effect includes `room_map.h`: the
+   **Room-aware effects** box under the editor generates it from a device's room shape
+   (**Generate room_map.h**), says which device and how many LEDs it was generated from, and warns
+   when that room shape has changed since. After **Create** the code opens, its folder is ticked for
    compiling, and **Compile and preview** is offered. Edit, **Save**. The files are in
    `./effects`, one folder per effect.
 2. **Watch:** tick the **effect folders to compile** (opening a file ticks its folder; the ticks

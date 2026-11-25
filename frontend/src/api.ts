@@ -187,6 +187,17 @@ export interface Preflight {
 /** An effect folder, with the effect ids its code fixes (`constexpr uint8_t kId = 251;`). */
 export interface EffectFolder { folder: string; files: string[]; effect_ids?: number[] }
 
+/** A folder's room_map.h: whether it's there, and which device's room shape it was written from. */
+export interface RoomMapStatus {
+  exists: boolean;
+  device: string | null;
+  device_name?: string | null;
+  leds?: number;
+  written?: string;
+  /** That device's room shape changed (or went) since. */
+  stale?: boolean;
+}
+
 /** An effect folder's git state (effects_git.py); repo false: not a clone. */
 export interface GitState {
   repo: boolean;
@@ -211,6 +222,7 @@ export const effects = {
     request<EffectFolder>("POST", "/api/effects", { folder, title, effect_id, template }),
   roomMap: (folder: string, device: string) =>
     request<{ leds: number }>("POST", `/api/effects/${encodeURIComponent(folder)}/room-map`, { device }),
+  roomMapStatus: (folder: string) => request<RoomMapStatus>("GET", `/api/effects/${encodeURIComponent(folder)}/room-map`),
   git: (folder: string) => request<GitState>("GET", `/api/effects/${encodeURIComponent(folder)}/git`),
   gitDiff: (folder: string) =>
     request<{ diff: string; truncated: boolean; new_files: string[] }>("GET", `/api/effects/${encodeURIComponent(folder)}/git/diff`),

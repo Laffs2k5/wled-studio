@@ -17,6 +17,9 @@ flowchart LR
   - `devices.json` and `secrets/<id>.pin` (mode 0600);
   - `library.json` with every earlier version in `history/`;
   - `backups/<device>/` and `state/` (the last written presets hash per device);
+  - `room-maps.json`: which device's room shape each effect folder's `room_map.h` was generated
+    from, and a digest of that shape, so the studio can say when it's out of date (kept here, not
+    in the effect folder, which may be a public repository);
   - `flashes/<device>/`: each flash and revert, with what the device ran before (`before`). Both
     swap WLED's two firmware slots, so the latest one that reached the device says what the other
     slot holds (`GET /api/devices/<id>/previous-firmware`; unknown before the app's first).

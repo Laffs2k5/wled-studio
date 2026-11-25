@@ -8,6 +8,8 @@ outside the effects directory can be reached.
 """
 from __future__ import annotations
 
+import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -217,6 +219,33 @@ def list_effects(request: Request):
     return out
 
 
+# before /{folder}/{name}, which would take "room-map" for a file name
+def _room_maps(request: Request) -> Path:
+    """The app's record of which device's room shape each folder's room_map.h was written from
+    (kept in the app's data, not in the effect folder, which may be a public repository)."""
+    return request.app.state.settings.data_dir / "room-maps.json"
+
+
+def _room_digest(text: str) -> str:
+    return hashlib.sha256(json.dumps(json.loads(text), sort_keys=True).encode()).hexdigest()
+
+
+@router.get("/{folder}/room-map")
+def room_map_status(folder: str, request: Request):
+    """Whether the folder has a room_map.h, which device's room shape it was written from, and
+    whether that shape changed since (`stale`)."""
+    d = _folder(request, folder)
+    p = _room_maps(request)
+    rec = (json.loads(p.read_text()) if p.exists() else {}).get(folder)
+    out: dict = {"exists": (d / "room_map.h").is_file(), "device": None}
+    if rec and out["exists"]:
+        dev = request.app.state.devices.get(rec["device"])
+        room = request.app.state.settings.data_dir / "rooms" / f"{rec['device']}.json"
+        out.update(device=rec["device"], device_name=dev.name if dev else None, leds=rec["leds"], written=rec["written"],
+                   stale=not room.exists() or _room_digest(room.read_text()) != rec["room"])
+    return out
+
+
 @router.get("/{folder}/{name}")
 def read_file(folder: str, name: str, request: Request):
     p = _file(request, folder, name)
@@ -268,7 +297,15 @@ def write_room_map(folder: str, body: RoomMapIn, request: Request):
     d = _folder(request, folder)
     p = request.app.state.settings.data_dir / "rooms" / f"{body.device}.json"
     if not p.exists():
-        raise HTTPException(404, "that device has no room model")
-    room = json.loads(p.read_text())
+        raise HTTPException(404, "that device has no room shape")
+    text = p.read_text()
+    room = json.loads(text)
     (d / "room_map.h").write_text(room_map_header(room), encoding="utf-8")
-    return {"folder": folder, "name": "room_map.h", "leds": sum(e["pixels"] for e in room["edges"])}
+    leds = sum(e["pixels"] for e in room["edges"])
+    rp = _room_maps(request)
+    records = json.loads(rp.read_text()) if rp.exists() else {}
+    records[folder] = {"device": body.device, "leds": leds, "room": _room_digest(text),
+                       "written": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
+    rp.parent.mkdir(parents=True, exist_ok=True)
+    rp.write_text(json.dumps(records, indent=1) + "\n", encoding="utf-8")
+    return {"folder": folder, "name": "room_map.h", "leds": leds}

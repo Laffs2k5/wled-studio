@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { deviceLabel } from "../devices";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { api, effects, type EffectFolder } from "../api";
+import { api, effects, type EffectFolder, type RoomMapStatus } from "../api";
+import { when } from "./WriteBar";
 import { GitPanel } from "./GitPanel";
 
 // CodeMirror loads when a file is first opened, not with the page
@@ -50,7 +51,15 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   const [devices, setDevices] = useState<Device[]>([]);
   const [mapFor, setMapFor] = useState(device ?? "");
   useEffect(() => { setMapFor(device ?? ""); }, [device]);
-  const [saves, setSaves] = useState(0);      // refreshes the git panel after a save
+  const [saves, setSaves] = useState(0);      // refreshes the git panel (and the room map's line) after a save
+  const [mapStatus, setMapStatus] = useState<RoomMapStatus | null>(null);
+  const [mapResult, setMapResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const openFolder = file?.folder ?? null;
+  useEffect(() => { setMapResult(null); }, [openFolder]);
+  useEffect(() => {
+    setMapStatus(null);
+    if (openFolder) effects.roomMapStatus(openFolder).then(setMapStatus).catch(() => setMapStatus(null));
+  }, [openFolder, saves]);
   useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
 
   const reload = useCallback(() => effects.list().then(setFolders).catch(() => setFolders(null)), []);
@@ -174,17 +183,37 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
         <GitPanel folder={file?.folder ?? folders[0].folder} version={saves} notify={notify} />
       )}
       {file && devices.length > 0 && (
-        <div className="row small">
-          <span className="muted">Room map from</span>
-          <select value={mapFor} aria-label="Room map device" onChange={(e) => setMapFor(e.target.value)}>
-            <option value="">Pick a device…</option>
-            {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
-          </select>
-          <button disabled={!mapFor} title="Write room_map.h (each LED's position) into this effect's folder"
-            onClick={() => effects.roomMap(file.folder, mapFor)
-              .then((r) => { notify(`room_map.h written: ${r.leds} LEDs`); reload(); })
-              .catch((e) => notify(e.message, true))}>Write room map</button>
-        </div>
+        <section className="room-map-box small" aria-label="Room-aware effects">
+          <h3>Room-aware effects</h3>
+          <p className="muted">Effects that include <code>room_map.h</code> need each LED's position. Generate it into{" "}
+            {file.folder} from a device's room shape, and again after that shape changes.</p>
+          {mapStatus && (
+            <p className={mapStatus.stale ? "warn" : undefined} aria-label="room_map.h">
+              {!mapStatus.exists ? `${file.folder} has no room_map.h yet.`
+                : !mapStatus.device ? "room_map.h is there, but wasn't generated from a device's room shape by this app."
+                  : <>room_map.h: generated from {mapStatus.device_name ?? mapStatus.device}, {mapStatus.leds} LEDs
+                    {mapStatus.written ? ` (written ${when(mapStatus.written)})` : ""}.
+                    {mapStatus.stale ? ` ${mapStatus.device_name ?? mapStatus.device}'s room shape changed since: generate it again.` : ""}</>}
+            </p>
+          )}
+          <div className="row">
+            <label htmlFor="room-map-device">From the room shape of</label>
+            <select id="room-map-device" value={mapFor} onChange={(e) => setMapFor(e.target.value)}>
+              <option value="">Pick a device…</option>
+              {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
+            </select>
+            <button disabled={!mapFor} title="Write room_map.h (each LED's position) into this effect's folder"
+              onClick={() => effects.roomMap(file.folder, mapFor)
+                .then(async (r) => {
+                  setMapResult({ ok: true, text: `room_map.h generated: ${r.leds} LEDs.` });
+                  await reload();
+                  setSaves((n) => n + 1);           // the git panel lists the new or changed file
+                  if (file.name === "room_map.h" && !dirty) open(file.folder, file.name);
+                })
+                .catch((e) => setMapResult({ ok: false, text: e.message }))}>Generate room_map.h</button>
+          </div>
+          {mapResult && <p className={`action-result ${mapResult.ok ? "done" : "error"}`} role={mapResult.ok ? "status" : "alert"}>{mapResult.text}</p>}
+        </section>
       )}
       {file && (
         <Suspense fallback={<p className="muted small">Loading the editor…</p>}>

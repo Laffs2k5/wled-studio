@@ -12,7 +12,11 @@ function type(host: HTMLElement, text: string) {
 
 afterEach(() => vi.unstubAllGlobals());
 
+let mapped = false;
+let gitReads = 0;
 function stub(files: Record<string, string>) {
+  mapped = false;
+  gitReads = 0;
   const calls: { key: string; body?: string }[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const key = `${init?.method ?? "GET"} ${url}`;
@@ -20,7 +24,11 @@ function stub(files: Record<string, string>) {
     const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
     if (key === "GET /api/effects") return reply([{ folder: "my_fx", files: ["library.json", "my_fx.cpp"], effect_ids: [253] }]);
     if (key === "GET /api/devices") return reply([{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }]);
-    if (key === "POST /api/effects/my_fx/room-map") return reply({ leds: 250 });
+    if (key === "POST /api/effects/my_fx/room-map") { mapped = true; return reply({ leds: 250 }); }
+    if (key === "GET /api/effects/my_fx/room-map") return reply(mapped
+      ? { exists: true, device: "desk", device_name: "Desk", leds: 250, written: "2020-01-02T03:04:05+00:00", stale: false }
+      : { exists: true, device: "desk", device_name: "Desk", leds: 240, written: "2020-01-02T03:04:05+00:00", stale: true });
+    if (key === "GET /api/effects/my_fx/git") { gitReads++; return reply({ repo: false }); }
     if (key.startsWith("GET /api/effects/")) return reply({ content: files[url.split("/").slice(-1)[0]] ?? "" });
     if (key.startsWith("PUT /api/effects/")) return reply({ bytes: 1 });
     if (key === "POST /api/effects") return reply({ folder: "new_fx", files: ["library.json", "new_fx.cpp"] }, 201);
@@ -103,22 +111,31 @@ test("hidden when no effects directory is configured", async () => {
   await waitFor(() => expect(container).toBeEmptyDOMElement());
 });
 
-test("writes the room map for the open effect", async () => {
+test("room-aware effects: says where room_map.h came from and that it's out of date; generating it refreshes the lists", async () => {
   const calls = stub({ "my_fx.cpp": "x" });
-  const notify = vi.fn();
-  render(<CodeEditor notify={notify} />);
+  render(<CodeEditor notify={() => {}} />);
   fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/my_fx.cpp" } });
-  fireEvent.change(await screen.findByLabelText("Room map device"), { target: { value: "desk" } });
-  fireEvent.click(screen.getByText("Write room map"));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("room_map.h written: 250 LEDs"));
+  const box = await screen.findByRole("region", { name: "Room-aware effects" });
+  expect(within(box).getByText(/Effects that include/)).toHaveTextContent("Effects that include room_map.h need each LED's position.");
+  const line = await within(box).findByLabelText("room_map.h");
+  expect(line).toHaveTextContent(/^room_map\.h: generated from Desk, 240 LEDs \(written .*\)\. Desk's room shape changed since: generate it again\.$/);
+  expect(line).toHaveClass("warn");
+  fireEvent.change(within(box).getByLabelText("From the room shape of"), { target: { value: "desk" } });
+  const listsBefore = calls.filter((c) => c.key === "GET /api/effects").length;
+  const gitBefore = gitReads;
+  fireEvent.click(within(box).getByText("Generate room_map.h"));
+  expect(await within(box).findByText("room_map.h generated: 250 LEDs.")).toBeInTheDocument();
   expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects/my_fx/room-map")!.body!)).toEqual({ device: "desk" });
+  await waitFor(() => expect(within(box).getByLabelText("room_map.h")).not.toHaveClass("warn"));
+  expect(calls.filter((c) => c.key === "GET /api/effects").length).toBeGreaterThan(listsBefore);   // the file list
+  expect(gitReads).toBeGreaterThan(gitBefore);                                                     // the git panel (bug 5)
 });
 
 test("the room map comes from the header's device unless another is picked", async () => {
   stub({ "my_fx.cpp": "x" });
   const { rerender } = render(<CodeEditor notify={() => {}} device="desk" />);
   fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/my_fx.cpp" } });
-  expect(await screen.findByLabelText("Room map device")).toHaveValue("desk");
+  expect(await screen.findByLabelText("From the room shape of")).toHaveValue("desk");
   rerender(<CodeEditor notify={() => {}} device={null} />);
-  expect(screen.getByLabelText("Room map device")).toHaveValue("");
+  expect(screen.getByLabelText("From the room shape of")).toHaveValue("");
 });

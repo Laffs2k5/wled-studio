@@ -288,3 +288,7 @@ button.code-place { font: inherit; text-align: left; }
 .new-effect-form h3 { margin: .2rem 0; font-size: .95rem; }
 .new-effect-form p { margin: 0; }
 .new-effect-form .field input:not(.slot), .new-effect-form .field select { max-width: 24rem; }
+/* the studio's room-aware effects box: what room_map.h is and where it came from */
+.room-map-box { border: 1px solid var(--line); border-radius: 8px; padding: .3rem .8rem .5rem; margin: .5rem 0; }
+.room-map-box h3 { margin: .2rem 0; font-size: .9rem; }
+.room-map-box p { margin: .2rem 0; }

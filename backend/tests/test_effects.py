@@ -94,9 +94,22 @@ def test_room_template_and_map(tmp_path):
     rooms = tmp_path / "d" / "rooms"
     rooms.mkdir(parents=True)
     (rooms / "desk.json").write_text('{"edges": [{"direction": "right", "pixels": 3}]}')
+    # the template's empty map: there, but not written from a device
+    assert c.get("/api/effects/room_wave/room-map").json() == {"exists": True, "device": None}
     r = c.post("/api/effects/room_wave/room-map", json={"device": "desk"}, headers=CSRF)
     assert r.status_code == 200 and r.json()["leds"] == 3
     assert "kRoomLeds = 3;" in (eff / "room_wave" / "room_map.h").read_text()
+    st = c.get("/api/effects/room_wave/room-map").json()
+    assert st["device"] == "desk" and st["leds"] == 3 and st["stale"] is False and st["written"]
+    assert st["device_name"] is None              # no device by that id in this app
+    # the room shape changes (the same shape written differently doesn't count)
+    (rooms / "desk.json").write_text('{"edges":[{"pixels": 3, "direction": "right"}]}')
+    assert c.get("/api/effects/room_wave/room-map").json()["stale"] is False
+    (rooms / "desk.json").write_text('{"edges": [{"direction": "right", "pixels": 4}]}')
+    assert c.get("/api/effects/room_wave/room-map").json()["stale"] is True
+    assert "desk" not in (eff / "room_wave" / "room_map.h").read_text()   # the record stays in the app's data
+    (eff / "room_wave" / "room_map.h").unlink()
+    assert c.get("/api/effects/room_wave/room-map").json() == {"exists": False, "device": None}
     assert c.post("/api/effects/room_wave/room-map", json={"device": "../x"}, headers=CSRF).status_code == 422
     assert c.post("/api/effects/nope/room-map", json={"device": "desk"}, headers=CSRF).status_code == 404
 
