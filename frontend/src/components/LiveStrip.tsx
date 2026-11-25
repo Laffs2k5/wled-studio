@@ -2,6 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { token } from "../api";
 import { drawPixels, type Room } from "../room";
+import { remembered } from "../remember";
+
+const liveView = remembered<Record<string, boolean>>("wledstudio.live-view", {});
 
 /** Parse WLED's live-view frame: 'L', version 1, then R, G, B per LED. */
 export function parseLiveFrame(buf: ArrayBuffer): Uint8Array | null {
@@ -12,7 +15,7 @@ export function parseLiveFrame(buf: ArrayBuffer): Uint8Array | null {
 
 /** What the strip shows right now (the device's live view, relayed by the backend). */
 export function LiveStrip({ deviceId, room = null }: { deviceId: string; room?: Room | null }) {
-  const [on, setOn] = useState(false);
+  const [on, setOn] = useState(() => liveView.get()[deviceId] ?? false);
   const [status, setStatus] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
 
@@ -38,7 +41,10 @@ export function LiveStrip({ deviceId, room = null }: { deviceId: string; room?: 
   return (
     <div className="live-strip">
       <label className="small" title="Uses the device's single live-view slot (WLED's own Peek stops meanwhile)">
-        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Live view of the strip
+        <input type="checkbox" checked={on} onChange={(e) => {
+          setOn(e.target.checked);
+          liveView.set({ ...liveView.get(), [deviceId]: e.target.checked });
+        }} /> What the strip shows now (live view)
       </label>
       {on && <canvas ref={canvas} width={960} height={room ? 360 : 20} className={room ? "room" : "strip"} aria-label="Live view" />}
       {on && status && <span className="muted small"> {status}</span>}

@@ -168,6 +168,9 @@ canvas.strip { width: 100%; height: 32px; background: var(--led-bg); border: 1px
 .code-editor { margin-top: 1.5rem; }
 .code { height: 32rem; margin-bottom: .75rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; resize: vertical; }
 canvas.room { width: 100%; max-height: 22rem; background: var(--led-bg); border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0; }
+.segment-advanced { margin-top: .5rem; }
+.segment-advanced > summary { cursor: pointer; font-weight: 600; }
+.segment-hint { padding: .4rem .6rem; border-left: 3px solid var(--accent); background: var(--hover); }
 .room-editor { margin-top: 1rem; }
 .flash { margin-top: 1.25rem; padding-top: .5rem; border-top: 1px solid var(--line); }
 .flash-checks, .flash .run ol { list-style: none; padding: 0; }

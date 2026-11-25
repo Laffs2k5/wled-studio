@@ -79,6 +79,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   // the palettes the next write would upload (from the write bar's check); null while unknown
   const [pendingPalettes, setPendingPalettes] = useState<string[] | null>(null);
   const [segId, setSegId] = useState(0);
+  const [newSegmentHint, setNewSegmentHint] = useState<number | null>(null);
+  const [removedSegment, setRemovedSegment] = useState<Segment | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [roomRead, setRoomRead] = useState(false);
   // bumped whenever the library is read again after a change: the write bar checks the device again
@@ -187,7 +189,11 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
       const next = await api.state(deviceId);
       setState(next);
       const added = next.seg.find((s) => !used.has(s.id));
-      if (added) setSegId(added.id);
+      if (added) {
+        setSegId(added.id);
+        setNewSegmentHint(added.id);
+        setRemovedSegment(null);
+      }
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -196,10 +202,26 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   async function removeSegment(id: number) {
     if (!state || state.seg.length < 2) return;
     await flush();
+    const removed = state.seg.find((s) => s.id === id);
     try {
       await api.setState(deviceId, { seg: [{ id, stop: 0 }] });
       setSegId(state.seg.find((s) => s.id !== id)?.id ?? 0);
+      setRemovedSegment(removed ?? null);
+      setNewSegmentHint(null);
       await reloadState();
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
+  async function undoRemoveSegment() {
+    if (!removedSegment) return;
+    try {
+      await api.setState(deviceId, { seg: [removedSegment] });
+      setSegId(removedSegment.id);
+      setRemovedSegment(null);
+      await reloadState();
+      notify(`Restored segment ${removedSegment.id}`);
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -322,7 +344,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
           {state.seg.map((s) => (
             <button key={s.id} className={s.id === segment.id ? "primary" : ""} aria-pressed={s.id === segment.id}
               onClick={() => setSegId(s.id)}>
-              Segment {s.id}{s.n ? ` · ${String(s.n)}` : ""} ({wallOf(s) ?? `${s.start}–${s.stop - 1}`})
+              {s.n ? String(s.n) : "Unnamed segment"} · seg {s.id} ({wallOf(s) ?? `${s.start}–${s.stop - 1}`})
             </button>
           ))}
           {state.seg.length < (profile.leds.maxseg || 1) && (
@@ -334,15 +356,28 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
         </div>
         <div className="row">
           <button disabled={place >= ids.length - 1} title="Draw it later, over the segment above"
-            onClick={() => restack(() => api.moveSegment(deviceId, segment.id, "up"))}>Raise</button>
+            onClick={() => restack(() => api.moveSegment(deviceId, segment.id, "up"))}>Draw later (on top)</button>
           <button disabled={place <= 0} title="Draw it earlier, under the segment below"
-            onClick={() => restack(() => api.moveSegment(deviceId, segment.id, "down"))}>Lower</button>
+            onClick={() => restack(() => api.moveSegment(deviceId, segment.id, "down"))}>Draw earlier (below)</button>
           {state.seg.length < (profile.leds.maxseg || 1) && (
             <button title="A copy of this segment, on top" onClick={() => restack(() => api.duplicateSegment(deviceId, segment.id))}>
               Duplicate
             </button>
           )}
         </div>
+        {newSegmentHint === segment.id && (
+          <p className="small segment-hint">
+            New segment covers the whole strip. Drag on the map to set its LEDs.
+            <button className="small link" onClick={() => setNewSegmentHint(null)}>Got it</button>
+          </p>
+        )}
+        {removedSegment && (
+          <div className="row action-result" aria-label="Removed segment">
+            <span className="grow">Removed segment {removedSegment.id}{removedSegment.n ? ` “${removedSegment.n}”` : ""} from the live strip.</span>
+            <button onClick={undoRemoveSegment}>Undo</button>
+            <button className="small" onClick={() => setRemovedSegment(null)}>Dismiss</button>
+          </div>
+        )}
         <SegmentMap ledCount={profile.leds.count} room={room} segments={state.seg} selected={segment.id}
           onSelect={setSegId} onPick={(start, stop) => change({ start, stop })} />
         <SegmentLayout segment={segment} ledCount={profile.leds.count} room={room} onChange={change} />

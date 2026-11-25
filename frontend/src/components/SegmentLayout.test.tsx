@@ -21,7 +21,7 @@ test("walls are the labelled edges as LED ranges", () => {
 
 test("bounds are sent when the field is left, clamped so the segment never becomes empty", () => {
   const onChange = setup();
-  const start = screen.getByLabelText("Start");
+  const start = screen.getByLabelText("First LED");
   fireEvent.change(start, { target: { value: "4" } });
   expect(onChange).not.toHaveBeenCalled(); // not per keystroke
   fireEvent.blur(start);
@@ -29,10 +29,10 @@ test("bounds are sent when the field is left, clamped so the segment never becom
   fireEvent.change(start, { target: { value: "99" } });
   fireEvent.keyDown(start, { key: "Enter" });
   expect(onChange).toHaveBeenLastCalledWith({ start: 39 }); // at most stop - 1
-  const stop = screen.getByLabelText("Stop");
+  const stop = screen.getByLabelText("Last LED");
   fireEvent.change(stop, { target: { value: "500" } });
   fireEvent.blur(stop);
-  expect(onChange).toHaveBeenLastCalledWith({ stop: 60 }); // at most the LED count
+  expect(onChange).toHaveBeenLastCalledWith({ stop: 60 }); // the inclusive last LED is 59
 });
 
 test("an unusable number is put back, and an unchanged one isn't sent", () => {
@@ -66,6 +66,7 @@ test("no wall picker without a room model", () => {
 
 test("flags, grouping, opacity and blend mode are segment patches", () => {
   const onChange = setup();
+  fireEvent.click(screen.getByText("Advanced"));
   fireEvent.click(screen.getByLabelText("Reverse segment"));
   expect(onChange).toHaveBeenLastCalledWith({ rev: true });
   fireEvent.click(screen.getByLabelText("Mirror segment"));

@@ -16,7 +16,7 @@ function setup() {
   const onSelect = vi.fn();
   const onPick = vi.fn();
   render(<SegmentMap ledCount={60} room={null} segments={segments} selected={0} onSelect={onSelect} onPick={onPick} />);
-  const canvas = screen.getByLabelText(/Segment map/);
+  const canvas = screen.getByLabelText(/Segments: click/);
   // a 960 x 28 strip: LED i spans x = 16 i .. 16 (i + 1)
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 960, height: 28, right: 960, bottom: 28, x: 0, y: 0, toJSON() {} });
   return { canvas, onSelect, onPick };
@@ -37,5 +37,5 @@ test("a drag sets the selected segment's LEDs, in either direction", () => {
   expect(screen.getByText("LEDs 35–40")).toBeInTheDocument();
   fireEvent.pointerUp(canvas);
   expect(onPick).toHaveBeenCalledWith(35, 41);
-  expect(screen.getByText("Segment 0: LEDs 0–59")).toBeInTheDocument();
+  expect(screen.getByText(/Segment 0: LEDs 0–59 · drag on the map/)).toBeInTheDocument();
 });

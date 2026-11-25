@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { LiveStrip, parseLiveFrame } from "./LiveStrip";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 
 test("parses WLED's live-view frames", () => {
   const ok = new Uint8Array([76, 1, 1, 2, 3, 4, 5, 6, 7]).buffer;
@@ -22,10 +22,11 @@ test("opens the live view only when asked, and closes it again", () => {
   vi.stubGlobal("WebSocket", FakeSocket);
   render(<LiveStrip deviceId="desk" />);
   expect(sockets).toHaveLength(0);
-  fireEvent.click(screen.getByLabelText(/Live view of the strip/));
+  fireEvent.click(screen.getByLabelText(/What the strip shows now/));
   expect(sockets[0].url).toMatch(/\/api\/devices\/desk\/live$/);
   expect(sockets[0].protocols).toEqual(["wledstudio"]);
   expect(screen.getByLabelText("Live view")).toBeInTheDocument();
-  fireEvent.click(screen.getByLabelText(/Live view of the strip/));
+  fireEvent.click(screen.getByLabelText(/What the strip shows now/));
   expect(sockets[0].closed).toBe(true);
+  expect(JSON.parse(localStorage.getItem("wledstudio.live-view")!)).toEqual({ desk: false });
 });

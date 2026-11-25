@@ -76,6 +76,7 @@ export function SegmentLayout({ segment, ledCount, room, onChange }: Props) {
   const name = String(segment.n ?? "");
   const len = Math.max(1, segment.stop - segment.start);
   const bm = Number(segment.bm ?? 0);
+  const commonBlendModes = new Set([0, 2, 6, 8]);
   return (
     <details className="segment-layout">
       <summary>
@@ -85,10 +86,6 @@ export function SegmentLayout({ segment, ledCount, room, onChange }: Props) {
         </span>
       </summary>
       <div className="row">
-        <NumberField label="Start" value={segment.start} min={0} max={segment.stop - 1}
-          title="The segment's first LED" onCommit={(start) => onChange({ start })} />
-        <NumberField label="Stop" value={segment.stop} min={segment.start + 1} max={ledCount}
-          title="The LED after the segment's last one" onCommit={(stop) => onChange({ stop })} />
         {ws.length > 0 && (
           <label>
             <span>Wall or zone</span>
@@ -106,43 +103,55 @@ export function SegmentLayout({ segment, ledCount, room, onChange }: Props) {
             </select>
           </label>
         )}
+        <NumberField label="First LED" value={segment.start} min={0} max={segment.stop - 1}
+          title="The segment's first LED (inclusive)" onCommit={(start) => onChange({ start })} />
+        <NumberField label="Last LED" value={segment.stop - 1} min={segment.start} max={ledCount - 1}
+          title="The segment's last LED (inclusive)" onCommit={(last) => onChange({ stop: last + 1 })} />
         <TextField label="Name" value={name} maxLength={32} onCommit={(n) => onChange({ n })} />
       </div>
       <div className="checks">
         <label><input type="checkbox" checked={Boolean(segment.on)} aria-label="Segment on"
-          onChange={(e) => onChange({ on: e.target.checked })} /> On</label>
+          onChange={(e) => onChange({ on: e.target.checked })} /> Segment on</label>
         <label><input type="checkbox" checked={Boolean(segment.rev)} aria-label="Reverse segment"
           onChange={(e) => onChange({ rev: e.target.checked })} /> Reverse</label>
         <label><input type="checkbox" checked={Boolean(segment.mi)} aria-label="Mirror segment"
           onChange={(e) => onChange({ mi: e.target.checked })} /> Mirror</label>
+      </div>
+      <details className="segment-advanced">
+        <summary>Advanced</summary>
+        <div className="row">
+          <NumberField label="Grouping" value={Number(segment.grp ?? 1)} min={1} max={255}
+            title="LEDs that show the same pixel" onCommit={(grp) => onChange({ grp })} />
+          <NumberField label="Spacing" value={Number(segment.spc ?? 0)} min={0} max={255}
+            title="LEDs left dark after each group" onCommit={(spc) => onChange({ spc })} />
+          <NumberField label="Offset" value={Number(segment.of ?? 0)} min={0} max={len - 1}
+            title="Shifts the effect along the segment" onCommit={(of) => onChange({ of })} />
+        </div>
         <label title="Stops the animation where it is"><input type="checkbox" checked={Boolean(segment.frz)}
           aria-label="Freeze segment" onChange={(e) => onChange({ frz: e.target.checked })} /> Freeze</label>
-      </div>
-      <div className="row">
-        <NumberField label="Grouping" value={Number(segment.grp ?? 1)} min={1} max={255}
-          title="LEDs that show the same pixel" onCommit={(grp) => onChange({ grp })} />
-        <NumberField label="Spacing" value={Number(segment.spc ?? 0)} min={0} max={255}
-          title="LEDs left dark after each group" onCommit={(spc) => onChange({ spc })} />
-        <NumberField label="Offset" value={Number(segment.of ?? 0)} min={0} max={len - 1}
-          title="Shifts the effect along the segment" onCommit={(of) => onChange({ of })} />
-      </div>
-      <label className="slider">
-        <span>Opacity</span>
-        <input type="range" min={1} max={255} value={segment.bri} aria-label="Opacity"
-          onChange={(e) => onChange({ bri: Number(e.target.value) })} />
-        <output>{segment.bri}</output>
-      </label>
-      <label>
-        <span>Blend mode</span>
-        <select aria-label="Blend mode" value={bm} onChange={(e) => onChange({ bm: Number(e.target.value) })}>
-          {BLEND_MODES.map((name, i) => <option key={i} value={i}>{name}</option>)}
-          {bm >= BLEND_MODES.length && <option value={bm}>Mode {bm}</option>}
-        </select>
-      </label>
-      <p className="muted small">
-        Segments are drawn in order, each over the ones before it; the blend mode says how this one
-        mixes with what is below.
-      </p>
+        <label className="slider">
+          <span>Opacity</span>
+          <input type="range" min={1} max={255} value={segment.bri} aria-label="Opacity"
+            onChange={(e) => onChange({ bri: Number(e.target.value) })} />
+          <output>{segment.bri}</output>
+        </label>
+        <label>
+          <span>Blend mode</span>
+          <select aria-label="Blend mode" value={bm} onChange={(e) => onChange({ bm: Number(e.target.value) })}>
+            <optgroup label="Common">
+              {BLEND_MODES.map((name, i) => commonBlendModes.has(i) && <option key={i} value={i}>{name}</option>)}
+            </optgroup>
+            <optgroup label="More">
+              {BLEND_MODES.map((name, i) => !commonBlendModes.has(i) && <option key={i} value={i}>{name}</option>)}
+            </optgroup>
+            {bm >= BLEND_MODES.length && <option value={bm}>Mode {bm}</option>}
+          </select>
+        </label>
+        <p className="muted small">
+          Segments are drawn in order, each over the ones before it; the blend mode says how this one
+          mixes with what is below.
+        </p>
+      </details>
     </details>
   );
 }

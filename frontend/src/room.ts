@@ -84,7 +84,7 @@ export function ledPositions(n: number, w: number, h: number, room: Room | null)
   }
   const { points, min, max } = layout(room);
   const spanX = Math.max(1, max[0] - min[0]), spanY = Math.max(1, max[1] - min[1]);
-  const pad = 8, s = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY), size = Math.max(2, s * 0.8);
+  const pad = 8, s = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY), size = Math.max(6, s * 0.8);
   const ox = (w - spanX * s) / 2, oy = (h - spanY * s) / 2; // centred, whichever way the room is narrow
   return points.slice(0, n).map(([px, py]) => ({ x: ox + (px - min[0]) * s, y: oy + (py - min[1]) * s, size }));
 }
