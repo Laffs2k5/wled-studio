@@ -224,8 +224,11 @@ self-built image on a spare board first. Open a build that's *ready to flash*:
    checks that passed are folded away. A line says what the device runs now and what it will run,
    with the effects the image adds, and what flashing does: a backup of presets and settings
    first, then the upload and a restart (the strip goes dark for a moment), about a minute.
-3. Type the device's name and **Flash** it, after accepting the flashing notice
-   ([DISCLAIMER.md](../DISCLAIMER.md)).
+3. Type the device's name under **To confirm, type the device's name** and **Flash** it. The
+   flashing notice ([DISCLAIMER.md](../DISCLAIMER.md)) comes first, and the form says so; once
+   accepted with "don't show this again", the button itself says what goes where ("Flash
+   quinled-16.0.1 + wled-studio-effects to Desk"). A plan more than 5 minutes old can't be used:
+   **Check again** first.
 4. The run lists all its steps from the start (backup, the image checked, upload, restart, checks
    against the backup) with *Do not power off* while it runs, then says plainly how it went:
    *Flashed and running: … runs WLED 16.0.1 with 218 effects*, or what went wrong and what that

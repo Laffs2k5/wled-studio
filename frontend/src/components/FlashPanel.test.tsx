@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { FlashPanel, forgetRuns, runVerdict } from "./FlashPanel";
+import { FlashPanel, forgetRuns, PLAN_FRESH_MS, runVerdict } from "./FlashPanel";
 
 const JOB = "j".repeat(32);
 afterEach(() => { vi.unstubAllGlobals(); forgetRuns(); });
@@ -44,9 +44,10 @@ test("plans, asks for the device's name, flashes and follows the run", async () 
   expect(await screen.findByText(/The gate passed/)).toBeInTheDocument();
   const go = screen.getByText("Flash Desk");
   expect(go).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Type the device's name to flash"), { target: { value: "desk" } });
+  expect(screen.getByText("You'll be asked to accept the flashing notice (no warranty, no support) before it starts.")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/^To confirm, type the device's name/), { target: { value: "desk" } });
   expect(go).toBeDisabled();                                       // exactly the name
-  fireEvent.change(screen.getByLabelText("Type the device's name to flash"), { target: { value: "Desk" } });
+  fireEvent.change(screen.getByLabelText(/^To confirm, type the device's name/), { target: { value: "Desk" } });
   fireEvent.click(go);
   // the notice comes first, and must be accepted
   const acceptButton = await screen.findByText("Accept and flash");
@@ -110,13 +111,16 @@ test("the plan leads with its verdict, then problems, things to look at with wha
 });
 
 test("with the notice accepted for good, flashing doesn't ask again", async () => {
-  const calls = stub(okPlan, [{ id: "r", kind: "flash", device: "d", state: "done", steps: [] }], true);
+  const calls = stub({ ...okPlan, image: { ...okPlan.image, release: "quinled-16.0.1", usermods: ["my_fx"] } },
+    [{ id: "r", kind: "flash", device: "d", state: "done", steps: [] }], true);
   render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
   expect(await screen.findByText(/chose not to see it again/)).toBeInTheDocument();
   fireEvent.click(screen.getByText("Plan the flash"));
   await screen.findByText(/The gate passed/);
-  fireEvent.change(screen.getByLabelText("Type the device's name to flash"), { target: { value: "Desk" } });
-  fireEvent.click(screen.getByText("Flash Desk"));
+  expect(screen.queryByText(/You'll be asked to accept the flashing notice/)).toBeNull();
+  fireEvent.change(screen.getByLabelText(/^To confirm, type the device's name/), { target: { value: "Desk" } });
+  // without the notice in between, the button itself says what is flashed where
+  fireEvent.click(screen.getByText("Flash quinled-16.0.1 + my_fx to Desk"));
   await waitFor(() => expect(calls.some((c) => c.includes("/jobs/") && c.includes('"notice":"v1"'))).toBe(true));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   fireEvent.click(screen.getByText("Show it before every flash again"));
@@ -128,7 +132,7 @@ test("revert needs the name typed too, and the notice", async () => {
   render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
   const button = screen.getByText("Go back on Desk");
   expect(button).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Type the device's name to go back"), { target: { value: "Desk" } });
+  fireEvent.change(screen.getByLabelText(/^To go back, type the device's name/), { target: { value: "Desk" } });
   fireEvent.click(button);
   fireEvent.click(await screen.findByLabelText(/I have read this notice and accept it/));
   fireEvent.click(screen.getByLabelText(/Don't show this again/));
@@ -178,8 +182,8 @@ test("the way back: what it would boot, folded away until a flash reached the de
   expect(await screen.findByText(/Desk's other firmware slot holds WLED 16.0.0 \(Acme\): what it ran before this app flashed it today/))
     .toBeInTheDocument();
   fireEvent.click(screen.getByText("Plan the flash"));
-  fireEvent.change(await screen.findByLabelText("Type the device's name to flash"), { target: { value: "Desk" } });
-  fireEvent.click(screen.getByText("Flash Desk"));
+  fireEvent.change(await screen.findByLabelText(/^To confirm, type the device's name/), { target: { value: "Desk" } });
+  fireEvent.click(screen.getByText("Flash this build to Desk"));
   expect(await screen.findByText(/^Flashed, but Desk doesn't report the new effects/)).toBeInTheDocument();
   await waitFor(() => expect(back()).toHaveAttribute("open"));        // part of the result now
   expect(back()).toHaveClass("prominent");
@@ -219,8 +223,31 @@ test("a plan or a flash that fails says so where it was, not in a toast", async 
   fireEvent.click(screen.getByText("Plan the flash"));
   await screen.findByText(/The gate passed/);
   expect(screen.queryByRole("alert")).toBeNull();                   // gone with the next action
-  fireEvent.change(screen.getByLabelText("Type the device's name to flash"), { target: { value: "Desk" } });
-  fireEvent.click(screen.getByText("Flash Desk"));
+  fireEvent.change(screen.getByLabelText(/^To confirm, type the device's name/), { target: { value: "Desk" } });
+  fireEvent.click(screen.getByText("Flash this build to Desk"));     // the notice was accepted for good
   expect(await screen.findByRole("alert")).toHaveTextContent("The flash didn't start: a flash or revert is already running for this device");
   expect(notify).not.toHaveBeenCalled();
+});
+
+test("a plan older than a few minutes can't be used: Check again first", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const calls = stub(okPlan, []);
+    render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
+    fireEvent.click(screen.getByText("Plan the flash"));
+    await screen.findByText(/The gate passed/);
+    const input = screen.getByLabelText(/^To confirm, type the device's name/);
+    fireEvent.change(input, { target: { value: "Desk" } });
+    expect(screen.getByText("Flash Desk")).toBeEnabled();
+    await vi.advanceTimersByTimeAsync(PLAN_FRESH_MS + 15_000);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/more than 5 minutes ago: Desk may have changed since/);
+    expect(screen.getByText("Flash Desk")).toBeDisabled();
+    expect(input).toBeDisabled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Check again" })[1]);
+    await waitFor(() => expect(calls.filter((c) => c.includes("/flash-plan")).length).toBe(2));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.getByText("Flash Desk")).toBeEnabled();
+  } finally {
+    vi.useRealTimers();
+  }
 });

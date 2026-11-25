@@ -65,6 +65,15 @@ export function verdict(plan: FlashPlan): string {
   return warns ? `Ready to flash, with ${count(warns, "thing", "things")} to look at` : "Ready to flash";
 }
 
+/** How long a flash plan may be used: after that, the device may have changed, so it's checked again. */
+export const PLAN_FRESH_MS = 5 * 60 * 1000;
+
+/** What a flash puts on the device, for the button that does it: "quinled-16.0.1 + my_fx". */
+export function imageWords(plan: FlashPlan): string {
+  const base = plan.image.release ?? plan.image.target ?? "this build";
+  return plan.image.usermods?.length ? `${base} + ${plan.image.usermods.join(", ")}` : base;
+}
+
 /** The last flash or revert per device, kept while the page is open: leaving the Firmware view, or
  * picking a virtual device for a while, doesn't lose a run or its result. */
 const lastRuns = new Map<string, FlashRun>();
@@ -83,7 +92,10 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
   const [pin, setPin] = useState("");
   // an action that failed here (planning, starting a flash or going back): said where it was, until the next one
   const [failure, setFailure] = useState<{ kind: "plan" | "flash" | "go back"; text: string } | null>(null);
-  const replan = () => { setFailure(null); return firmware.flashPlan(job, device).then(setPlan)
+  // when the plan was made: an old plan can't be used to flash (the clock is read again every few seconds)
+  const [planAt, setPlanAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const replan = () => { setFailure(null); return firmware.flashPlan(job, device).then((p) => { setPlan(p); setPlanAt(Date.now()); setNow(Date.now()); })
     .catch((e) => setFailure({ kind: "plan", text: `Couldn't plan the flash: ${(e as Error).message}` })); };
   const [typed, setTyped] = useState("");
   // the last flash or revert per device: a run belongs to its device, and isn't shown under another
@@ -97,6 +109,12 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
   const [pending, setPending] = useState<{ action: "flash" | "go back"; go: (version: string) => Promise<FlashRun> } | null>(null);
 
   useEffect(() => { firmware.notice().then(setNotice).catch(() => setNotice(null)); }, []);
+  useEffect(() => {
+    if (!plan) return;
+    const t = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(t);
+  }, [plan]);
+  const planOld = Boolean(plan && now - planAt > PLAN_FRESH_MS);
 
   useEffect(() => { setPlan(null); setTyped(""); setRevertTyped(""); setPinForm(false); setFailure(null); }, [job, device]);
 
@@ -217,12 +235,27 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
               you can go back to the previous firmware.
             </p>
           )}
+          {plan.can_flash && planOld && (
+            <p className="warn small plan-old" role="alert">
+              This plan is from {new Date(planAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}, more than{" "}
+              {PLAN_FRESH_MS / 60000} minutes ago: {plan.name} may have changed since.{" "}
+              <button onClick={replan}>Check again</button>
+            </p>
+          )}
           {plan.can_flash ? (
-            <div className="row">
-              <input aria-label="Type the device's name to flash" placeholder={`type ${plan.name} to flash`} value={typed}
-                onChange={(e) => setTyped(e.target.value)} />
-              <button className="danger" disabled={typed !== plan.name || running || plan.busy}
-                onClick={() => withNotice("flash", (v) => firmware.flash(job, device, typed, v))}>Flash {plan.name}</button>
+            <div className="flash-confirm">
+              <label htmlFor="flash-confirm-name" className="small">To confirm, type the device's name: <strong>{plan.name}</strong></label>
+              <div className="row">
+                <input id="flash-confirm-name" value={typed} autoComplete="off" disabled={planOld}
+                  onChange={(e) => setTyped(e.target.value)} />
+                <button className="danger" disabled={typed !== plan.name || running || plan.busy || planOld}
+                  onClick={() => withNotice("flash", (v) => firmware.flash(job, device, typed, v))}>
+                  {notice?.remembered ? `Flash ${imageWords(plan)} to ${plan.name}` : `Flash ${plan.name}`}
+                </button>
+              </div>
+              {!notice?.remembered && (
+                <p className="muted small">You'll be asked to accept the flashing notice (no warranty, no support) before it starts.</p>
+              )}
             </div>
           ) : <p className="bad small">Fix the problems above, then check again.</p>}
         </div>
@@ -272,8 +305,9 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
               : <>What {deviceName}'s other firmware slot holds isn't known: the app knows only after it has flashed the device.</>}
             {" "}WLED keeps the previous firmware there; going back boots it again (WLED's /update?revert), with a backup first.
           </p>
+          <label htmlFor="revert-confirm-name" className="small">To go back, type the device's name: <strong>{deviceName}</strong></label>
           <div className="row">
-            <input aria-label="Type the device's name to go back" placeholder={`type ${deviceName} to go back`} value={revertTyped}
+            <input id="revert-confirm-name" value={revertTyped} autoComplete="off"
               onChange={(e) => setRevertTyped(e.target.value)} />
             <button className="danger" disabled={revertTyped !== deviceName || running}
               onClick={() => withNotice("go back", (v) => firmware.revert(device, revertTyped, v))}>Go back on {deviceName}</button>
