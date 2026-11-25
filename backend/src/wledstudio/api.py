@@ -18,7 +18,7 @@ from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, che
 from .push import DuplicatePresetIds, StateStore, fetch_lists, push
 from .preset_admin import backup_details, inspect_device, mutate_presets, preset_summary, PresetChanged, PresetVerification
 from .session import SEG_RESTORE, Sessions, restore_payload
-from .wled import WLEDClient, WLEDError, WLEDLocked
+from .wled import WLEDClient, WLEDError, WLEDLocked, WLEDStateChanged
 
 router = APIRouter(prefix="/api")
 
@@ -215,6 +215,11 @@ class PresetMutationIn(Strict):
     backup: str | None = Field(default=None, max_length=100, pattern=r"^[^/\\]+-presets\.json$")
 
 
+class TrialRestoreIn(Strict):
+    confirm: str = Field(min_length=1, max_length=64)
+    current_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 # --- dependencies ---------------------------------------------------------------
 
 def stores(request: Request) -> tuple[DeviceStore, LibraryStore, StateStore]:
@@ -231,6 +236,10 @@ def device_or_404(device_id: str, request: Request) -> Device:
 def destructive_auth(request: Request) -> None:
     if not request.app.state.settings.token:
         raise HTTPException(409, "Enable WLED Studio access-token protection before deleting or restoring presets.")
+
+
+def state_sha256(state: dict) -> str:
+    return hashlib.sha256(json.dumps(state, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
 
 
 def make_client(request: Request, dev: Device) -> WLEDClient:
@@ -965,6 +974,64 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
         except WLEDError as e:
             raise device_errors(e) from None
     return {**res.__dict__, "set_notes": set_notes}
+
+
+@router.post("/devices/{device_id}/bank-trial")
+async def start_bank_trial(device_id: str, request: Request):
+    dev = device_or_404(device_id, request)
+    if request.app.state.trials.get(device_id) is not None:
+        raise HTTPException(409, "A bank trial is already waiting for recovery.")
+    async with make_client(request, dev) as client:
+        try:
+            snapshot = await client.state()
+        except WLEDError as e:
+            raise device_errors(e) from None
+    try:
+        record = request.app.state.trials.start(device_id, snapshot)
+    except FileExistsError:
+        raise HTTPException(409, "A bank trial is already waiting for recovery.") from None
+    return {"active": True, "current_sha256": state_sha256(snapshot), "snapshot": record["snapshot"]}
+
+
+@router.get("/devices/{device_id}/bank-trial")
+async def bank_trial(device_id: str, request: Request):
+    dev = device_or_404(device_id, request)
+    record = request.app.state.trials.get(device_id)
+    if record is None:
+        return {"active": False, "current_sha256": None}
+    async with make_client(request, dev) as client:
+        try:
+            current = await client.state()
+        except WLEDError as e:
+            raise device_errors(e) from None
+    return {"active": True, "current_sha256": state_sha256(current), "snapshot": record["snapshot"]}
+
+
+@router.delete("/devices/{device_id}/bank-trial", status_code=204)
+def keep_bank_trial(device_id: str, request: Request):
+    device_or_404(device_id, request)
+    request.app.state.trials.finish(device_id)
+
+
+@router.post("/devices/{device_id}/bank-trial/restore")
+async def restore_bank_trial(device_id: str, body: TrialRestoreIn, request: Request):
+    dev = device_or_404(device_id, request)
+    if body.confirm != dev.name:
+        raise HTTPException(400, "The device name did not match.")
+    record = request.app.state.trials.get(device_id)
+    if record is None:
+        raise HTTPException(404, "No bank trial is waiting for recovery.")
+    async with make_client(request, dev) as client:
+        try:
+            current = await client.state()
+            payload = restore_payload(record["snapshot"], current)
+            result = await client.restore_if_current(body.current_sha256, payload)
+        except WLEDStateChanged as e:
+            raise HTTPException(409, str(e)) from None
+        except WLEDError as e:
+            raise device_errors(e) from None
+    request.app.state.trials.finish(device_id)
+    return {"restored": True, "state": result}
 
 
 @router.get("/devices/{device_id}/room")

@@ -102,6 +102,11 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [gridName, setGridName] = useState("Remote A");
   const [creating, setCreating] = useState(false);
+  const [trialRow, setTrialRow] = useState<number | null>(null);
+  const [trialAt, setTrialAt] = useState(0);
+  const [trialHash, setTrialHash] = useState("");
+  const [restoreConfirm, setRestoreConfirm] = useState("");
+  const [restoreReady, setRestoreReady] = useState(false);
   const [fillMode, setFillMode] = useState<"move" | "also" | null>(null);
   const [pendingItem, setPendingItem] = useState<Item | null>(null);
 
@@ -116,6 +121,15 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
     if (!s.grid) { setEditing((e) => e ?? DEFAULT); setCreating(true); }
   }).catch((e) => notify((e as Error).message, true)), [notify, loadItems]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!deviceId) return;
+    api.bankTrial(deviceId).then((trial) => {
+      if (trial.active && trial.current_sha256) {
+        setTrialHash(trial.current_sha256);
+        setTrialRow(-1);
+      }
+    }).catch(() => {});
+  }, [deviceId]);
   const done = (s: Slots, msg: string) => {
     setData(s);
     onChanged?.();
@@ -149,7 +163,6 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
       .then(() => notify(`Showing “${cell.name}” on ${deviceName ?? deviceId} (nothing stored on the device)`))
       .catch(fail);
   };
-
   if (!data) return null;
   if (editing) {
     const g = editing;
@@ -230,6 +243,25 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   const duplicate = picked
     ? (plan?.duplicates ?? []).find((d) => d.preset_id === picked.preset_id)
     : undefined;
+  const showTrial = async (row: number, index: number) => {
+    if (!deviceId) return;
+    const bank = cols.map((col) => at(row, col)).filter((cell) => cell.name);
+    if (!bank.length) { notify(`Bank ${row} has nothing that can be shown`); return; }
+    const next = ((index % bank.length) + bank.length) % bank.length;
+    const trial = trialRow === null
+      ? await api.startBankTrial(deviceId).catch((e) => { fail(e); return null; })
+      : await api.bankTrial(deviceId).catch((e) => { fail(e); return null; });
+    if (!trial?.active || !trial.current_sha256) return;
+    const cell = bank[next];
+    try {
+      if (cell.kind === "playlist") await api.play(deviceId, cell.name!);
+      else await api.apply(deviceId, cell.name!);
+      setTrialRow(row);
+      setTrialAt(next);
+      setTrialHash(trial.current_sha256);
+      notify(`Trying bank ${row}, ${next + 1} of ${bank.length}: ${cell.name}`);
+    } catch (e) { fail(e); }
+  };
   return (<>
     <section className="slots">
       <h2>Slot grid</h2>
@@ -265,7 +297,10 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
             <tbody>
               {rows.map((r) => (
                 <tr key={r}>
-                  <th>{r}</th>
+                  <th>
+                    {r}
+                    <button className="small" disabled={!deviceId} onClick={() => showTrial(r, 0)}>Try bank</button>
+                  </th>
                   {cols.map((c) => {
                     const cell = at(r, c);
                     const st = cellState(cell, plan);
@@ -286,6 +321,49 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
               ))}
             </tbody>
           </table>
+          {trialRow !== null && (
+            <div className="bank-trial" aria-label="Bank trial">
+              {trialRow === -1 ? (
+                <>
+                  <p>A bank trial is waiting for recovery after leaving the view or restarting the app.</p>
+                  <button onClick={() => setTrialRow(0)}>Review recovery</button>
+                </>
+              ) : (
+                <>
+                  <p>Trying bank {trialRow}, button {trialAt + 1}.</p>
+                  <button onClick={() => showTrial(trialRow, trialAt - 1)}>Previous</button>
+                  <button onClick={() => showTrial(trialRow, trialAt + 1)}>Next</button>
+                  <button onClick={() => {
+                    api.keepBankTrial(deviceId!).then(() => {
+                      setTrialRow(null); setTrialHash(""); setRestoreConfirm(""); setRestoreReady(false);
+                      notify("Kept what the strip shows; the bank trial is finished");
+                    }).catch(fail);
+                  }}>Keep what shows now</button>
+                  <button className="danger" onClick={() => {
+                    api.bankTrial(deviceId!).then((trial) => {
+                      if (trial.current_sha256) setTrialHash(trial.current_sha256);
+                      setRestoreReady(true);
+                    }).catch(fail);
+                  }}>Put the strip back…</button>
+                  {restoreReady && trialHash && (
+                    <div className="inline-confirm">
+                      <p>Home Assistant or another remote can still change the strip in the final restore interval.</p>
+                      <label>Type the device name: <strong>{deviceName}</strong>
+                        <input value={restoreConfirm} onChange={(e) => setRestoreConfirm(e.target.value)} />
+                      </label>
+                      <button disabled={restoreConfirm !== deviceName} onClick={() => {
+                        api.restoreBankTrial(deviceId!, deviceName ?? deviceId!, trialHash)
+                          .then(() => {
+                            setTrialRow(null); setTrialHash(""); setRestoreConfirm(""); setRestoreReady(false);
+                            notify(`Put ${deviceName ?? deviceId} back and verified it`);
+                          }).catch(fail);
+                      }}>Restore and verify</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {picked ? (
             <div className="slot-edit" aria-label="The picked slot">
               <h3>Slot {picked.row}·{picked.col}, preset {picked.preset_id}: {picked.name ?? "empty"}</h3>

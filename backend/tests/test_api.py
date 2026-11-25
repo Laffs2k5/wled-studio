@@ -58,6 +58,21 @@ def test_destructive_preset_delete_and_restore_are_authenticated_and_verified(
         assert stale.status_code == 409
 
 
+def test_bank_trial_persists_and_refuses_to_restore_a_changed_state(client, dev_id, device):
+    started = client.post(f"/api/devices/{dev_id}/bank-trial", headers=CSRF)
+    assert started.status_code == 200 and started.json()["active"]
+    seen = started.json()["current_sha256"]
+    device.apply({"on": False}, 0)
+    current = client.get(f"/api/devices/{dev_id}/bank-trial").json()
+    refused = client.post(f"/api/devices/{dev_id}/bank-trial/restore",
+                          json={"confirm": "Desk strip", "current_sha256": seen}, headers=CSRF)
+    assert refused.status_code == 409
+    restored = client.post(f"/api/devices/{dev_id}/bank-trial/restore",
+                           json={"confirm": "Desk strip", "current_sha256": current["current_sha256"]}, headers=CSRF)
+    assert restored.status_code == 200 and restored.json()["restored"]
+    assert client.get(f"/api/devices/{dev_id}/bank-trial").json()["active"] is False
+
+
 def test_add_list_remove_device(client):
     r = client.post("/api/devices", json={"name": "Desk", "host": "wled.lan", "pin": "1234"}, headers=CSRF)
     assert r.status_code == 201

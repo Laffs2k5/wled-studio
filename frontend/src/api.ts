@@ -319,6 +319,13 @@ export const api = {
   startSession: (id: string) => request<EditingSession>("POST", `/api/devices/${enc(id)}/session`),
   endSession: (id: string, restore: boolean) =>
     request<{ restored: boolean }>("DELETE", `/api/devices/${enc(id)}/session?restore=${restore}`),
+  startBankTrial: (id: string) => request<{ active: boolean; current_sha256: string }>(
+    "POST", `/api/devices/${enc(id)}/bank-trial`),
+  bankTrial: (id: string) => request<{ active: boolean; current_sha256: string | null }>(
+    "GET", `/api/devices/${enc(id)}/bank-trial`),
+  keepBankTrial: (id: string) => request<void>("DELETE", `/api/devices/${enc(id)}/bank-trial`),
+  restoreBankTrial: (id: string, confirm: string, current_sha256: string) =>
+    request<{ restored: boolean }>("POST", `/api/devices/${enc(id)}/bank-trial/restore`, { confirm, current_sha256 }),
   accept: (id: string, name: string) =>
     request<{ look: Look; status: string; notes: string[]; accepted: string[] }>(
       "POST", `/api/devices/${enc(id)}/accept/${enc(name)}`),

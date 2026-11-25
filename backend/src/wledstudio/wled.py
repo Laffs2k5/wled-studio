@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import re
 import logging
@@ -37,6 +38,10 @@ class WLEDError(Exception):
 
 class WLEDLocked(WLEDError):
     """The device refused a protected request (settings PIN missing or wrong)."""
+
+
+class WLEDStateChanged(WLEDError):
+    """The live state changed after the caller inspected it."""
 
 
 _locks: dict[str, asyncio.Lock] = {}
@@ -139,6 +144,16 @@ class WLEDClient:
             raise ValueError("use unlocked() for the PIN")
         async with device_lock(self.base_url):
             return await self._retry_busy(lambda: self._http.post("/json/state", json=payload))
+
+    async def restore_if_current(self, inspected_sha256: str, payload: dict) -> dict:
+        """Check and restore live state in one Studio-side write transaction."""
+        async with device_lock(self.base_url):
+            current = await self._retry_busy(lambda: self._http.get("/json/state"))
+            current_hash = hashlib.sha256(json.dumps(current, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+            if current_hash != inspected_sha256:
+                raise WLEDStateChanged("the device changed; inspect the current state and confirm again")
+            await self._retry_busy(lambda: self._http.post("/json/state", json=payload))
+            return await self._retry_busy(lambda: self._http.get("/json/state"))
 
     async def _wait_pin_cooldown(self) -> None:
         wait = PIN_COOLDOWN_S - (self._clock() - _last_pin_check.get(self.base_url, -1e9))

@@ -28,6 +28,9 @@ function stub(initial: object, sharedId = false) {
       ...(shared ? [{ name: "Extra", preset_id: 40 }] : []),
     ]);
     if (key === "GET /api/playlists") return reply([{ name: "Evening" }]);
+    if (key === "GET /api/devices/desk/bank-trial") return reply({ active: false, current_sha256: null });
+    if (key === "POST /api/devices/desk/bank-trial") return reply({ active: true, current_sha256: "a".repeat(64) });
+    if (key === "POST /api/devices/desk/apply/G1-1%20Calm") return reply({ status: "ok", notes: [] });
     if (key === "PUT /api/slots/grid") { state = { grid: JSON.parse(String(init!.body)), cells: cells({}) }; return reply(state); }
     if (key === "POST /api/slots/grids") {
       state = { grid: JSON.parse(String(init!.body)).grid, cells: cells({}) };
@@ -146,6 +149,15 @@ test("a picked slot can be shown on the strip; without a picked slot the library
   fireEvent.click(screen.getByRole("button", { name: /^Slot 1·1, preset 40/ }));
   fireEvent.click(screen.getByText("Show on strip"));
   await waitFor(() => expect(calls.some((c) => c.startsWith("POST /api/devices/desk/apply/G1-1%20Calm"))).toBe(true));
+});
+
+test("a bank can be tried without writing presets", async () => {
+  const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) });
+  render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" />);
+  fireEvent.click((await screen.findAllByRole("button", { name: "Try bank" }))[0]);
+  expect(await screen.findByLabelText("Bank trial")).toHaveTextContent("Trying bank 1, button 1");
+  expect(calls.some((c) => c.startsWith("POST /api/devices/desk/apply/G1-1%20Calm"))).toBe(true);
+  expect(calls.some((c) => c.startsWith("POST /api/devices/desk/push"))).toBe(false);
 });
 
 test("cellState: each slot against the device's dry run", () => {
