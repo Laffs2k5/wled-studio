@@ -292,3 +292,5 @@ button.code-place { font: inherit; text-align: left; }
 .room-map-box { border: 1px solid var(--line); border-radius: 8px; padding: .3rem .8rem .5rem; margin: .5rem 0; }
 .room-map-box h3 { margin: .2rem 0; font-size: .9rem; }
 .room-map-box p { margin: .2rem 0; }
+.look-list li.just-saved { background: var(--deep); border-left: 3px solid var(--ok); padding-left: .4rem; }
+.stop-pos { min-width: 2rem; text-align: right; }

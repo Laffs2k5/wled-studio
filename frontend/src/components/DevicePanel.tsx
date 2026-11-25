@@ -73,6 +73,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   // after the editor saved: what the device now lacks, until dismissed; and a request to open the write plan
   const [saved, setSaved] = useState<{ name: string; presetId: number | null; changed: boolean } | null>(null);
   const [openPlan, setOpenPlan] = useState(0);
+  // the palettes the next write would upload (from the write bar's check); null while unknown
+  const [pendingPalettes, setPendingPalettes] = useState<string[] | null>(null);
   const [segId, setSegId] = useState(0);
   const [room, setRoom] = useState<Room | null>(null);
   const [roomRead, setRoomRead] = useState(false);
@@ -227,7 +229,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
       <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
         deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
         onShown={reloadState} />
-      <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
+      <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} deviceName={profile?.device.name ?? deviceName}
+        pending={offlineName ? null : pendingPalettes} onCheckAndWrite={offlineName ? undefined : () => setOpenPlan((n) => n + 1)} />
     </aside>
   );
   if (offline !== null && !(profile && state)) {
@@ -366,6 +369,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
       </main>
       {library()}
     </div>
-    <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan} />
+    <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan}
+      onPlan={(p) => setPendingPalettes(p ? (p.palettes ?? []).map((x) => x.palette) : null)} />
   </>);
 }

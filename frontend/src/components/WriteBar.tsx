@@ -36,12 +36,14 @@ interface Props {
   version: number;
   /** Bumped to open the plan from elsewhere (the look editor's "Check and write"). */
   openRequest?: number;
+  /** Each check's answer (null when the device couldn't be checked): the palettes it would upload, say. */
+  onPlan?: (plan: PushResult | null) => void;
 }
 
 /** The one route to the device: a bar at the bottom of the view that says whether the device's
  * presets match the library, and opens the write plan. It checks when the view opens, after
  * library changes and on "Check again"; it never polls. */
-export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 0 }: Props) {
+export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 0, onPlan }: Props) {
   const [plan, setPlan] = useState<PushResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -49,6 +51,8 @@ export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 
   // the last write's result: stays until the next write, or until dismissed
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const seq = useRef(0);
+  const onPlanRef = useRef(onPlan);
+  onPlanRef.current = onPlan;
 
   const check = useCallback(async () => {
     const n = ++seq.current;
@@ -58,9 +62,11 @@ export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 
       if (n !== seq.current) return;
       setPlan(p);
       setError(null);
+      onPlanRef.current?.(p);
     } catch (e) {
       if (n !== seq.current) return;
       setError((e as Error).message);
+      onPlanRef.current?.(null);
     } finally {
       if (n === seq.current) setChecking(false);
     }

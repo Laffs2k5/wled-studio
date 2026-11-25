@@ -122,6 +122,11 @@ the total time is shown. **Edit** on a playlist's row loads it into the form (it
 **Show on strip** plays it on the device now, from the presets stored there, so it's refused, with
 the presets it lacks, until they are written.
 
+A palette reaches the device with the next write. Each palette's row says whether it's **on** the
+header's device or **not on it yet**; after **Save palette** the editor closes and the row says how
+to use it (write presets once, then pick it in an effect's Palette list), with **Check and write**.
+The editor shows each stop's position as a number (0 to 255).
+
 ## 4. The room's shape
 
 Under **Room shape** in the device settings, describe the strip as walls in LED order: a direction
