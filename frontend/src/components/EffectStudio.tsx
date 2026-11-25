@@ -31,13 +31,15 @@ function initialSegment(e: Effect): Segment {
 }
 
 /** Your own effects, running in the browser (WebAssembly), drawn on a strip. */
-export function EffectStudio({ notify, load = Preview.load, device = null, onBuild }: {
+export function EffectStudio({ notify, load = Preview.load, device = null, onBuild, openFile = null, onOpenFile }: {
   notify: (msg: string, error?: boolean) => void;
   load?: (url?: string, length?: number) => Promise<Preview>;
   /** Build firmware with these folders (opens the Firmware view with them ticked). */
   onBuild?: (folders: string[]) => void;
   /** The header's device: the preview takes its shape, and streams to it, unless another is picked here. */
   device?: string | null;
+  openFile?: { folder: string; name: string } | null;
+  onOpenFile?: (folder: string, name: string) => void;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [effects, setEffects] = useState<Effect[]>([]);
@@ -240,7 +242,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
 
   // the code editor works with or without a preview: without one, it's how the first preview starts
   const editor = (
-    <CodeEditor notify={notify} device={device} jump={jump}
+    <CodeEditor notify={notify} device={device} jump={jump} openFile={openFile} onFileOpen={onOpenFile}
       previewIds={effects.filter((e) => e.id >= 200).map((e) => ({ id: e.id, by: e.name }))}
       onCreated={(folder) => {
         // a new folder: compilable at once, and ticked (known gap 11: it waited for a reload)
@@ -263,6 +265,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
     return (
       <section className="studio">
         <h2>Effect studio</h2>
+        {!device && <p className="first-run-note">You can try effects in the browser without a device; add one to stream to the strip.</p>}
         <p>This build has no effect preview ({error}). Previews are compiled with Emscripten by wled-studio-builder.</p>
         {compileBox}
         {editor}
@@ -272,6 +275,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   return (
     <section className="studio">
       <h2>Effect studio</h2>
+      {!device && <p className="first-run-note">You can try effects in the browser without a device; add one to stream to the strip.</p>}
       <p className="muted small">
         Your own effects, compiled to WebAssembly and running in the browser: the logic is the effect's own code.{" "}
         {preview?.palettes()

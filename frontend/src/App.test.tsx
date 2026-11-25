@@ -18,7 +18,17 @@ function backend(routes: Record<string, Route>) {
   return calls;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); history.replaceState(null, "", location.pathname); });
+
+test("view navigation and the selected device are in the URL", async () => {
+  backend({ "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }] });
+  render(<App />);
+  await waitFor(() => expect(screen.getByLabelText("Device")).toHaveValue("desk"));
+  fireEvent.click(screen.getByRole("button", { name: "Effect studio" }));
+  expect(location.hash).toBe("#/studio?device=desk");
+  fireEvent.click(screen.getByRole("button", { name: "Slot grid" }));
+  expect(location.hash).toBe("#/slots?device=desk");
+});
 
 test("first run asks for a device in a card of its own", async () => {
   backend({ "GET /api/devices": () => [] });

@@ -18,7 +18,7 @@ export const firmwareFolders = remembered<string[]>("wledstudio.firmware.folders
 const FIT_NOTE: Record<Fit, string> = { match: "matches", "other-release": "same board, other release", "other-board": "different board" };
 
 /** Build firmware with your own effects, through the gate (wled-studio-builder). */
-export function Firmware({ notify, devices = [], device = null, request = null, onOpenLooks }: {
+export function Firmware({ notify, devices = [], device = null, request = null, onOpenLooks, openJob, onOpenJob }: {
   notify: (msg: string, error?: boolean) => void;
   /** The devices, and the one picked in the header: the library is checked, and images flashed, for it. */
   devices?: Device[];
@@ -27,6 +27,8 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   request?: { folders: string[]; seq: number } | null;
   /** After a flash: go to Looks & effects. */
   onOpenLooks?: () => void;
+  openJob?: string | null;
+  onOpenJob?: (id: string) => void;
 }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [targets, setTargets] = useState<FirmwareTarget[]>([]);
@@ -112,6 +114,14 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   }, [open?.id]);
 
   useEffect(() => {
+    if (!openJob) return;
+    let stop = false;
+    firmware.job(openJob).then((job) => { if (!stop) setOpen(job); })
+      .catch((e) => notify((e as Error).message, true));
+    return () => { stop = true; };
+  }, [openJob, notify]);
+
+  useEffect(() => {
     setPreflight(null);
     if (!open || open.state !== "passed" || open.kind === "preview" || !device) return;
     let stop = false;
@@ -126,6 +136,7 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
     return (
       <section className="firmware">
         <h2>Firmware</h2>
+        {!device && <p className="first-run-note">Building needs no device; flashing does.</p>}
         <p>No firmware builder is configured. Start one with <code>docker compose --profile firmware up</code>; see the README.</p>
       </section>
     );
@@ -141,13 +152,14 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   return (
     <section className="firmware">
       <h2>Build firmware with your effects</h2>
+      {!device && <p className="first-run-note">Building needs no device; flashing does.</p>}
       <p className="muted small">
         Builds WLED for your board with your effects added. Before it may be flashed, the build must pass four
         safety checks; they're listed when it starts. A build takes a few minutes.
       </p>
       <form className="build-form" onSubmit={(e) => {
         e.preventDefault();
-        firmware.submit(pins, tgt, chosen).then((j) => { setOpen(j); reloadJobs(); notify("Build queued"); })
+        firmware.submit(pins, tgt, chosen).then((j) => { setOpen(j); onOpenJob?.(j.id); reloadJobs(); notify("Build queued"); })
           .catch((er) => notify(er.message, true));
       }}>
         <label className="field">
@@ -202,7 +214,10 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
               {builds.map((j) => (
                 <tr key={j.id} className={`state-${j.state}${open?.id === j.id ? " open" : ""}`} tabIndex={0}
                   aria-selected={open?.id === j.id} title="Open this build"
-                  onClick={() => setOpen(j)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(j); } }}>
+                  onClick={() => { setOpen(j); onOpenJob?.(j.id); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault(); setOpen(j); onOpenJob?.(j.id);
+                  } }}>
                   <td>{when(j.created)}</td><td>{j.target} · {releaseOf(j.pins)}</td>
                   <td>{j.usermods.join(", ")}</td>
                   <td title={j.state === "failed" ? gateLines({ passed: false, checks: j.report?.checks ?? j.checks, error: j.error })

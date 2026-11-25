@@ -21,7 +21,8 @@ export function nextFreeId(used: UsedId[]): number | null {
 }
 
 /** Edit your effect usermods' files (./effects), and start new ones from a template. */
-export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null, previewIds = [], onCreated, onCompile }: {
+export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null, previewIds = [], onCreated, onCompile,
+  openFile = null, onFileOpen }: {
   notify: (msg: string, error?: boolean) => void;
   onSaved?: (folder: string) => void;
   /** Effect ids the preview has (the built-in example's, say), besides the folders' own. */
@@ -36,6 +37,9 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   jump?: (Place & { seq: number }) | null;
   /** The header's device: the room map is taken from it unless another is picked here. */
   device?: string | null;
+  /** A file from the app URL, opened after the folder list is read. */
+  openFile?: { folder: string; name: string } | null;
+  onFileOpen?: (folder: string, name: string) => void;
 }) {
   const [folders, setFolders] = useState<EffectFolder[] | null>(null);
   const [file, setFile] = useState<{ folder: string; name: string } | null>(null);
@@ -73,12 +77,21 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
       setText(r.content);
       setDirty(false);
       onOpen?.(folder);
+      onFileOpen?.(folder, name);
       return true;
     } catch (e) {
       notify((e as Error).message, true);
       return false;
     }
   }
+
+  useEffect(() => {
+    if (!folders || !openFile || file?.folder === openFile.folder && file?.name === openFile.name) return;
+    if (!folders.some((f) => f.folder === openFile.folder && f.files.includes(openFile.name))) return;
+    open(openFile.folder, openFile.name);
+    // The open function reads the current dirty state and callbacks; `openFile` is the navigation request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folders, openFile?.folder, openFile?.name]);
 
   // a compiler message clicked in the studio: open its file (unless it's open) and go to the line
   const [line, setLine] = useState<{ line: number; seq: number } | null>(null);

@@ -11,19 +11,34 @@ import { TokenPrompt } from "./components/TokenPrompt";
 import { DeviceSettings } from "./components/DeviceSettings";
 import type { Device } from "./types";
 import { rememberedDevice } from "./devices";
+import { parseRoute, routeHash, type AppRoute } from "./routes";
 
 export function App() {
   const [devices, setDevices] = useState<Device[] | null>(null);
+  const [route, setRouteState] = useState<AppRoute>(() => parseRoute());
   // the device every view works on: picked in the header, remembered across reloads
-  const [current, setCurrentState] = useState<string | null>(() => rememberedDevice.get());
-  const setCurrent = useCallback((id: string | null) => { setCurrentState(id); rememberedDevice.set(id); }, []);
+  const [current, setCurrentState] = useState<string | null>(() => parseRoute().device ?? rememberedDevice.get());
+  const setCurrent = useCallback((id: string | null) => {
+    setCurrentState(id);
+    rememberedDevice.set(id);
+    setRouteState((old) => {
+      const next = { ...old, device: id };
+      history.replaceState(null, "", routeHash(next));
+      return next;
+    });
+  }, []);
   // toasts: a confirmation goes after a few seconds; an error stays until dismissed
   const [toasts, setToasts] = useState<{ id: number; msg: string; error: boolean }[]>([]);
   const [needToken, setNeedToken] = useState(false);
-  const [view, setViewState] = useState<"looks" | "slots" | "studio" | "firmware">("looks");
+  const view = route.view;
   // the Effect studio's "Build firmware with these effects": the folders the Firmware view opens with
   const [buildRequest, setBuildRequest] = useState<{ folders: string[]; seq: number } | null>(null);
-  const setView = (v: typeof view) => { setBuildRequest(null); setViewState(v); };
+  const setView = (v: typeof view, extra: Partial<AppRoute> = {}) => {
+    setBuildRequest(null);
+    const next: AppRoute = { view: v, device: current, ...extra };
+    setRouteState(next);
+    if (location.hash !== routeHash(next)) location.hash = routeHash(next);
+  };
   // the current device's settings, open below the header (and what to bring into view there)
   const [settings, setSettings] = useState<{ focus: "room" | "address" | null } | null>(null);
   // bumped when a room shape is saved: the views that draw it read it again
@@ -45,6 +60,12 @@ export function App() {
         setCurrentState((c) => {
           const next = c && d.some((x) => x.id === c) ? c : d[0]?.id ?? null;
           rememberedDevice.set(next);
+          setRouteState((old) => {
+            if (old.device === next) return old;
+            const withDevice = { ...old, device: next };
+            history.replaceState(null, "", routeHash(withDevice));
+            return withDevice;
+          });
           return next;
         });
       })
@@ -55,6 +76,20 @@ export function App() {
   }, [notify]);
 
   useEffect(reload, [reload]);
+
+  useEffect(() => {
+    const changed = () => {
+      const next = parseRoute();
+      setRouteState(next);
+      if (next.device !== undefined) {
+        setCurrentState(next.device);
+        rememberedDevice.set(next.device);
+      }
+      setBuildRequest(null);
+    };
+    window.addEventListener("hashchange", changed);
+    return () => window.removeEventListener("hashchange", changed);
+  }, []);
 
   const cur = devices?.find((d) => d.id === current);
 
@@ -86,8 +121,15 @@ export function App() {
           onChanged={reload} onRemoved={() => { setSettings(null); reload(); }} onRoomSaved={() => setRoomVersion((n) => n + 1)} />
       )}
       {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={cur?.name}
-        onOpenLook={(name) => { setView("looks"); setLookToOpen(name); }} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} request={buildRequest} onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
-        <EffectStudio notify={notify} device={current} onBuild={(folders) => { setViewState("firmware"); setBuildRequest({ folders, seq: Date.now() }); }} />
+        onOpenLook={(name) => { setView("looks"); setLookToOpen(name); }} /> : view === "firmware" ? <Firmware
+        notify={notify} devices={devices ?? []} device={current} request={buildRequest} openJob={route.job}
+        onOpenJob={(job) => setView("firmware", { job })}
+        onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
+        <EffectStudio notify={notify} device={current} openFile={route.folder && route.file ? {
+          folder: route.folder, name: route.file,
+        } : null}
+          onOpenFile={(folder, file) => setView("studio", { folder, file })}
+          onBuild={(folders) => { setView("firmware"); setBuildRequest({ folders, seq: Date.now() }); }} />
       ) :
         current ? <DevicePanel key={`${current}@${cur?.host ?? ""}`} deviceId={current} notify={notify}
           deviceName={cur?.name} host={cur?.host} roomVersion={roomVersion}

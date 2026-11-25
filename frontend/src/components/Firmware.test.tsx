@@ -221,7 +221,8 @@ test("lists firmware builds only, in plain words, and heads the open one with wh
     [`GET /api/firmware/jobs/${JID}`]: json(passed),
     [`GET /api/firmware/jobs/${JID}/log`]: () => new Response("", { status: 200 }),
   });
-  render(<Firmware notify={() => {}} />);
+  const onOpenJob = vi.fn();
+  render(<Firmware notify={() => {}} onOpenJob={onOpenJob} />);
   const table = await screen.findByRole("table", { name: "Your builds" });
   const rows = [...table.querySelectorAll("tbody tr")].map((r) => [...r.querySelectorAll("td")].map((td) => td.textContent));
   expect(rows).toHaveLength(3);                                    // no preview compile
@@ -234,6 +235,7 @@ test("lists firmware builds only, in plain words, and heads the open one with wh
   expect(table.querySelectorAll("tbody tr")[2].querySelector("td:last-child")).toHaveAttribute("title",
     expect.stringMatching(/^Something besides your effect code changed/));
   fireEvent.click(screen.getByText("ready to flash"));
+  expect(onOpenJob).toHaveBeenCalledWith(JID);
   expect(await screen.findByRole("heading", { name: /^dig-next-2 · acme-16.0.1 with my_fx, built today \d\d:\d\d: ready to flash$/ }))
     .toBeInTheDocument();
   expect(table.querySelectorAll("tbody tr")[1]).toHaveClass("open");

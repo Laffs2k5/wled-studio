@@ -147,6 +147,9 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
     return (
       <section className="slots">
         <h2>Slot grid</h2>
+        {items.length === 0 && (
+          <p className="first-run-note">Fill this once you have saved some looks.</p>
+        )}
         <p className="muted small">
           A block of preset ids laid out as banks and buttons, for setups that give ids a meaning: a remote whose
           bank 1 plays presets 101–104, say. Set where the ids start and how they step; the table below shows the
@@ -213,6 +216,9 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
   return (<>
     <section className="slots">
       <h2>Slot grid</h2>
+      {items.length === 0 && (
+        <p className="first-run-note">Fill this once you have saved some looks.</p>
+      )}
       <p className="muted small">
         Presets {g.first}–{idOf(g, g.rows, g.cols)}. Click a slot, then a look or playlist in the library beside the
         grid (or drag one onto a slot): a copy of it takes the slot's preset id. The bar at the bottom says when

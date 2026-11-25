@@ -66,6 +66,16 @@ test("switching files swaps the text and isn't an edit", async () => {
   expect(screen.getByText("Save")).toBeDisabled();
 });
 
+test("a file from the URL opens without the user finding it in the select", async () => {
+  stub({ "my_fx.cpp": "void x() {}\n" });
+  const onFileOpen = vi.fn();
+  render(<CodeEditor notify={() => {}} openFile={{ folder: "my_fx", name: "my_fx.cpp" }} onFileOpen={onFileOpen} />);
+  const code = await screen.findByLabelText("Code");
+  await waitFor(() => expect(textOf(code)).toBe("void x() {}\n"));
+  expect(screen.getByLabelText("Effect file")).toHaveValue("my_fx/my_fx.cpp");
+  expect(onFileOpen).toHaveBeenCalledWith("my_fx", "my_fx.cpp");
+});
+
 test("a new effect: labelled fields, the next free id with the used ones, then created, opened and offered for compiling", async () => {
   const calls = stub({ "new_fx.cpp": "// template" });
   const onCreated = vi.fn();
