@@ -61,7 +61,24 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     const msg = detail(data, `${r.status} ${r.statusText}`);
     throw new ApiError(r.status, r.status === 502 ? plainDeviceError(msg) : msg);
   }
+
   return data as T;
+}
+
+async function transferLibrary(file?: File, mode: "keep" | "replace" = "keep", preview = false): Promise<Blob | object> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const t = token.get();
+  if (t) headers["Authorization"] = `Bearer ${t}`;
+  if (file) headers["X-WLED-Studio"] = "1";
+  const path = file ? `/api/library/archive/import?mode=${mode}&preview=${preview}` : "/api/library/archive";
+  const response = await fetch(path, { method: file ? "POST" : "GET", headers, body: file ?? undefined });
+  if (!file) {
+    if (!response.ok) throw new ApiError(response.status, await response.text());
+    return response.blob();
+  }
+  const data = await response.json();
+  if (!response.ok) throw new ApiError(response.status, detail(data, `${response.status} ${response.statusText}`));
+  return data;
 }
 
 const enc = encodeURIComponent;
@@ -265,6 +282,9 @@ export const effects = {
 };
 
 export const api = {
+  exportLibrary: () => transferLibrary() as Promise<Blob>,
+  importLibrary: (file: File, mode: "keep" | "replace", preview = false) =>
+    transferLibrary(file, mode, preview) as Promise<{ looks: number; playlists: number; palettes: number; kept: string[] }>,
   devices: () => request<Device[]>("GET", "/api/devices"),
   addDevice: (name: string, host: string, pin?: string) =>
     request<Device>("POST", "/api/devices", pin ? { name, host, pin } : { name, host }),

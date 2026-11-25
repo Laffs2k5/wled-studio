@@ -16,6 +16,7 @@ import { Palettes } from "./Palettes";
 import { Playlists } from "./Playlists";
 import { WriteBar } from "./WriteBar";
 import { SaveLook } from "./SaveLook";
+import { LibraryTransfer } from "./LibraryTransfer";
 
 interface Props {
   deviceId: string;
@@ -274,6 +275,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
         onShown={reloadState} formOnly />
       <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} deviceName={profile?.device.name ?? deviceName}
         pending={offlineName ? null : pendingPalettes} onCheckAndWrite={offlineName ? undefined : () => setOpenPlan((n) => n + 1)} />
+      <LibraryTransfer onChanged={reloadLooks} notify={notify} />
     </aside>
   );
   if (viewMode === "library") {

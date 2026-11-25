@@ -7,7 +7,7 @@ import json
 import shutil
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from . import fxmeta, netcheck
@@ -602,6 +602,80 @@ async def import_from_device(device_id: str, request: Request, replace: bool = F
     lib.save(data)
     return {"imported": added, "kept_existing": kept, "imported_playlists": imported_playlists,
             "skipped_presets": skipped}
+
+
+ARCHIVE_LIMIT = 10 * 1024 * 1024
+
+
+@router.get("/library/archive")
+def export_library(request: Request):
+    lib = request.app.state.library.load()
+    portable_looks = {}
+    for name, look in lib["looks"].items():
+        portable_looks[name] = {k: v for k, v in look.items() if k != "source"}
+    archive = {"format": "wled-studio-library", "version": 1,
+               "looks": portable_looks, "playlists": lib["playlists"], "palettes": lib["palettes"]}
+    return Response(json.dumps(archive, indent=2, ensure_ascii=False).encode(),
+                    media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="wled-studio-library-v1.json"'})
+
+
+@router.post("/library/archive/import")
+async def import_library(request: Request, mode: Literal["keep", "replace"] = "keep", preview: bool = False):
+    chunks, size = [], 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > ARCHIVE_LIMIT:
+            raise HTTPException(413, "Library archive is too large (maximum 10 MiB).")
+        chunks.append(chunk)
+    try:
+        raw = json.loads(b"".join(chunks))
+        if not isinstance(raw, dict) or raw.get("format") != "wled-studio-library" or raw.get("version") != 1:
+            raise ValueError("not a wled-studio library v1 archive")
+        if set(raw) != {"format", "version", "looks", "playlists", "palettes"}:
+            raise ValueError("the archive contains unsupported fields")
+        archive = {}
+        for kind, model in (("looks", LookIn), ("playlists", PlaylistIn), ("palettes", PaletteIn)):
+            if not isinstance(raw[kind], dict):
+                raise ValueError(f"{kind} must be an object")
+            archive[kind] = {}
+            for name, item in raw[kind].items():
+                if kind == "looks" and set(item) - {
+                    "name", "preset_id", "on", "bri", "transition", "mic", "segments", "snapshot", "folder",
+                }:
+                    raise ValueError("looks contain unsupported fields")
+                parsed = model.model_validate(item).model_dump(exclude_none=True)
+                if parsed.get("name") != name:
+                    raise ValueError(f"the {kind} key and item name differ")
+                archive[kind][name] = parsed
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+        raise HTTPException(422, f"Invalid library archive: {e}") from None
+
+    lib = request.app.state.library.load()
+    result = {"looks": 0, "playlists": 0, "palettes": 0, "kept": []}
+    for kind in ("looks", "playlists", "palettes"):
+        for name in archive[kind]:
+            if name in lib[kind] and mode == "keep":
+                result["kept"].append(name)
+            else:
+                result[kind] += 1
+    merged = {**lib}
+    for kind in ("looks", "playlists", "palettes"):
+        merged[kind] = {**lib[kind], **archive[kind]} if mode == "replace" else {**archive[kind], **lib[kind]}
+    known = set(merged["looks"])
+    for playlist in merged["playlists"].values():
+        refs = [entry.get("look") for entry in playlist.get("entries", [])]
+        if playlist.get("end"):
+            refs.append(playlist["end"])
+        missing = sorted({name for name in refs if name not in known})
+        if missing:
+            raise HTTPException(422, f"Playlist {playlist['name']!r} refers to missing looks: {', '.join(missing)}")
+    if preview:
+        return result
+    try:
+        return request.app.state.library.merge_archive(archive, mode)
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
 
 
 @router.get("/looks")

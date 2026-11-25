@@ -72,7 +72,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             return _deny(400, "host not allowed (set WLEDSTUDIO_ALLOWED_HOSTS)")
 
         length = request.headers.get("content-length")
-        if length is not None and (not length.isdigit() or int(length) > self.s.max_body_bytes):
+        archive_limit = 10 * 1024 * 1024
+        limit = archive_limit if request.url.path == "/api/library/archive/import" else self.s.max_body_bytes
+        if length is not None and (not length.isdigit() or int(length) > limit):
             return _deny(413, "request body too large")
 
         if request.url.path.startswith("/api/"):

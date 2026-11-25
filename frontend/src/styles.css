@@ -82,6 +82,7 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .stored-presets { list-style: none; padding: 0; }
 .preset-backups { margin-top: .75rem; }
 .preset-backups > button { margin: .2rem; display: block; }
+.library-transfer { margin-top: 1rem; padding-top: .5rem; border-top: 1px solid var(--line); }
 .set-list { list-style: none; padding: 0; margin: 0; }
 .set-list li { display: flex; gap: .5rem; align-items: center; padding: .25rem 0; border-bottom: 1px solid var(--line); }
 @media (max-width: 700px) { .device-set-items { grid-template-columns: 1fr; } }

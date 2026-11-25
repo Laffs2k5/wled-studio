@@ -625,6 +625,29 @@ class LibraryStore:
         tmp.write_text(json.dumps(lib, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         os.replace(tmp, self.path)
 
+    def merge_archive(self, archive: dict, mode: str) -> dict:
+        """Atomically merge portable looks/playlists/palettes, retaining one library history version."""
+        lib = self.load()
+        counts = {"looks": 0, "playlists": 0, "palettes": 0, "kept": []}
+        for kind in counts.keys() - {"kept"}:
+            incoming = archive.get(kind, {})
+            for name, item in incoming.items():
+                if name in lib[kind] and mode == "keep":
+                    counts["kept"].append(name)
+                    continue
+                lib[kind][name] = item
+                counts[kind] += 1
+        known_looks = set(lib["looks"])
+        for playlist in lib["playlists"].values():
+            refs = [e.get("look") for e in playlist.get("entries", [])]
+            if playlist.get("end"):
+                refs.append(playlist["end"])
+            missing = sorted({name for name in refs if name not in known_looks})
+            if missing:
+                raise LookError(f"playlist {playlist['name']!r} refers to missing looks: {', '.join(missing)}")
+        self.save(lib)
+        return counts
+
     def rename_look(self, old: str, new: str) -> dict:
         """Rename a look, and every playlist's reference to it, in one save."""
         new = check_name(new)

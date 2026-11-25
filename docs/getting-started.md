@@ -128,6 +128,10 @@ header's device or **not on it yet**; after **Save palette** the editor closes a
 to use it (write presets once, then pick it in an effect's Palette list), with **Check and write**.
 The editor shows each stop's position as a number (0 to 255).
 
+The Library view can export a portable JSON file containing looks, playlists and palettes, excluding
+device PINs, hosts, device sets and remote-grid assignments. Import first previews what will be merged,
+then either keeps existing names or explicitly replaces them. It never writes a device.
+
 ## 4. The room's shape
 
 Under **Room shape** in the device settings, describe the strip as walls in LED order: a direction

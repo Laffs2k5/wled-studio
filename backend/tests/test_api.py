@@ -73,6 +73,28 @@ def test_bank_trial_persists_and_refuses_to_restore_a_changed_state(client, dev_
     assert client.get(f"/api/devices/{dev_id}/bank-trial").json()["active"] is False
 
 
+def test_library_archive_is_portable_and_import_is_atomic(client):
+    client.put("/api/looks/Calm", json={"name": "Calm", "preset_id": 3, "segments": [], "source": {"device": "private"}},
+               headers=CSRF)
+    client.put("/api/playlists/Evening", json={"name": "Evening", "entries": [{"look": "Calm"}]}, headers=CSRF)
+    exported = client.get("/api/library/archive")
+    assert exported.status_code == 200 and "attachment" in exported.headers["content-disposition"]
+    archive = exported.json()
+    assert archive["looks"]["Calm"].get("source") is None and "sets" not in archive
+
+    preview = client.post("/api/library/archive/import?preview=true", content=json.dumps(archive),
+                          headers={**CSRF, "Content-Type": "application/json"})
+    assert preview.status_code == 200 and preview.json()["kept"] == ["Calm", "Evening"]
+    bad = {**archive, "playlists": {"Broken": {"name": "Broken", "entries": [{"look": "Missing"}]}}}
+    assert client.post("/api/library/archive/import?mode=replace", content=json.dumps(bad),
+                       headers={**CSRF, "Content-Type": "application/json"}).status_code == 422
+    assert client.get("/api/looks").json()[0]["name"] == "Calm"
+
+    big = b"x" * (10 * 1024 * 1024 + 1)
+    assert client.post("/api/library/archive/import", content=big,
+                       headers={**CSRF, "Content-Type": "application/json"}).status_code == 413
+
+
 def test_add_list_remove_device(client):
     r = client.post("/api/devices", json={"name": "Desk", "host": "wled.lan", "pin": "1234"}, headers=CSRF)
     assert r.status_code == 201
