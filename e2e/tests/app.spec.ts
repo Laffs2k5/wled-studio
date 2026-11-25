@@ -262,7 +262,9 @@ test("effect studio: the code editor highlights, folds and follows the system th
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
   await page.getByRole("button", { name: "Effect studio" }).click();
-  await page.getByLabel("Effect files").getByRole("button", { name: "e2e_fx.cpp" }).click();
+  const files = page.getByLabel("Effect files");
+  await expect(files.getByText("e2e_fx", { exact: true })).toBeVisible();
+  await files.getByRole("button", { name: "e2e_fx.cpp" }).click();
   const content = page.locator(".code .cm-content");   // inside the editor's shadow root
   await expect(content).toContainText("SEGMENT.fill");
   const editor = page.locator(".code .cm-editor");
