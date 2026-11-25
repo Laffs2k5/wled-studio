@@ -283,3 +283,8 @@ button.code-place { font: inherit; text-align: left; }
 /* streaming the studio's preview to a device: amber, at the top while it lasts */
 .stream-banner { position: sticky; top: 0; z-index: 4; margin: .4rem 0; padding: .4rem .7rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 8px; background: var(--panel); }
 .stream-banner strong { color: var(--warn); }
+/* the new-effect form: labelled fields above each other */
+.new-effect-form { border: 1px solid var(--accent); border-radius: 8px; padding: .4rem .9rem .6rem; margin: .4rem 0; display: grid; gap: .4rem; max-width: 40rem; }
+.new-effect-form h3 { margin: .2rem 0; font-size: .95rem; }
+.new-effect-form p { margin: 0; }
+.new-effect-form .field input:not(.slot), .new-effect-form .field select { max-width: 24rem; }

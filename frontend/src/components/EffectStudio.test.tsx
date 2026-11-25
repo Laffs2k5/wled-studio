@@ -300,3 +300,30 @@ test("no sound controls for a build without preview_audio", async () => {
   await screen.findByLabelText("Preview effect");
   expect(screen.queryByLabelText("Simulated beat")).toBeNull();
 });
+
+test("a new effect's folder is ticked for compiling at once, and the studio's ids count as used", async () => {
+  let created = false;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+    if (key === "GET /api/firmware/status") return reply({ enabled: true });
+    if (key === "GET /api/firmware/usermods") return reply(["my_fx"]);
+    if (key === "GET /api/effects") return reply([{ folder: "my_fx", files: ["fx.cpp"], effect_ids: [250] },
+      ...(created ? [{ folder: "new_fx", files: ["library.json", "new_fx.cpp"], effect_ids: [253] }] : [])]);
+    if (key === "POST /api/effects") { created = true; return reply({ folder: "new_fx", files: ["library.json", "new_fx.cpp"] }, 201); }
+    if (key.startsWith("GET /api/effects/new_fx/")) return reply(key.endsWith("/git") ? { repo: false } : { content: "x\n" });
+    if (key === "GET /api/devices") return reply([]);
+    return reply({ detail: "no route" }, 404);
+  }));
+  render(<EffectStudio notify={() => {}} load={async () => new Preview(fakeModule() as never)} />);
+  await screen.findByLabelText("my_fx");
+  fireEvent.click(await screen.findByRole("button", { name: "＋ New effect" }));
+  const form = screen.getByRole("form", { name: "New effect" });
+  // the preview's Studio Comet (id 2 in the fake) is below 200; 250 is my_fx's
+  expect(within(form).getByText(/In use: 250 \(my_fx\)\./)).toBeInTheDocument();
+  fireEvent.change(within(form).getByLabelText("Folder name (lowercase, e.g. my_wave)"), { target: { value: "new_fx" } });
+  fireEvent.change(within(form).getByLabelText("Name shown in WLED"), { target: { value: "New Fx" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Create" }));
+  await waitFor(() => expect(screen.getByLabelText("new_fx")).toBeChecked());
+  expect(within(form).getByRole("button", { name: "Compile and preview" })).toBeInTheDocument();
+});

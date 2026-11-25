@@ -134,9 +134,13 @@ shape…**).
 Effects are small C++ functions inside WLED's firmware. The Effect studio lets you write them,
 watch them run, and build them in.
 
-1. **Write:** in *Your effects' code*, **New effect** starts from a template: a wave along the strip,
+1. **Write:** in *Your effects' code*, **＋ New effect** opens a form: the folder name, the name
+   shown in WLED, the effect id (200-254, fixed for good because presets store it; the next free
+   one is suggested and the ones in use are listed) and what to start from: a wave along the strip,
    or a room-aware wave that uses each LED's position (**Write room map** puts the positions from
-   your room shape next to it). Edit, **Save**. The files are in `./effects`, one folder per effect.
+   your room shape next to it). After **Create** the code opens, its folder is ticked for
+   compiling, and **Compile and preview** is offered. Edit, **Save**. The files are in
+   `./effects`, one folder per effect.
 2. **Watch:** tick the **effect folders to compile** (opening a file ticks its folder; the ticks
    are remembered), then **Compile and preview**: it compiles them to WebAssembly and runs them in
    the browser, with the effect's own sliders. The line above the preview says what it shows: the

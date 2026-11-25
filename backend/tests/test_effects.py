@@ -30,7 +30,8 @@ def test_create_edit_list(tmp_path):
     assert r.status_code == 200
     assert (eff / "my_wave" / "my_wave.cpp").read_text().endswith("// changed\n")
     assert c.put("/api/effects/my_wave/extra.h", json={"content": "#pragma once\n"}, headers=CSRF).status_code == 200
-    assert c.get("/api/effects").json() == [{"folder": "my_wave", "files": ["extra.h", "library.json", "my_wave.cpp"]}]
+    assert c.get("/api/effects").json() == [{"folder": "my_wave", "files": ["extra.h", "library.json", "my_wave.cpp"],
+                                             "effect_ids": [250]}]
 
 
 def test_existing_folders_follow_the_builders_rule(tmp_path):
@@ -40,7 +41,7 @@ def test_existing_folders_follow_the_builders_rule(tmp_path):
     (eff / "wled-studio-effects").mkdir()
     (eff / "wled-studio-effects" / "fx.cpp").write_text("// fx\n")
     (eff / ".git").mkdir()
-    assert c.get("/api/effects").json() == [{"folder": "wled-studio-effects", "files": ["fx.cpp"]}]
+    assert c.get("/api/effects").json() == [{"folder": "wled-studio-effects", "files": ["fx.cpp"], "effect_ids": []}]
     assert c.get("/api/effects/wled-studio-effects/fx.cpp").json()["content"] == "// fx\n"
     r = c.put("/api/effects/wled-studio-effects/fx.cpp", json={"content": "// changed\n"}, headers=CSRF)
     assert r.status_code == 200 and (eff / "wled-studio-effects" / "fx.cpp").read_text() == "// changed\n"
@@ -98,3 +99,12 @@ def test_room_template_and_map(tmp_path):
     assert "kRoomLeds = 3;" in (eff / "room_wave" / "room_map.h").read_text()
     assert c.post("/api/effects/room_wave/room-map", json={"device": "../x"}, headers=CSRF).status_code == 422
     assert c.post("/api/effects/nope/room-map", json={"device": "desk"}, headers=CSRF).status_code == 404
+
+
+def test_the_effect_ids_a_folder_fixes_are_listed(tmp_path):
+    c, eff = client(tmp_path)
+    (eff / "fx").mkdir()
+    (eff / "fx" / "fx.cpp").write_text("constexpr uint8_t kStudioVuId = 240;\nconstexpr uint8_t kSkyId=241;\nint kOtherId = 9;\n")
+    (eff / "fx" / "ids.h").write_text("constexpr uint8_t kId = 241;\n")
+    (eff / "fx" / "notes.txt").write_text("constexpr uint8_t kId = 7;\n")
+    assert c.get("/api/effects").json() == [{"folder": "fx", "files": ["fx.cpp", "ids.h"], "effect_ids": [240, 241]}]

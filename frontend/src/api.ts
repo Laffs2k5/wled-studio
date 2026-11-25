@@ -184,7 +184,8 @@ export interface Preflight {
   rows: (CheckItem & { today: CheckItem["status"]; changes: boolean })[];
 }
 
-export interface EffectFolder { folder: string; files: string[] }
+/** An effect folder, with the effect ids its code fixes (`constexpr uint8_t kId = 251;`). */
+export interface EffectFolder { folder: string; files: string[]; effect_ids?: number[] }
 
 /** An effect folder's git state (effects_git.py); repo false: not a clone. */
 export interface GitState {

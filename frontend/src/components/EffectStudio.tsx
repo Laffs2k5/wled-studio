@@ -240,7 +240,15 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
 
   // the code editor works with or without a preview: without one, it's how the first preview starts
   const editor = (
-    <CodeEditor notify={notify} device={device} jump={jump} onSaved={(folder) => {
+    <CodeEditor notify={notify} device={device} jump={jump}
+      previewIds={effects.filter((e) => e.id >= 200).map((e) => ({ id: e.id, by: e.name }))}
+      onCreated={(folder) => {
+        // a new folder: compilable at once, and ticked (known gap 11: it waited for a reload)
+        if (mine && !mine.includes(folder)) setMine([...mine, folder]);
+        setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
+      }}
+      onCompile={mine ? compile : undefined}
+      onSaved={(folder) => {
       if (mine && !mine.includes(folder)) setMine([...mine, folder]);
       setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
       if (shown?.folders.includes(folder)) setStale(true);

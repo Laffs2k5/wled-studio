@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { viewOf } from "./Code";
-import { CodeEditor } from "./CodeEditor";
+import { CodeEditor, nextFreeId } from "./CodeEditor";
 
 /** The editor's text, and typing into it as a user would (a transaction from the view). */
 const textOf = (host: HTMLElement) => viewOf(host)!.state.doc.toString();
@@ -18,7 +18,7 @@ function stub(files: Record<string, string>) {
     const key = `${init?.method ?? "GET"} ${url}`;
     calls.push({ key, body: init?.body as string });
     const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
-    if (key === "GET /api/effects") return reply([{ folder: "my_fx", files: ["library.json", "my_fx.cpp"] }]);
+    if (key === "GET /api/effects") return reply([{ folder: "my_fx", files: ["library.json", "my_fx.cpp"], effect_ids: [253] }]);
     if (key === "GET /api/devices") return reply([{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }]);
     if (key === "POST /api/effects/my_fx/room-map") return reply({ leds: 250 });
     if (key.startsWith("GET /api/effects/")) return reply({ content: files[url.split("/").slice(-1)[0]] ?? "" });
@@ -58,18 +58,43 @@ test("switching files swaps the text and isn't an edit", async () => {
   expect(screen.getByText("Save")).toBeDisabled();
 });
 
-test("creates a new effect from the template and opens it", async () => {
+test("a new effect: labelled fields, the next free id with the used ones, then created, opened and offered for compiling", async () => {
   const calls = stub({ "new_fx.cpp": "// template" });
-  render(<CodeEditor notify={() => {}} />);
-  fireEvent.click(await screen.findByText("New effect"));
-  fireEvent.change(screen.getByLabelText("New effect folder"), { target: { value: "new_fx" } });
-  fireEvent.change(screen.getByLabelText("New effect name"), { target: { value: "New Fx" } });
-  fireEvent.change(screen.getByLabelText("Effect id"), { target: { value: "251" } });
-  fireEvent.click(screen.getByText("Create"));
+  const onCreated = vi.fn();
+  const onCompile = vi.fn();
+  render(<CodeEditor notify={() => {}} previewIds={[{ id: 254, by: "Studio Comet" }]} onCreated={onCreated} onCompile={onCompile} />);
+  fireEvent.click(await screen.findByRole("button", { name: "＋ New effect" }));
+  const form = screen.getByRole("form", { name: "New effect" });
+  const id = within(form).getByLabelText("Effect id (200-254; never change it later: presets store it)");
+  expect(id).toHaveAttribute("placeholder", "252");                 // 254 and 253 are taken
+  expect(within(form).getByText(/252, the next free one, unless you type another\. In use: 253 \(my_fx\), 254 \(Studio Comet\)\./))
+    .toBeInTheDocument();
+  fireEvent.change(within(form).getByLabelText("Folder name (lowercase, e.g. my_wave)"), { target: { value: "New-fx" } });
+  expect(within(form).getByText(/Lowercase letters, digits and _ only/)).toBeInTheDocument();
+  fireEvent.change(within(form).getByLabelText("Folder name (lowercase, e.g. my_wave)"), { target: { value: "new_fx" } });
+  fireEvent.change(within(form).getByLabelText("Name shown in WLED"), { target: { value: "New Fx" } });
+  fireEvent.change(id, { target: { value: "254" } });
+  expect(within(form).getByText("Effect id 254 is taken by Studio Comet.")).toBeInTheDocument();
+  expect(within(form).getByRole("button", { name: "Create" })).toBeDisabled();
+  fireEvent.change(id, { target: { value: "199" } });
+  expect(within(form).getByText("The effect id must be a whole number from 200 to 254.")).toBeInTheDocument();
+  fireEvent.change(id, { target: { value: "" } });                   // back to the suggestion
+  fireEvent.change(within(form).getByLabelText("Start from"), { target: { value: "room" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Create" }));
   const code = await screen.findByLabelText("Code");
   await waitFor(() => expect(textOf(code)).toBe("// template"));
   expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects")!.body!)).toEqual(
-    { folder: "new_fx", title: "New Fx", effect_id: 251, template: "wave" });
+    { folder: "new_fx", title: "New Fx", effect_id: 252, template: "room" });
+  expect(onCreated).toHaveBeenCalledWith("new_fx");
+  expect(screen.getByText(/Created new_fx \(effect id 252\) and opened its code\. It's ticked for compiling\./)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Compile and preview" }));
+  expect(onCompile).toHaveBeenCalled();
+});
+
+test("the next free id counts down from 254", () => {
+  expect(nextFreeId([])).toBe(254);
+  expect(nextFreeId([{ id: 254, by: "a" }, { id: 252, by: "b" }])).toBe(253);
+  expect(nextFreeId(Array.from({ length: 55 }, (_, i) => ({ id: 200 + i, by: "x" })))).toBeNull();
 });
 
 test("hidden when no effects directory is configured", async () => {

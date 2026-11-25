@@ -193,13 +193,27 @@ def _file(request: Request, folder: str, name: str) -> Path:
     return _folder(request, folder) / name
 
 
+# the effect ids a folder's code fixes, in the templates' shape: `constexpr uint8_t kId = 251;`
+ID_RE = re.compile(r"constexpr\s+uint8_t\s+k\w*Id\s*=\s*(\d{1,3})\s*;")
+
+
+def effect_ids(d: Path) -> list[int]:
+    """The effect ids fixed in a folder's sources (so a new effect can take a free one)."""
+    ids: set[int] = set()
+    for f in d.iterdir():
+        if f.is_file() and f.suffix in (".cpp", ".h") and FILE_RE.match(f.name) and f.stat().st_size <= MAX_FILE:
+            ids.update(int(m) for m in ID_RE.findall(f.read_text(encoding="utf-8", errors="replace")) if int(m) <= 255)
+    return sorted(ids)
+
+
 @router.get("")
 def list_effects(request: Request):
     root = _root(request)
     out = []
     for d in sorted(root.iterdir()) if root.is_dir() else []:
         if d.is_dir() and FOLDER_RE.match(d.name):
-            out.append({"folder": d.name, "files": sorted(f.name for f in d.iterdir() if f.is_file() and FILE_RE.match(f.name))})
+            out.append({"folder": d.name, "files": sorted(f.name for f in d.iterdir() if f.is_file() and FILE_RE.match(f.name)),
+                        "effect_ids": effect_ids(d)})
     return out
 
 
