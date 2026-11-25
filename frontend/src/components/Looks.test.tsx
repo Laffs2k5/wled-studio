@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { Looks } from "./Looks";
+import { importText, Looks } from "./Looks";
 
 function stubFetch(routes: Record<string, unknown>) {
   const calls: { key: string; body?: string }[] = [];
@@ -36,15 +36,33 @@ test("a look on walls names them", () => {
   expect(screen.getByTitle("Follows these walls of the room model")).toHaveTextContent("A · L2");
 });
 
-test("import calls the API and refreshes", async () => {
-  stubFetch({ "POST /api/devices/desk/import": { imported: ["A"], kept_existing: [], skipped_presets: [] } });
+test("import calls the API, refreshes, and leaves its result under the button", async () => {
+  stubFetch({ "POST /api/devices/desk/import": { imported: ["A"], kept_existing: ["B", "C"], imported_playlists: [], skipped_presets: [] } });
   const onChanged = vi.fn();
   const notify = vi.fn();
   render(<Looks deviceId="desk" looks={[]} onChanged={onChanged} onApplied={() => {}} notify={notify} />);
   fireEvent.click(screen.getByText("Import from device"));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-  expect(notify).toHaveBeenCalledWith("Imported 1 preset from desk into the library, kept 0 existing");
+  expect(screen.getByLabelText("Import result")).toHaveTextContent(
+    "Imported 1 new look from desk into the library. 2 looks already in the library were left as they are.");
+  expect(notify).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "OK" }));
+  expect(screen.queryByLabelText("Import result")).toBeNull();
   expect(screen.queryByText("Save current")).toBeNull();              // saving is under the live controls now
+});
+
+test("a failed import says so where the import was", async () => {
+  stubFetch({});
+  render(<Looks deviceId="desk" looks={[]} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
+  fireEvent.click(screen.getByText("Import from device"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't import from desk: no route");
+});
+
+test("the import's words: playlists, nothing new, presets not taken", () => {
+  expect(importText({ imported: [], kept_existing: ["A"], imported_playlists: ["P"], skipped_presets: ["9"] }, "Desk")).toBe(
+    "Imported 1 playlist from Desk into the library. 1 look already in the library was left as it is. "
+    + "Left out: preset 9 (playlists already in the library, or not readable as a look).");
+  expect(importText({ imported: [], kept_existing: [] }, "Desk")).toBe("Nothing new to import from Desk.");
 });
 
 test("a look's preset id is changed on its row, with a warning when it's taken", async () => {

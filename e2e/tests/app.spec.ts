@@ -49,8 +49,8 @@ test("look studio: add the device, live control, save a look and write it", asyn
   await page.getByRole("button", { name: "Review and write" }).click();
   await expect(page.getByRole("region", { name: "Will be written" }).getByRole("row", { name: /E2E look 7/ })).toBeVisible();
   await page.getByRole("button", { name: /^Write \d+ presets? to / }).click();
-  // (the sliders' <output> values have the status role too, so target the toast)
-  await expect(page.locator(".toast")).toContainText(/Written to .* and verified/);
+  // the write's result stays in the write bar, with the backup's name
+  await expect(page.getByLabel("Last write")).toContainText(/Written to .* and verified at .*Backup of the previous presets: .*-presets\.json/);
   const presets = await (await request.get(`/api/devices/${id}/presets`)).json();
   expect(presets["7"].n).toBe("E2E look");
 

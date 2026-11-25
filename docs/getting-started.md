@@ -61,7 +61,8 @@ sound-reactive ones). Picking one shows **only the controls that effect uses, wi
 read from WLED's effect metadata. Changes go to the strip at once.
 
 - **Import from device** turns the device's presets into looks, **by name**. A look keeps the
-  effect's and palette's names, not their numbers, so it survives firmware changes.
+  effect's and palette's names, not their numbers, so it survives firmware changes. What it did
+  stays under the button ("Imported 1 new look… 5 already in the library were left as they are.").
 - **Save as look…**, under the effect controls, stores what the strip shows as a look in the
   library. Give it a name and, optionally, a **preset id** (1-250, WLED's preset number; the form
   suggests the next free one, and warns when another look has it); without one the look stays in
@@ -102,7 +103,13 @@ read from WLED's effect metadata. Changes go to the strip at once.
     you say to go ahead;
   - after the write, the file is read back and must match.
 
-  Entries wled-studio doesn't manage are left alone.
+  Entries wled-studio doesn't manage are left alone. The result stays in the write bar until the
+  next write: "Written to Desk and verified at 22:30: 4 presets. Backup of the previous presets:
+  <file>", or why nothing was written.
+
+Results that matter stay where the action was: the write, an import, a flash and its steps. Short
+confirmations show for a few seconds at the top right; errors stay there until you dismiss them
+(×).
 
 **Playlists** (looks in a row, with times and shuffle) and **palettes** (a gradient editor) live in
 the library too, and are written with the looks.

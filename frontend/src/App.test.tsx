@@ -62,7 +62,35 @@ test("errors are shown", async () => {
     "GET /api/looks": () => [],
   });
   render(<App />);
-  expect(await screen.findByRole("status")).toHaveTextContent("no route");
+  expect((await screen.findAllByRole("alert"))[0]).toHaveTextContent("no route");
+  // an error stays until dismissed (the same error again replaces it, rather than piling up)
+  await new Promise((r) => setTimeout(r, 100));
+  const toasts = screen.getAllByRole("alert");
+  expect(toasts).toHaveLength(1);
+  fireEvent.click(within(toasts[0]).getByRole("button", { name: "Dismiss" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("a confirmation toast goes by itself after a few seconds", async () => {
+  let added = false;
+  backend({
+    "GET /api/devices": () => (added ? [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }] : []),
+    "POST /api/devices": () => { added = true; return { id: "desk", name: "Desk", host: "wled.lan", has_pin: false }; },
+    "GET /api/devices/desk/profile": () => profile,
+  });
+  render(<App />);
+  const card = await screen.findByRole("form", { name: "Add your WLED controller" });
+  fireEvent.change(within(card).getByLabelText("Device name"), { target: { value: "Desk" } });
+  fireEvent.change(within(card).getByLabelText("Address (IP or host name)"), { target: { value: "wled.lan" } });
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    fireEvent.click(within(card).getByRole("button", { name: "Add" }));
+    expect(await screen.findByText(/Added Desk\. Found: WLED 16\.0\.1, 60 LEDs\./)).toHaveAttribute("role", "status");
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(screen.queryByText(/Added Desk\./)).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("asks for the token when the backend wants one, then sends it", async () => {
@@ -256,6 +284,7 @@ test("a device that doesn't answer: the address, what to check, Try again, and t
   expect(card).toHaveTextContent("Check that it is powered and on the network");
   expect(screen.queryByText(/ConnectError/)).toBeNull();
   expect(screen.queryByRole("status")).toBeNull();                       // no raw toast
+  expect(screen.queryByRole("alert")).toBeNull();
   const looks = screen.getByRole("region", { name: "Looks" });
   expect(within(looks).getByText("Evening")).toBeInTheDocument();
   expect(within(looks).getByText(/Not checked against Desk: it does not answer/)).toBeInTheDocument();

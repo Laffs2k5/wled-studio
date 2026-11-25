@@ -9,6 +9,17 @@ export const CHECK_DELAY_MS = 600;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** What a write did, in a line that stays in the bar until the next write (or OK). */
+export function writeResult(r: PushResult, deviceName: string, at = new Date()): { ok: boolean; text: string } {
+  if (!r.done) return { ok: false, text: `Not written to ${deviceName}: ${r.reason ?? "the device refused it"}.` };
+  const time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const n = r.changed_ids.length;
+  const pals = r.palettes?.length ?? 0;
+  const what = [n ? plural(n, "preset") : "", pals ? plural(pals, "palette") : ""].filter(Boolean).join(" and ") || "nothing new";
+  const backup = r.backup ? ` Backup of the previous presets: ${r.backup.split("/").pop()}.` : "";
+  return { ok: true, text: `Written to ${deviceName} and verified at ${time}: ${what}.${backup}` };
+}
+
 /** A time from the backend (ISO 8601): the clock time today, else the date too. */
 export function when(iso: string): string {
   const d = new Date(iso);
@@ -35,6 +46,8 @@ export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [open, setOpen] = useState(false);
+  // the last write's result: stays until the next write, or until dismissed
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const seq = useRef(0);
 
   const check = useCallback(async () => {
@@ -100,7 +113,14 @@ export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 
     <div className={`write-dock ${state}`} aria-label="Write to device">
       {open && plan && (
         <WritePlan deviceId={deviceId} deviceName={deviceName} plan={plan} notify={notify}
-          onWritten={(r) => { if (r.done) setOpen(false); check(); }} />
+          onWritten={(r) => { setResult(writeResult(r, deviceName)); if (r.done) setOpen(false); check(); }}
+          onFailed={(msg) => setResult({ ok: false, text: `Writing to ${deviceName} failed: ${msg}` })} />
+      )}
+      {result && (
+        <div className={`row action-result ${result.ok ? "done" : "error"}`} aria-label="Last write">
+          <span className="grow" role={result.ok ? undefined : "alert"}>{result.text}</span>
+          <button className="small" onClick={() => setResult(null)}>OK</button>
+        </div>
       )}
       <div className="row write-bar">
         <span className="grow" aria-live="polite">{text}{checking && plan ? " · checking…" : ""}</span>

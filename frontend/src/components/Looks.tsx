@@ -25,6 +25,24 @@ interface Props {
   offline?: string;
 }
 
+const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+
+/** What an import did, in words: new looks and playlists, what was left alone, what wasn't taken. */
+export function importText(r: { imported: string[]; kept_existing: string[]; imported_playlists?: string[]; skipped_presets?: string[] },
+  deviceName: string): string {
+  const parts = [r.imported.length || r.imported_playlists?.length
+    ? `Imported ${[r.imported.length ? n(r.imported.length, "new look") : "", r.imported_playlists?.length ? n(r.imported_playlists.length, "playlist") : ""]
+      .filter(Boolean).join(" and ")} from ${deviceName} into the library.`
+    : `Nothing new to import from ${deviceName}.`];
+  if (r.kept_existing.length) {
+    parts.push(`${n(r.kept_existing.length, "look")} already in the library ${r.kept_existing.length === 1 ? "was" : "were"} left as ${r.kept_existing.length === 1 ? "it is" : "they are"}.`);
+  }
+  if (r.skipped_presets?.length) {
+    parts.push(`Left out: preset${r.skipped_presets.length === 1 ? "" : "s"} ${r.skipped_presets.join(", ")} (playlists already in the library, or not readable as a look).`);
+  }
+  return parts.join(" ");
+}
+
 export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [], offline }: Props) {
   const usedIn = (name: string) => playlists.filter((p) => p.entries.some((e) => e.look === name) || p.end === name).map((p) => p.name);
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
@@ -52,6 +70,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [copyTo, setCopyTo] = useState("");
   const [set, setSet] = useState<DeviceSet | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [imported, setImported] = useState<{ ok: boolean; text: string } | null>(null);
   const loadSet = useCallback(() => api.getSet(deviceId)
     .then((s) => setSet(s && Array.isArray(s.looks) && s.on_device ? s : null)).catch(() => setSet(null)), [deviceId]);
   useEffect(() => {
@@ -106,6 +125,22 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       .then(() => { setSelected(new Set()); setMoveTo(""); });
   }
 
+  // the import's result stays under its button until the next import (or OK)
+  async function importFromDevice() {
+    setBusy(true);
+    setImported(null);
+    try {
+      await beforeAction?.();
+      const r = await api.importPresets(deviceId);
+      setImported({ ok: true, text: importText(r, deviceName) });
+      onChanged();
+    } catch (e) {
+      setImported({ ok: false, text: `Couldn't import from ${deviceName}: ${(e as Error).message}` });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function run<T>(f: () => Promise<T>, ok?: (v: T) => string) {
     setBusy(true);
     try {
@@ -126,11 +161,16 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       <p className="muted small library-line">Library: kept in the app, shared by all devices. Nothing here is on a device until you write presets.</p>
       {offline && <p className="small warn">Not checked against {offline}: it does not answer. Showing, editing and importing wait until it does.</p>}
       <div className="row">
-        <button disabled={busy || !!offline} title={offline ? `${offline} does not answer` : undefined} onClick={() => run(() => api.importPresets(deviceId),
-          (r) => `Imported ${r.imported.length} preset${r.imported.length === 1 ? "" : "s"} from ${deviceName} into the library, kept ${r.kept_existing.length} existing`).then(onChanged)}>
+        <button disabled={busy || !!offline} title={offline ? `${offline} does not answer` : undefined} onClick={importFromDevice}>
           Import from device
         </button>
       </div>
+      {imported && (
+        <div className={`row action-result ${imported.ok ? "done" : "error"}`} aria-label="Import result">
+          <span className="grow" role={imported.ok ? undefined : "alert"}>{imported.text}</span>
+          <button className="small" onClick={() => setImported(null)}>OK</button>
+        </div>
+      )}
       {set && (
         <div className="row device-set small" aria-label="What goes on this device">
           {set.all ? (

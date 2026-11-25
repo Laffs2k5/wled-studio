@@ -81,7 +81,10 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
   const [plan, setPlan] = useState<FlashPlan | null>(null);
   const [pinForm, setPinForm] = useState(false);
   const [pin, setPin] = useState("");
-  const replan = () => firmware.flashPlan(job, device).then(setPlan).catch((e) => notify((e as Error).message, true));
+  // an action that failed here (planning, starting a flash or going back): said where it was, until the next one
+  const [failure, setFailure] = useState<{ kind: "plan" | "flash" | "go back"; text: string } | null>(null);
+  const replan = () => { setFailure(null); return firmware.flashPlan(job, device).then(setPlan)
+    .catch((e) => setFailure({ kind: "plan", text: `Couldn't plan the flash: ${(e as Error).message}` })); };
   const [typed, setTyped] = useState("");
   // the last flash or revert per device: a run belongs to its device, and isn't shown under another
   const [runs, setRuns] = useState<Record<string, FlashRun>>(() => Object.fromEntries(lastRuns));
@@ -91,11 +94,11 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
   const [revertTyped, setRevertTyped] = useState("");
   // the notice: loaded when needed; `pending` is the flash or revert waiting for it to be accepted
   const [notice, setNotice] = useState<FlashNotice | null>(null);
-  const [pending, setPending] = useState<{ action: string; go: (version: string) => Promise<FlashRun> } | null>(null);
+  const [pending, setPending] = useState<{ action: "flash" | "go back"; go: (version: string) => Promise<FlashRun> } | null>(null);
 
   useEffect(() => { firmware.notice().then(setNotice).catch(() => setNotice(null)); }, []);
 
-  useEffect(() => { setPlan(null); setTyped(""); setRevertTyped(""); setPinForm(false); }, [job, device]);
+  useEffect(() => { setPlan(null); setTyped(""); setRevertTyped(""); setPinForm(false); setFailure(null); }, [job, device]);
 
   // what going back would boot: read again for each device, and after each finished run
   const runDone = run && run.state !== "running" ? run.id : null;
@@ -118,36 +121,43 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
   const running = run?.state === "running";
   const afterFlash = Boolean(run && run.kind === "flash" && !running
     && run.steps.some((s) => s.name === "upload" && s.state === "ok"));
-  const start = (p: Promise<FlashRun>) => p.then((r) => { setRun(r); setPlan(null); setTyped(""); setRevertTyped(""); })
-    .catch((e) => notify((e as Error).message, true));
+  const failed = (kind: "flash" | "go back", e: unknown) =>
+    setFailure({ kind, text: `${kind === "flash" ? "The flash" : "Going back"} didn't start: ${(e as Error).message}` });
+  const start = (kind: "flash" | "go back", p: Promise<FlashRun>) => p.then((r) => { setRun(r); setPlan(null); setTyped(""); setRevertTyped(""); })
+    .catch((e) => failed(kind, e));
   // every flash and revert passes the notice: shown unless accepted with "don't show this again"
-  const withNotice = async (action: string, go: (version: string) => Promise<FlashRun>) => {
+  const withNotice = async (action: "flash" | "go back", go: (version: string) => Promise<FlashRun>) => {
+    setFailure(null);
     try {
       const n = await firmware.notice();
       setNotice(n);
-      if (n.remembered) start(go(n.version));
+      if (n.remembered) start(action, go(n.version));
       else setPending({ action, go });
     } catch (e) {
-      notify((e as Error).message, true);
+      failed(action, e);
     }
   };
   const accept = async (remember: boolean) => {
     if (!notice || !pending) return;
-    const { go } = pending;
+    const { action, go } = pending;
     setPending(null);
     try {
       await firmware.acceptNotice(notice.version, remember);
       if (remember) setNotice({ ...notice, remembered: true, accepted: new Date().toISOString() });
-      start(go(notice.version));
+      start(action, go(notice.version));
     } catch (e) {
-      notify((e as Error).message, true);
+      failed(action, e);
     }
   };
+  const failureLine = (kinds: string[]) => failure && kinds.includes(failure.kind) ? (
+    <p className="small action-result error" role="alert">{failure.text}</p>
+  ) : null;
 
   return (
     <div className="flash">
       <h2>Flash it to {deviceName} <ChangeDevice /></h2>
       <button disabled={running} onClick={replan}>{plan ? "Check again" : "Plan the flash"}</button>
+      {failureLine(["plan"])}
       {plan && (
         <div className="flash-plan">
           <p className={`verdict ${plan.can_flash ? (plan.checks.some((c) => c.level === "warn") ? "warn" : "ok") : "bad"}`}>
@@ -217,6 +227,7 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
           ) : <p className="bad small">Fix the problems above, then check again.</p>}
         </div>
       )}
+      {failureLine(["flash"])}
       {run && (() => {
         const done = run.steps.length;
         const failedAt = run.steps.findIndex((s) => s.state === "failed");
@@ -267,6 +278,7 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
             <button className="danger" disabled={revertTyped !== deviceName || running}
               onClick={() => withNotice("go back", (v) => firmware.revert(device, revertTyped, v))}>Go back on {deviceName}</button>
           </div>
+          {failureLine(["go back"])}
         </details>
       )}
       {notice?.remembered && (

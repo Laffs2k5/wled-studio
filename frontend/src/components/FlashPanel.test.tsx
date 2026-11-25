@@ -200,3 +200,27 @@ test("without a flash from this app, what going back would boot is unknown", asy
   render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
   expect(await screen.findByText(/What Desk's other firmware slot holds isn't known: the app knows only after it has flashed the device/)).toBeInTheDocument();
 });
+
+test("a plan or a flash that fails says so where it was, not in a toast", async () => {
+  let refuse = "plan";
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+    if (url === "/api/notices/flash") return reply({ ...NOTICE, remembered: true });
+    if (url.endsWith("/previous-firmware")) return reply({ known: false });
+    if (url.includes("/flash-plan")) return refuse === "plan" ? reply({ detail: "no such job" }, 404) : reply(okPlan);
+    if (url.endsWith("/flash") && init?.method === "POST") return reply({ detail: "a flash or revert is already running for this device" }, 409);
+    return reply({ detail: "no" }, 404);
+  }));
+  const notify = vi.fn();
+  render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={notify} />);
+  fireEvent.click(screen.getByText("Plan the flash"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't plan the flash: no such job");
+  refuse = "flash";
+  fireEvent.click(screen.getByText("Plan the flash"));
+  await screen.findByText(/The gate passed/);
+  expect(screen.queryByRole("alert")).toBeNull();                   // gone with the next action
+  fireEvent.change(screen.getByLabelText("Type the device's name to flash"), { target: { value: "Desk" } });
+  fireEvent.click(screen.getByText("Flash Desk"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("The flash didn't start: a flash or revert is already running for this device");
+  expect(notify).not.toHaveBeenCalled();
+});

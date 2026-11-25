@@ -75,7 +75,8 @@ test("an effect that changed waits for a tick; drift must be acknowledged; the w
   fireEvent.click(write);
   await waitFor(() => expect(onWritten).toHaveBeenCalled());
   expect(bodies[0]).toEqual({ dry_run: false, adopt_drift: true, accept_review: ["Storm"] });
-  expect(notify).toHaveBeenCalledWith("Written to Desk and verified (backup b.json)", false);
+  expect(onWritten.mock.calls[0][0]).toMatchObject({ done: true, backup: "b.json" });
+  expect(notify).not.toHaveBeenCalled();   // the write bar shows the result where the write was
 });
 
 test("nothing to write", () => {
@@ -87,11 +88,11 @@ test("nothing to write", () => {
 
 test("a refused write is reported", async () => {
   stubPush({ detail: "Not written: more than one look wants the same preset id" }, 409);
-  const notify = vi.fn();
-  render(<WritePlan deviceId="desk" deviceName="Desk" notify={notify} onWritten={() => {}} plan={plan({
+  const onFailed = vi.fn();
+  render(<WritePlan deviceId="desk" deviceName="Desk" notify={() => {}} onWritten={() => {}} onFailed={onFailed} plan={plan({
     changed_ids: ["3"], palettes: [{ palette: "Ice", file: "palette0.json", id: 200 }],
     report: [{ look: "Evening", preset_id: 3, status: "ok", notes: [], written: true, changed: true, on_device: null }] })} />);
   expect(screen.getByText(/and uploads 1 palette\./)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Write 1 preset to Desk" }));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("Not written: more than one look wants the same preset id", true));
+  await waitFor(() => expect(onFailed).toHaveBeenCalledWith("Not written: more than one look wants the same preset id"));
 });

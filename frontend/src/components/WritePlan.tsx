@@ -32,10 +32,12 @@ interface Props {
   notify: (msg: string, error?: boolean) => void;
   /** After a write that went through (or was refused by the device or the drift check). */
   onWritten: (result: PushResult) => void;
+  /** A write that failed (the device didn't answer, say): the message, shown where the write was. */
+  onFailed?: (message: string) => void;
 }
 
 /** The write plan: what writing the library to the device would change, and the write itself. */
-export function WritePlan({ deviceId, deviceName, plan, notify, onWritten }: Props) {
+export function WritePlan({ deviceId, deviceName, plan, notify, onWritten, onFailed }: Props) {
   const [adopt, setAdopt] = useState(false);
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -51,10 +53,10 @@ export function WritePlan({ deviceId, deviceName, plan, notify, onWritten }: Pro
     setBusy(true);
     try {
       const r = await api.push(deviceId, { dry_run: false, adopt_drift: adopt, accept_review: ticked.map((x) => x.look!) });
-      notify(r.done ? `Written to ${deviceName} and verified (backup ${r.backup})` : `Not written to ${deviceName}: ${r.reason}`, !r.done);
       onWritten(r);
     } catch (e) {
-      notify((e as Error).message, true);
+      if (onFailed) onFailed((e as Error).message);
+      else notify((e as Error).message, true);
     } finally {
       setBusy(false);
     }

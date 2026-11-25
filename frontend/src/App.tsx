@@ -17,7 +17,8 @@ export function App() {
   // the device every view works on: picked in the header, remembered across reloads
   const [current, setCurrentState] = useState<string | null>(() => rememberedDevice.get());
   const setCurrent = useCallback((id: string | null) => { setCurrentState(id); rememberedDevice.set(id); }, []);
-  const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
+  // toasts: a confirmation goes after a few seconds; an error stays until dismissed
+  const [toasts, setToasts] = useState<{ id: number; msg: string; error: boolean }[]>([]);
   const [needToken, setNeedToken] = useState(false);
   const [view, setViewState] = useState<"looks" | "slots" | "studio" | "firmware">("looks");
   // the Effect studio's "Build firmware with these effects": the folders the Firmware view opens with
@@ -29,9 +30,12 @@ export function App() {
   const [roomVersion, setRoomVersion] = useState(0);
 
   const notify = useCallback((msg: string, error = false) => {
-    setToast({ msg, error });
-    setTimeout(() => setToast((t) => (t && t.msg === msg ? null : t)), error ? 8000 : 3500);
+    const id = Date.now() + Math.random();
+    // the same message again replaces the old one; confirmations replace each other, errors pile up
+    setToasts((ts) => [...ts.filter((t) => t.msg !== msg && t.error), { id, msg, error }].slice(-4));
+    if (!error) setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 3500);
   }, []);
+  const dismiss = (id: number) => setToasts((ts) => ts.filter((t) => t.id !== id));
 
   const reload = useCallback(() => {
     api.devices()
@@ -93,7 +97,16 @@ export function App() {
             <AddDevice variant="card" notify={notify} onAdded={(d) => { reload(); setCurrent(d.id); }} />
           </div>
         )}
-      {toast && <div role="status" className={`toast ${toast.error ? "error" : ""}`}>{toast.msg}</div>}
+      {toasts.length > 0 && (
+        <div className="toasts">
+          {toasts.map((t) => t.error ? (
+            <div key={t.id} role="alert" className="toast error">
+              <span className="grow">{t.msg}</span>
+              <button className="small" aria-label="Dismiss" onClick={() => dismiss(t.id)}>×</button>
+            </div>
+          ) : <div key={t.id} role="status" className="toast">{t.msg}</div>)}
+        </div>
+      )}
     </div>
   );
 }
