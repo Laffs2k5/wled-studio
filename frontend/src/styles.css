@@ -224,6 +224,9 @@ button.slot.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 
 /* the effect folder's version control (GitPanel) */
 .git-panel { margin: 0.5rem 0; }
+.git-steps { margin: .3rem 0; padding-left: 1.4rem; font-size: .9rem; display: grid; gap: .35rem; }
+.git-steps li > button { margin-left: .4rem; }
+.git-steps form.row { margin: .2rem 0; }
 .git-changes { margin: 0.25rem 0; padding-left: 1.2rem; }
 .git-diff { max-height: 24rem; overflow: auto; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--deep); white-space: pre; }
 

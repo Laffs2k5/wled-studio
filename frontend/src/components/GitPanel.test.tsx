@@ -33,38 +33,44 @@ test("nothing for a folder that isn't a clone", async () => {
   expect(container.textContent).toBe("");
 });
 
-test("shows the changes, commits them, then pushes", async () => {
+test("three steps: the changes, commit them all, then push to GitHub; each result where it happened", async () => {
   const calls = stub({ changes: [{ status: "M", path: "fx.cpp" }, { status: "??", path: "n.h" }] });
   const notify = vi.fn();
   render(<GitPanel folder="fx" version={0} notify={notify} />);
-  expect(await screen.findByText(/2 changes/)).toBeInTheDocument();
-  expect(screen.getByText("Push")).toBeDisabled();                 // commit first
+  expect(await screen.findByLabelText("1 Changes")).toHaveTextContent("Changes: 2 files (fx.cpp changed, n.h new)");
+  expect(screen.getByLabelText("3 Push")).toHaveTextContent("Commit your changes first.");
+  expect(screen.queryByText("Push to GitHub")).toBeNull();
+  expect(screen.getByText("Get new commits from GitHub")).toBeDisabled();
   fireEvent.click(screen.getByText("Show changes"));
   expect(await screen.findByText(/\+new/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Commit message"), { target: { value: "Brighter" } });
-  fireEvent.click(screen.getByText("Commit"));
-  expect(await screen.findByText(/1 commit not pushed/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Commit all 2 files"));
+  expect(await screen.findByText("Committed locally. Push to put it on GitHub.")).toBeInTheDocument();
+  expect(screen.getByLabelText("3 Push")).toHaveTextContent("1 commit not on GitHub yet.");
+  expect(screen.getByLabelText("2 Commit")).toHaveTextContent("nothing to commit.");
   expect(JSON.parse(calls.find((c) => c.key === "POST /api/effects/fx/git/commit")!.body!)).toEqual({ message: "Brighter" });
-  fireEvent.click(screen.getByText("Push"));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("Pushed to github.com/someone/effects"));
-  expect(screen.getByText("Push")).toBeDisabled();                 // nothing left to push
+  fireEvent.click(screen.getByText("Push to GitHub"));
+  expect(await screen.findByText("Pushed to github.com/someone/effects.")).toBeInTheDocument();
+  expect(screen.getByLabelText("3 Push")).toHaveTextContent("Nothing to push: GitHub has every commit.");
+  expect(notify).not.toHaveBeenCalled();
 });
 
 test("says why it can't commit or push", async () => {
   stub({ changes: [], can_commit: false, can_push: false });
   render(<GitPanel folder="fx" version={0} notify={() => {}} />);
-  expect(await screen.findByText(/Committing is off here/)).toBeInTheDocument();
-  expect(screen.queryByText("Push")).toBeNull();
+  expect(await screen.findByLabelText("2 Commit")).toHaveTextContent("off here (WLEDSTUDIO_EFFECTS_GIT)");
+  expect(screen.getByLabelText("3 Push")).toHaveTextContent("needs a key");
+  expect(screen.queryByText("Push to GitHub")).toBeNull();
 });
 
-test("a failed push is reported", async () => {
-  stub({ changes: [], ahead: 1 });
+test("a failed push is reported in the panel", async () => {
+  stub({ changes: [], ahead: 1, behind: 2 });
   vi.mocked(fetch).mockImplementation(async (_url, init) => {
     if (init?.method === "POST") return new Response(JSON.stringify({ detail: "the remote changed the same lines" }), { status: 409 });
-    return new Response(JSON.stringify({ ...base, changes: [], ahead: 1 }));
+    return new Response(JSON.stringify({ ...base, changes: [], ahead: 1, behind: 2 }));
   });
-  const notify = vi.fn();
-  render(<GitPanel folder="fx" version={0} notify={notify} />);
-  fireEvent.click(await screen.findByText("Push"));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("the remote changed the same lines", true));
+  render(<GitPanel folder="fx" version={0} notify={() => {}} />);
+  expect(await screen.findByText("2 commits on GitHub not here yet.")).toBeInTheDocument();
+  fireEvent.click(await screen.findByText("Push to GitHub"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("the remote changed the same lines");
 });

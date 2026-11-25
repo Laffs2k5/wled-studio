@@ -166,9 +166,12 @@ the ESP32 toolchain.
 
 **Keep your effects in git and work in the app alone.** Clone your effects repository into
 `./effects` (the repository's root, or each folder in it, being one effect usermod). The app then
-shows that folder's changes under the editor: **Show changes**, **Commit** with a message,
-**Push** and **Pull**. A push first takes the remote's new commits under yours; if the same lines
-changed on both sides, nothing is pushed and the app says so. Turn it on with:
+shows that folder under the editor as three steps: **1 Changes** (the files, with **Show
+changes**), **2 Commit** (a message, then **Commit all N files**: every file listed is committed),
+**3 Push** (how many commits aren't on GitHub yet, and **Push to GitHub**). A step that can't be
+done says why ("Commit your changes first."). **Get new commits from GitHub** takes commits made
+elsewhere, with yours on top. A push first takes the remote's new commits under yours; if the same
+lines changed on both sides, nothing is pushed and the app says so. Turn it on with:
 
 ```bash
 WLEDSTUDIO_EFFECTS_GIT=on                          # committing
