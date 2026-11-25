@@ -13,9 +13,11 @@ export function DeviceSetPanel({ deviceId, deviceName, looks, playlists, notify,
 }) {
   const [set, setSet] = useState<DeviceSet | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deviceCount, setDeviceCount] = useState(1);
   const load = useCallback(() => api.getSet(deviceId).then(setSet).catch((e) => notify(e.message, true)),
     [deviceId, notify]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { api.devices().then((devices) => setDeviceCount(devices.length)).catch(() => setDeviceCount(1)); }, []);
 
   const put = (action: () => Promise<DeviceSet>, message: string) => {
     setBusy(true);
@@ -53,8 +55,23 @@ export function DeviceSetPanel({ deviceId, deviceName, looks, playlists, notify,
               <ul className="set-list">
                 {looks.map((look) => (
                   <li key={look.name}>
+                    {deviceCount > 1 && (
+                      <label className="set-check">
+                        <input type="checkbox" aria-label={`Put ${look.name} on ${deviceName}`}
+                          checked={selected("looks", look.name)}
+                          disabled={busy || (selected("looks", look.name) && !included("looks", look.name))}
+                          onChange={(event) => put(
+                            () => event.target.checked
+                              ? api.addToSet(deviceId, [look.name])
+                              : api.removeFromSet(deviceId, [look.name]),
+                            event.target.checked ? `Put “${look.name}” on ${deviceName}`
+                              : `Don't put “${look.name}” on ${deviceName}`,
+                          )} />
+                        On {deviceName}
+                      </label>
+                    )}
                     <span className="grow">{look.name}</span>
-                    {!selected("looks", look.name)
+                    {deviceCount === 1 && (!selected("looks", look.name)
                       ? <button disabled={busy} onClick={() => put(
                         () => api.addToSet(deviceId, [look.name]), `Put “${look.name}” on ${deviceName}`,
                       )}>Put on {deviceName}</button>
@@ -62,7 +79,7 @@ export function DeviceSetPanel({ deviceId, deviceName, looks, playlists, notify,
                         title={!included("looks", look.name) ? "Needed by a playlist in this set" : undefined}
                         onClick={() => put(
                           () => api.removeFromSet(deviceId, [look.name]), `Don't put “${look.name}” on ${deviceName}`,
-                        )}>Don't put on {deviceName}</button>}
+                        )}>Don't put on {deviceName}</button>)}
                   </li>
                 ))}
               </ul>
@@ -72,14 +89,28 @@ export function DeviceSetPanel({ deviceId, deviceName, looks, playlists, notify,
               <ul className="set-list">
                 {playlists.map((playlist) => (
                   <li key={playlist.name}>
+                    {deviceCount > 1 && (
+                      <label className="set-check">
+                        <input type="checkbox" aria-label={`Put playlist ${playlist.name} on ${deviceName}`}
+                          checked={selected("playlists", playlist.name)} disabled={busy}
+                          onChange={(event) => put(
+                            () => event.target.checked
+                              ? api.addToSet(deviceId, [], [playlist.name])
+                              : api.removeFromSet(deviceId, [], [playlist.name]),
+                            event.target.checked ? `Put “${playlist.name}” on ${deviceName}`
+                              : `Don't put “${playlist.name}” on ${deviceName}`,
+                          )} />
+                        On {deviceName}
+                      </label>
+                    )}
                     <span className="grow">{playlist.name}</span>
-                    {!included("playlists", playlist.name)
+                    {deviceCount === 1 && (!included("playlists", playlist.name)
                       ? <button disabled={busy} onClick={() => put(
                         () => api.addToSet(deviceId, [], [playlist.name]), `Put “${playlist.name}” on ${deviceName}`,
                       )}>Put on {deviceName}</button>
                       : <button disabled={busy} onClick={() => put(
                         () => api.removeFromSet(deviceId, [], [playlist.name]), `Don't put “${playlist.name}” on ${deviceName}`,
-                      )}>Don't put on {deviceName}</button>}
+                      )}>Don't put on {deviceName}</button>)}
                   </li>
                 ))}
               </ul>

@@ -12,6 +12,9 @@ test("the Presets view owns choosing what goes on the device", async () => {
     const key = `${init?.method ?? "GET"} ${url}`;
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     calls.push({ key, body });
+    if (key === "GET /api/devices") return new Response(JSON.stringify([
+      { id: "desk", name: "Desk" }, { id: "other", name: "Other" },
+    ]), { status: 200 });
     if (key.startsWith("POST /api/devices/desk/set/add")) {
       set = { ...set, looks: [...set.looks, body.looks[0]] };
     }
@@ -26,10 +29,10 @@ test("the Presets view owns choosing what goes on the device", async () => {
     playlists={[{ name: "Storm", entries: [], repeat: 0, shuffle: false }]} notify={() => {}} onChanged={changed} />);
   expect(await screen.findByText("Desk has its own set: 1 looks and 0 playlists.")).toBeInTheDocument();
   expect(screen.getByText("Storm brings Rain")).toBeInTheDocument();
-  fireEvent.click(screen.getAllByRole("button", { name: "Put on Desk" })[0]);
+  fireEvent.click(screen.getByLabelText("Put Fire on Desk"));
   await waitFor(() => expect(changed).toHaveBeenCalled());
   expect(calls.find((call) => call.key === "POST /api/devices/desk/set/add")?.body)
     .toEqual({ looks: ["Fire"], playlists: [] });
-  fireEvent.click(screen.getAllByRole("button", { name: "Don't put on Desk" })[0]);
+  fireEvent.click(screen.getByLabelText("Put Calm on Desk"));
   await waitFor(() => expect(calls.some((call) => call.key === "POST /api/devices/desk/set/remove")).toBe(true));
 });
