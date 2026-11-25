@@ -128,11 +128,11 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
   await expect(looks.getByText("E2E single")).toBeVisible();
 
   // showing each look restores its own layout: the single one deletes the layer again
-  await looks.getByRole("listitem").filter({ hasText: "E2E layers" }).getByRole("button", { name: "Show" }).click();
+  await looks.getByRole("listitem").filter({ hasText: "E2E layers" }).getByRole("button", { name: "Show on strip" }).click();
   await expect.poll(async () => (await segs()).map((s: { start: number; stop: number; bm: number }) => [s.start, s.stop, s.bm]))
     .toEqual([[0, 60, 0], [10, 30, 2]]);
   await expect(page.getByRole("button", { name: /^Segment 1 / })).toBeVisible();
-  await looks.getByRole("listitem").filter({ hasText: "E2E single" }).getByRole("button", { name: "Show" }).click();
+  await looks.getByRole("listitem").filter({ hasText: "E2E single" }).getByRole("button", { name: "Show on strip" }).click();
   await expect.poll(async () => (await segs()).length).toBe(1);
 
   // add a layer again, then end the session: the device is back as it was at the start

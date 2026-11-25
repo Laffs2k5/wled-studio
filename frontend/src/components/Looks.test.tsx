@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Looks } from "./Looks";
 
 function stubFetch(routes: Record<string, unknown>) {
@@ -14,6 +14,12 @@ function stubFetch(routes: Record<string, unknown>) {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+/** Opens a look's ⋯ menu and picks an item. */
+function menu(look: string, item: string | RegExp) {
+  fireEvent.click(screen.getByRole("button", { name: `More for ${look}` }));
+  return within(screen.getByRole("menu", { name: `Actions for ${look}` })).getByRole("menuitem", { name: item });
+}
 
 const looks = [{ name: "Evening", preset_id: 3, mic: false, segments: [] }, { name: "Loose", segments: [] }];
 
@@ -91,9 +97,9 @@ test("show a look live; delete asks first", async () => {
   const onApplied = vi.fn();
   vi.stubGlobal("confirm", vi.fn(() => true));
   render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={onApplied} notify={() => {}} />);
-  fireEvent.click(screen.getAllByText("Show")[0]);
+  fireEvent.click(screen.getAllByText("Show on strip")[0]);
   await waitFor(() => expect(onApplied).toHaveBeenCalled());
-  fireEvent.click(screen.getByLabelText("Delete Evening"));
+  fireEvent.click(menu("Evening", "Delete…"));
   await waitFor(() => expect(calls.some((c) => c.key === "DELETE /api/looks/Evening")).toBe(true));
 });
 
@@ -134,7 +140,7 @@ test("a look whose effect the device lacks: not on this device, can't be accepte
   expect(screen.getByText("not on this device")).toHaveAttribute("title", why);
   expect(screen.queryByText("unavailable")).toBeNull();
   expect(screen.queryByRole("button", { name: "Looks right: keep" })).toBeNull();
-  const [show, other] = screen.getAllByRole("button", { name: "Show" });
+  const [show, other] = screen.getAllByRole("button", { name: "Show on strip" });
   expect(show).toBeDisabled();
   expect(show).toHaveAttribute("title", why);
   expect(other).toBeEnabled();                                     // "Loose" is fine
@@ -157,8 +163,8 @@ test("rename a look, and see which playlists use it", async () => {
   const notify = vi.fn();
   render(<Looks deviceId="desk" looks={looks} onChanged={onChanged} onApplied={() => {}} notify={notify}
     playlists={[{ name: "Mix", entries: [{ look: "Evening", duration: 100, transition: 7 }], repeat: 0, shuffle: false }]} />);
-  expect(screen.getByTitle("In Mix")).toHaveTextContent("▶1");
-  fireEvent.click(screen.getByLabelText("Rename Evening"));
+  expect(screen.getByTitle("In Mix")).toHaveTextContent("in 1 playlist");
+  fireEvent.click(menu("Evening", "Rename…"));
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   const call = calls.find((c) => c.key === "POST /api/looks/Evening/rename")!;
   expect(JSON.parse(call.body!)).toEqual({ to: "Dusk" });
@@ -187,8 +193,8 @@ describe("folders and order", () => {
     render(<Looks deviceId="desk" looks={lib} onChanged={onChanged} onApplied={() => {}} notify={() => {}} />);
     expect(screen.getByText(/Not in a folder \(2\)/)).toBeInTheDocument();
     expect(screen.getByText(/Storms \(2\)/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Move Fire up")).toBeDisabled();             // first in its folder
-    fireEvent.click(screen.getByLabelText("Move Rain up"));                    // Rain swaps with Fire, not Party
+    expect(menu("Fire", "Move up")).toBeDisabled();                           // first in its folder
+    fireEvent.click(menu("Rain", "Move up"));                                  // Rain swaps with Fire, not Party
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
     expect(libCalls(calls)[0]).toEqual({ url: "/api/library/looks/order", body: { names: ["Calm", "Rain", "Party", "Fire"] } });
   });
@@ -252,9 +258,11 @@ describe("what goes on this device", () => {
     expect(await screen.findByText(/Desk has its own set: 1 looks, 1 playlists \(Storm brings Rain\)/)).toBeInTheDocument();
     expect(screen.getByText("Fire").closest("li")).toHaveClass("off-device");
     expect(screen.getByText("via playlist")).toBeInTheDocument();            // Rain, brought by Storm
-    fireEvent.click(screen.getByLabelText("Add Fire to this device"));
+    expect(screen.getByText("left off Desk")).toBeInTheDocument();
+    expect(menu("Rain", "On this device through a playlist")).toBeDisabled();
+    fireEvent.click(menu("Fire", "Put on this device"));
     await waitFor(() => expect(calls.find((c) => c.key === "POST /api/devices/desk/set/add")?.body).toEqual({ looks: ["Fire"], playlists: [] }));
-    fireEvent.click(screen.getByLabelText("Take Calm off this device"));
+    fireEvent.click(menu("Calm", "Remove from this device"));
     await waitFor(() => expect(calls.find((c) => c.key === "POST /api/devices/desk/set/remove")?.body).toEqual({ looks: ["Calm"], playlists: [] }));
   });
 
@@ -269,4 +277,28 @@ describe("what goes on this device", () => {
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Copied 1 to Test board's set"));
     expect(calls.find((c) => c.key === "POST /api/devices/test/set/add")?.body).toEqual({ looks: ["Fire"], playlists: [] });
   });
+});
+
+test("a calm row: the facts in words, Show on strip and Edit, and the rest in a ⋯ menu that closes", async () => {
+  const lib = [{ name: "Loud", mic: true, segments: [], folder: "Party" }, { name: "Quiet", mic: false, segments: [] }];
+  const calls = stubFetch({ "POST /api/library/looks/folder": { moved: ["Quiet"] } });
+  const onChanged = vi.fn();
+  render(<Looks deviceId="desk" looks={lib} onChanged={onChanged} onApplied={() => {}} notify={() => {}} onEdit={() => {}} />);
+  expect(screen.getByText("♪ mic")).toBeInTheDocument();                       // mic on: said
+  expect(screen.queryByText("–")).toBeNull();                                  // mic off: nothing
+  expect(screen.queryByText("♪")).toBeNull();
+  const row = screen.getByText("Quiet").closest("li")!;
+  expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual(["no preset id", "Show on strip", "Edit", "⋯"]);
+  fireEvent.click(screen.getByRole("button", { name: "More for Quiet" }));
+  expect(screen.getByRole("menu", { name: "Actions for Quiet" })).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByRole("menu")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "More for Quiet" }));
+  fireEvent.mouseDown(document.body);
+  expect(screen.queryByRole("menu")).toBeNull();
+  fireEvent.click(menu("Quiet", "Move to folder…"));
+  fireEvent.change(screen.getByLabelText("Folder for Quiet"), { target: { value: "Party" } });
+  await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  expect(JSON.parse(calls.find((c) => c.key === "POST /api/library/looks/folder")!.body!)).toEqual({ names: ["Quiet"], folder: "Party" });
+  expect(screen.queryByRole("menu")).toBeNull();
 });

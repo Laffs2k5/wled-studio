@@ -34,6 +34,18 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [busy, setBusy] = useState(false);
   // the look whose "Looks right: keep" waits for its confirmation in the row
   const [keeping, setKeeping] = useState<string | null>(null);
+  // the look whose ⋯ menu is open, and whether it shows the folder picker
+  const [menu, setMenu] = useState<string | null>(null);
+  const [folderFor, setFolderFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !(e.target as Element).closest?.(".row-menu")) setMenu(null);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
+  }, [menu]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [moveTo, setMoveTo] = useState("");
@@ -187,66 +199,102 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
             {open && (
               <ul className="look-list">
                 {items.map((l, i) => (
-              <li key={l.name} className={onDevice(l.name) ? "" : "off-device"}>
+              <li key={l.name} className={`look-row${onDevice(l.name) ? "" : " off-device"}`}>
                 <input type="checkbox" aria-label={`Select ${l.name}`} checked={selected.has(l.name)}
                   onChange={() => setSelected(toggle(selected, l.name))} />
-                <span className="order">
-                  <button disabled={busy || i === 0} aria-label={`Move ${l.name} up`} title="Up"
-                    onClick={() => organise(() => api.setOrder("looks", moveWithin(order, group, l.name, -1)))}>▲</button>
-                  <button disabled={busy || i === group.length - 1} aria-label={`Move ${l.name} down`} title="Down"
-                    onClick={() => organise(() => api.setOrder("looks", moveWithin(order, group, l.name, 1)))}>▼</button>
-                </span>
-                <span className="name">{l.name}</span>
-                {set && !set.all && (onDevice(l.name)
-                  ? (chosen(l.name)
-                    ? <button className="small" disabled={busy} aria-label={`Take ${l.name} off this device`} title={`Take it out of ${deviceName}'s set`}
-                        onClick={() => changeSet(() => api.removeFromSet(deviceId, [l.name]), `Took “${l.name}” off ${deviceName}'s set`)}>−</button>
-                    : <span className="badge" title="On this device because a playlist in its set plays it">via playlist</span>)
-                  : <button className="small" disabled={busy} aria-label={`Add ${l.name} to this device`} title={`Add it to ${deviceName}'s set`}
-                      onClick={() => changeSet(() => api.addToSet(deviceId, [l.name]), `Added “${l.name}” to ${deviceName}'s set`)}>＋</button>)}
-                <PresetIdEdit look={l} looks={looks} playlists={playlists} disabled={busy}
-                  onSave={(pid) => api.setPresetId(l.name, pid).then((r) => {
-                    notify((pid ? `“${l.name}” now has preset ${pid}` : `“${l.name}” has no preset id now`)
-                      + " (in the library; write presets to put it on the device)"
-                      + (r.shared_with.length ? `. Preset ${pid} is also used by ${r.shared_with.join(", ")}: nothing can be written until one changes.` : ""),
-                      r.shared_with.length > 0);
-                    onChanged();
-                  }, (e) => { notify((e as Error).message, true); throw e; })} />
-                {l.segments.some((s) => s.wall) && (
-                  <span className="muted small" title="Follows these walls of the room model">
-                    {[...new Set(l.segments.map((s) => s.wall).filter(Boolean))].join(" · ")}
-                  </span>
-                )}
-                {l.mic !== undefined && <span className="badge" title={l.mic ? "Mic on" : "Mic off"}>{l.mic ? "♪" : "–"}</span>}
-                {usedIn(l.name).length > 0 && (
-                  <span className="badge" title={`In ${usedIn(l.name).join(", ")}`}>▶{usedIn(l.name).length}</span>
-                )}
-                <StatusBadge item={status.get(l.name)} where={deviceName} />
-                {ACCEPTABLE.has(status.get(l.name)?.status ?? "ok") && (
-                  <button disabled={busy} aria-expanded={keeping === l.name}
-                    title={`Show it on the strip first; if it looks right, keep ${deviceName}'s version of its effect`}
-                    onClick={() => setKeeping(keeping === l.name ? null : l.name)}>
-                    Looks right: keep
+                <div className="look-main">
+                  <span className="name" title={l.name}>{l.name}</span>
+                  <div className="look-meta small">
+                    <PresetIdEdit look={l} looks={looks} playlists={playlists} disabled={busy}
+                      onSave={(pid) => api.setPresetId(l.name, pid).then((r) => {
+                        notify((pid ? `“${l.name}” now has preset ${pid}` : `“${l.name}” has no preset id now`)
+                          + " (in the library; write presets to put it on the device)"
+                          + (r.shared_with.length ? `. Preset ${pid} is also used by ${r.shared_with.join(", ")}: nothing can be written until one changes.` : ""),
+                          r.shared_with.length > 0);
+                        onChanged();
+                      }, (e) => { notify((e as Error).message, true); throw e; })} />
+                    <StatusBadge item={status.get(l.name)} where={deviceName} />
+                    {ACCEPTABLE.has(status.get(l.name)?.status ?? "ok") && (
+                      <button className="small" disabled={busy} aria-expanded={keeping === l.name}
+                        title={`Show it on the strip first; if it looks right, keep ${deviceName}'s version of its effect`}
+                        onClick={() => setKeeping(keeping === l.name ? null : l.name)}>
+                        Looks right: keep
+                      </button>
+                    )}
+                    {set && !set.all && !onDevice(l.name) && <span className="muted" title={`Not in ${deviceName}'s set`}>left off {deviceName}</span>}
+                    {set && !set.all && onDevice(l.name) && !chosen(l.name) && (
+                      <span className="badge" title="On this device because a playlist in its set plays it">via playlist</span>
+                    )}
+                    {l.segments.some((s) => s.wall) && (
+                      <span className="muted" title="Follows these walls of the room model">
+                        {[...new Set(l.segments.map((s) => s.wall).filter(Boolean))].join(" · ")}
+                      </span>
+                    )}
+                    {l.mic && <span className="badge" title="Turns the device's microphone on: a sound-reactive look">♪ mic</span>}
+                    {usedIn(l.name).length > 0 && (
+                      <span className="badge" title={`In ${usedIn(l.name).join(", ")}`}>
+                        in {usedIn(l.name).length} {usedIn(l.name).length === 1 ? "playlist" : "playlists"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="look-actions">
+                  <button disabled={busy || !showable(l.name)} title={showable(l.name) ? `Show it on ${deviceName}'s strip now (nothing is stored)` : whyNot(l.name)}
+                    onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” on ${deviceName}${r.status === "ok" ? "" : ` (${r.status})`}`).then(onApplied)}>
+                    Show on strip
                   </button>
-                )}
-                <button disabled={busy || !showable(l.name)} title={showable(l.name) ? "Show it on the strip now" : whyNot(l.name)}
-                  onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” on ${deviceName}${r.status === "ok" ? "" : ` (${r.status})`}`).then(onApplied)}>
-                  Show
-                </button>
-                {onEdit && (
-                  <button disabled={busy || !showable(l.name)} aria-label={`Edit ${l.name}`}
-                    title={showable(l.name) ? "Edit it in the library, without showing it" : whyNot(l.name)}
-                    onClick={() => onEdit(l.name)}>Edit</button>
-                )}
-                <button disabled={busy} aria-label={`Rename ${l.name}`} title="Rename; playlists that use it follow"
-                  onClick={() => {
-                    const to = prompt(`New name for “${l.name}”`, l.name)?.trim();
-                    if (to && to !== l.name) run(() => api.renameLook(l.name, to), (r) => `Renamed to “${r.name}” in the library`).then(onChanged);
-                  }}>✎</button>
-                <button disabled={busy} className="danger" aria-label={`Delete ${l.name}`}
-                  onClick={() => confirm(`Delete “${l.name}” from the library?`) && run(() => api.deleteLook(l.name)).then(onChanged)}>
-                  ×
-                </button>
+                  {onEdit && (
+                    <button disabled={busy || !showable(l.name)} aria-label={`Edit ${l.name}`}
+                      title={showable(l.name) ? "Edit it in the library, without showing it" : whyNot(l.name)}
+                      onClick={() => onEdit(l.name)}>Edit</button>
+                  )}
+                  <span className="row-menu">
+                    <button className="menu-button" aria-label={`More for ${l.name}`} aria-haspopup="menu" aria-expanded={menu === l.name}
+                      disabled={busy} onClick={() => { setMenu(menu === l.name ? null : l.name); setFolderFor(null); }}>⋯</button>
+                    {menu === l.name && (
+                      <div className="menu" role="menu" aria-label={`Actions for ${l.name}`}>
+                        <button role="menuitem" title="Rename; playlists that use it follow" onClick={() => {
+                          setMenu(null);
+                          const to = prompt(`New name for “${l.name}”`, l.name)?.trim();
+                          if (to && to !== l.name) run(() => api.renameLook(l.name, to), (r) => `Renamed to “${r.name}” in the library`).then(onChanged);
+                        }}>Rename…</button>
+                        <button role="menuitem" disabled={i === 0}
+                          onClick={() => { setMenu(null); organise(() => api.setOrder("looks", moveWithin(order, group, l.name, -1))); }}>Move up</button>
+                        <button role="menuitem" disabled={i === group.length - 1}
+                          onClick={() => { setMenu(null); organise(() => api.setOrder("looks", moveWithin(order, group, l.name, 1))); }}>Move down</button>
+                        {folderFor === l.name ? (
+                          <select autoFocus aria-label={`Folder for ${l.name}`} value="" onChange={(e) => {
+                            const v = e.target.value;
+                            const folder = v === "\u0000new" ? prompt("New folder name")?.trim() || "" : v === "\u0000none" ? null : v;
+                            setMenu(null); setFolderFor(null);
+                            if (folder === "") return;
+                            organise(() => api.setFolder("looks", [l.name], folder), `Moved “${l.name}” to ${folder ? `“${folder}”` : "no folder"}`);
+                          }}>
+                            <option value="">Move to…</option>
+                            {known.filter((f) => f !== l.folder).map((f) => <option key={f} value={f}>{f}</option>)}
+                            <option value={"\u0000new"}>A new folder…</option>
+                            {l.folder && <option value={"\u0000none"}>No folder</option>}
+                          </select>
+                        ) : (
+                          <button role="menuitem" onClick={() => setFolderFor(l.name)}>Move to folder…</button>
+                        )}
+                        {set && (onDevice(l.name)
+                          ? (set.all || chosen(l.name)
+                            ? <button role="menuitem" title={`Take it out of ${deviceName}'s set; its preset stays on the device until you remove it there`}
+                                onClick={() => { setMenu(null); changeSet(() => api.removeFromSet(deviceId, [l.name]), `Took “${l.name}” off ${deviceName}'s set`); }}>
+                                Remove from this device</button>
+                            : <button role="menuitem" disabled title="A playlist in this device's set plays it">On this device through a playlist</button>)
+                          : <button role="menuitem" title={`Add it to ${deviceName}'s set`}
+                              onClick={() => { setMenu(null); changeSet(() => api.addToSet(deviceId, [l.name]), `Added “${l.name}” to ${deviceName}'s set`); }}>
+                              Put on this device</button>)}
+                        <button role="menuitem" className="danger" onClick={() => {
+                          setMenu(null);
+                          if (confirm(`Delete “${l.name}” from the library?`)) run(() => api.deleteLook(l.name)).then(onChanged);
+                        }}>Delete…</button>
+                      </div>
+                    )}
+                  </span>
+                </div>
                 {keeping === l.name && (() => {
                   const item = status.get(l.name);
                   const fx = changedEffects(item);

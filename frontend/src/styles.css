@@ -55,7 +55,7 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .keep-confirm p { margin: 0 0 .4rem; }
 .library-line { margin: -.25rem 0 .5rem; }
 .device-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-.device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 24rem); gap: 1rem; padding: 1rem 1.25rem; }
+.device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 27rem); gap: 1rem; padding: 1rem 1.25rem; }
 @media (max-width: 1000px) { .device-panel { grid-template-columns: 1fr; } }
 aside, main { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; min-width: 0; }
 .effect-list input[type=search] { width: 100%; }
@@ -181,8 +181,25 @@ button.slot.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 .look-group { margin: .25rem 0 .5rem; }
 .group-head { gap: .4rem; margin: .5rem 0 .1rem; }
 .group-head .link { color: var(--text); text-decoration: none; font-weight: 600; }
-.look-list .order { display: inline-flex; gap: .1rem; }
-.look-list .order button { padding: 0 .3rem; font-size: .7rem; line-height: 1.4; }
+/* a look's row: the name with a line of facts under it, then the two everyday actions and a ⋯ menu */
+.look-list li.look-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .1rem .5rem;
+  grid-template-areas: "check name actions" ". meta meta"; }
+.look-list li.look-row > input[type=checkbox] { grid-area: check; }
+.look-list .look-main { display: contents; }
+.look-list li.look-row .name { grid-area: name; display: block; min-width: 0; }
+.look-meta { grid-area: meta; display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: center; }
+.look-actions { grid-area: actions; }
+.look-meta .badge { margin-left: 0; }
+.look-meta button.small { padding: 0 .4rem; }
+.look-actions { display: flex; gap: .3rem; align-items: center; }
+.look-actions button { padding: .2rem .45rem; font-size: .9rem; }
+.look-list li.look-row .keep-confirm { grid-column: 1 / -1; }
+.row-menu { position: relative; }
+.row-menu .menu { position: absolute; right: 0; top: calc(100% + .2rem); z-index: 10; display: flex; flex-direction: column;
+  min-width: 13rem; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .25rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.row-menu .menu button, .row-menu .menu select { border: none; text-align: left; border-radius: 4px; }
+.row-menu .menu button:hover:not(:disabled) { background: var(--hover); }
 .bulk { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .35rem .6rem; }
 .look-list li.off-device .name { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
 .device-set { margin: .25rem 0 .5rem; gap: .4rem .6rem; }

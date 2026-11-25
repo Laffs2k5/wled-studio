@@ -259,7 +259,7 @@ test("a device that doesn't answer: the address, what to check, Try again, and t
   const looks = screen.getByRole("region", { name: "Looks" });
   expect(within(looks).getByText("Evening")).toBeInTheDocument();
   expect(within(looks).getByText(/Not checked against Desk: it does not answer/)).toBeInTheDocument();
-  expect(within(looks).getByRole("button", { name: "Show" })).toBeDisabled();
+  expect(within(looks).getByRole("button", { name: "Show on strip" })).toBeDisabled();
   expect(within(looks).getByRole("button", { name: "Import from device" })).toBeDisabled();
   up = true;
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
