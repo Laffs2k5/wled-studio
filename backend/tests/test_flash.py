@@ -278,6 +278,9 @@ def test_what_the_other_slot_holds(make, device):
     run = wait(c, c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
     assert run["state"] == "done"
     assert c.get(f"/api/devices/{dev}/previous-firmware").json()["kind"] == "revert"
+    history = c.get(f"/api/devices/{dev}/firmware-history").json()
+    assert len(history) == 2
+    assert [row["kind"] for row in history] == ["revert", "flash"]
     # a record from before `before` was kept: unknown; an unreadable one is skipped
     rec = s.data_dir / "flashes" / dev / "29991231T235959-flash.json"
     rec.write_text('{"kind": "flash", "steps": [{"name": "upload", "state": "ok"}]}', encoding="utf-8")

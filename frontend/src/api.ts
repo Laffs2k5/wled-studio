@@ -346,6 +346,10 @@ export const api = {
   keepBankTrial: (id: string) => request<void>("DELETE", `/api/devices/${enc(id)}/bank-trial`),
   restoreBankTrial: (id: string, confirm: string, current_sha256: string) =>
     request<{ restored: boolean }>("POST", `/api/devices/${enc(id)}/bank-trial/restore`, { confirm, current_sha256 }),
+  firmwareHistory: (id: string) => request<FirmwareHistoryItem[]>(
+    "GET", `/api/devices/${enc(id)}/firmware-history`),
+  lastPresetWrite: (id: string) => request<{ last_write: string | null }>(
+    "GET", `/api/devices/${enc(id)}/last-preset-write`),
   accept: (id: string, name: string) =>
     request<{ look: Look; status: string; notes: string[]; accepted: string[] }>(
       "POST", `/api/devices/${enc(id)}/accept/${enc(name)}`),
@@ -353,3 +357,13 @@ export const api = {
     accept_review?: boolean | string[] }) =>
     request<PushResult>("POST", `/api/devices/${enc(id)}/push`, opts),
 };
+
+export interface FirmwareHistoryItem {
+  id: string | null;
+  job: string | null;
+  kind: "flash" | "revert";
+  state: string;
+  when: number | null;
+  ver?: string;
+  effects?: number;
+}

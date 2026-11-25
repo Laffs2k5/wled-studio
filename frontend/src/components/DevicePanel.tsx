@@ -18,6 +18,7 @@ import { WriteBar } from "./WriteBar";
 import { SaveLook } from "./SaveLook";
 import { LibraryTransfer } from "./LibraryTransfer";
 import { CrossDevice } from "./CrossDevice";
+import { DeviceHome } from "./DeviceHome";
 
 interface Props {
   deviceId: string;
@@ -84,6 +85,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const [openPlan, setOpenPlan] = useState(0);
   // the palettes the next write would upload (from the write bar's check); null while unknown
   const [pendingPalettes, setPendingPalettes] = useState<string[] | null>(null);
+  const [lastPresetWrite, setLastPresetWrite] = useState<string | null>(null);
   const [segId, setSegId] = useState(0);
   const [newSegmentHint, setNewSegmentHint] = useState<number | null>(null);
   const [removedSegment, setRemovedSegment] = useState<Segment | null>(null);
@@ -343,6 +345,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
             onClose={closeEditor} looks={looks} playlists={playlists} deviceName={profile.device.name}
             pick={pick} onEffect={setEditorFx} onSaved={setSaved} />
         ) : (<>
+        <DeviceHome deviceId={deviceId} profile={profile} lastPresetWrite={lastPresetWrite} />
         {saved && (
           <div className="row saved-note small" role="note" aria-label="Saved look">
             <span className="grow">
@@ -456,7 +459,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
     {viewMode === "legacy" && (
       <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan}
         onLibraryChanged={reloadLooks}
-        onPlan={(p) => setPendingPalettes(p ? (p.palettes ?? []).map((x) => x.palette) : null)} />
+        onPlan={(p) => { setLastPresetWrite(p?.last_write ?? null); setPendingPalettes(p ? (p.palettes ?? []).map((x) => x.palette) : null); }} />
     )}
   </>);
 }

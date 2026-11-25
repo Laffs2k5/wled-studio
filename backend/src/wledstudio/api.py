@@ -1138,6 +1138,12 @@ def backups(device_id: str, request: Request):
     return request.app.state.statestore.list_backups(device_id)
 
 
+@router.get("/devices/{device_id}/last-preset-write")
+def last_preset_write(device_id: str, request: Request):
+    device_or_404(device_id, request)
+    return {"last_write": request.app.state.statestore.last_written(device_id)}
+
+
 @router.get("/devices/{device_id}/backups/{name}")
 def backup(device_id: str, name: str, request: Request):
     device_or_404(device_id, request)

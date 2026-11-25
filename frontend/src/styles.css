@@ -84,6 +84,10 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .preset-backups { margin-top: .75rem; }
 .preset-backups > button { margin: .2rem; display: block; }
 .library-transfer { margin-top: 1rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+.device-home { border-left: 3px solid var(--accent); padding: .25rem .65rem; margin-bottom: .75rem; background: var(--deep); }
+.device-home h2 { margin-top: 0; }
+.device-home p { margin: .2rem 0; }
+.firmware-history { padding-left: 1.1rem; font-size: .85rem; }
 .room-columns { display: grid; grid-template-columns: 12rem 10rem 5rem; gap: .5rem; }
 .room-preview { max-height: 18rem; }
 .compare-devices { width: 100%; border-collapse: collapse; margin-top: .5rem; }

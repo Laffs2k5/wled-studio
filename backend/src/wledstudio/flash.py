@@ -460,3 +460,23 @@ def flash_status(rid: str, request: Request):
     if run is None:
         raise HTTPException(404, "no such flash")
     return run.public()
+
+
+@router.get("/api/devices/{device_id}/firmware-history")
+def firmware_history(device_id: str, request: Request):
+    from .api import device_or_404
+    dev = device_or_404(device_id, request)
+    directory = request.app.state.settings.data_dir / "flashes" / dev.id
+    rows = []
+    for path in sorted(directory.glob("*.json"), reverse=True) if directory.is_dir() else []:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        result = record.get("result") if isinstance(record.get("result"), dict) else {}
+        rows.append({
+            "id": record.get("id"), "job": record.get("job"), "kind": record.get("kind"),
+            "state": record.get("state"), "when": record.get("finished") or record.get("started"),
+            "ver": result.get("ver"), "effects": result.get("effects"),
+        })
+    return rows[:50]
