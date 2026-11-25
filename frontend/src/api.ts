@@ -99,7 +99,12 @@ export const firmware = {
     request<{ version: string; remembered: boolean }>("POST", "/api/notices/flash", { version, remember }),
   forgetNotice: () => request<{ remembered: boolean }>("DELETE", "/api/notices/flash"),
   run: (id: string) => request<FlashRun>("GET", `/api/flashes/${encodeURIComponent(id)}`),
+  previous: (device: string) => request<PreviousFirmware>("GET", `/api/devices/${encodeURIComponent(device)}/previous-firmware`),
 };
+
+/** What a device's other firmware slot holds, as far as the app knows (from its own flashes and reverts). */
+export type PreviousFirmware = { known: false } |
+  { known: true; ver: string; release: string | null; kind: "flash" | "revert"; when: number | null };
 
 /** What flashing an image to a device would do, and whether it may. */
 export interface FlashPlan {

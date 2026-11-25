@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useEffect, useState } from "react";
-import { api, firmware, type FlashNotice, type FlashPlan, type FlashRun } from "../api";
+import { api, firmware, type FlashNotice, type FlashPlan, type FlashRun, type PreviousFirmware } from "../api";
+import { when } from "../time";
 import { NoticeDialog } from "./NoticeDialog";
 import { ChangeDevice } from "./ChangeDevice";
 
@@ -64,6 +65,11 @@ export function verdict(plan: FlashPlan): string {
   return warns ? `Ready to flash, with ${count(warns, "thing", "things")} to look at` : "Ready to flash";
 }
 
+/** The last flash or revert per device, kept while the page is open: leaving the Firmware view, or
+ * picking a virtual device for a while, doesn't lose a run or its result. */
+const lastRuns = new Map<string, FlashRun>();
+export const forgetRuns = () => lastRuns.clear();
+
 /** Flash a gate-passed image to a device: the plan, a typed confirmation, the run; and the way back. */
 export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpenLooks }: {
   job: string; device: string; deviceName: string; notify: (msg: string, error?: boolean) => void;
@@ -77,7 +83,11 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
   const [pin, setPin] = useState("");
   const replan = () => firmware.flashPlan(job, device).then(setPlan).catch((e) => notify((e as Error).message, true));
   const [typed, setTyped] = useState("");
-  const [run, setRun] = useState<FlashRun | null>(null);
+  // the last flash or revert per device: a run belongs to its device, and isn't shown under another
+  const [runs, setRuns] = useState<Record<string, FlashRun>>(() => Object.fromEntries(lastRuns));
+  const run = runs[device] ?? null;
+  const setRun = (r: FlashRun) => { lastRuns.set(r.device, r); setRuns((m) => ({ ...m, [r.device]: r })); };
+  const [previous, setPrevious] = useState<PreviousFirmware | null>(null);
   const [revertTyped, setRevertTyped] = useState("");
   // the notice: loaded when needed; `pending` is the flash or revert waiting for it to be accepted
   const [notice, setNotice] = useState<FlashNotice | null>(null);
@@ -85,19 +95,29 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
 
   useEffect(() => { firmware.notice().then(setNotice).catch(() => setNotice(null)); }, []);
 
-  useEffect(() => { setPlan(null); setTyped(""); setRevertTyped(""); }, [job, device]);
+  useEffect(() => { setPlan(null); setTyped(""); setRevertTyped(""); setPinForm(false); }, [job, device]);
+
+  // what going back would boot: read again for each device, and after each finished run
+  const runDone = run && run.state !== "running" ? run.id : null;
+  useEffect(() => {
+    setPrevious(null);
+    firmware.previous(device).then(setPrevious).catch(() => setPrevious(null));
+  }, [device, runDone]);
 
   // follow a running flash or revert
   useEffect(() => {
     if (!run || run.state !== "running") return;
     const t = setTimeout(() => firmware.run(run.id).then((r) => {
       setRun(r);
-      if (r.state !== "running") notify(`${r.kind === "flash" ? "Flash" : "Revert"}: ${r.state}`, r.state === "failed");
+      if (r.state !== "running") { const v = runVerdict(r, deviceName); notify(v.text, v.level === "bad"); }
     }).catch((e) => notify((e as Error).message, true)), 1000);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, notify]);
 
   const running = run?.state === "running";
+  const afterFlash = Boolean(run && run.kind === "flash" && !running
+    && run.steps.some((s) => s.name === "upload" && s.state === "ok"));
   const start = (p: Promise<FlashRun>) => p.then((r) => { setRun(r); setPlan(null); setTyped(""); setRevertTyped(""); })
     .catch((e) => notify((e as Error).message, true));
   // every flash and revert passes the notice: shown unless accepted with "don't show this again"
@@ -230,16 +250,25 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
           </div>
         );
       })()}
-      {plan?.running.arch !== "virtual" && <details className="revert">
-        <summary>The way back: revert {deviceName} to its previous image</summary>
-        <p className="small muted">WLED keeps the previous image in its other slot; this boots it again (WLED's /update?revert).</p>
-        <div className="row">
-          <input aria-label="Type the device's name to revert" placeholder={`type ${deviceName} to revert`} value={revertTyped}
-            onChange={(e) => setRevertTyped(e.target.value)} />
-          <button className="danger" disabled={revertTyped !== deviceName || running}
-            onClick={() => withNotice("revert", (v) => firmware.revert(device, revertTyped, v))}>Revert {deviceName}</button>
-        </div>
-      </details>}
+      {plan?.running.arch !== "virtual" && (
+        // after a flash that reached the device, the way back is part of the result; otherwise folded away
+        <details key={afterFlash ? "result" : "folded"} open={afterFlash} className={`revert${afterFlash ? " prominent" : ""}`}>
+          <summary>Go back to the previous firmware</summary>
+          <p className="small">
+            {previous?.known
+              ? <>{deviceName}'s other firmware slot holds WLED {previous.ver}{previous.release ? ` (${previous.release})` : ""}: what it
+                  ran before this app {previous.kind === "flash" ? "flashed" : "switched"} it{previous.when ? ` ${when(previous.when)}` : ""}.</>
+              : <>What {deviceName}'s other firmware slot holds isn't known: the app knows only after it has flashed the device.</>}
+            {" "}WLED keeps the previous firmware there; going back boots it again (WLED's /update?revert), with a backup first.
+          </p>
+          <div className="row">
+            <input aria-label="Type the device's name to go back" placeholder={`type ${deviceName} to go back`} value={revertTyped}
+              onChange={(e) => setRevertTyped(e.target.value)} />
+            <button className="danger" disabled={revertTyped !== deviceName || running}
+              onClick={() => withNotice("go back", (v) => firmware.revert(device, revertTyped, v))}>Go back on {deviceName}</button>
+          </div>
+        </details>
+      )}
       {notice?.remembered && (
         <p className="small muted">
           You accepted the flashing notice ({notice.version}) and chose not to see it again.{" "}

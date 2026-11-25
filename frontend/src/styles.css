@@ -197,3 +197,6 @@ button.code-place { font: inherit; text-align: left; }
 .flash .run .pending { color: var(--muted); }
 .flash .run .running { color: var(--accent); }
 .flash .do-not { font-weight: 600; }
+.flash .revert summary { cursor: pointer; }
+.flash .revert.prominent { border: 1px solid var(--warn); border-radius: 8px; padding: .4rem .8rem; }
+.flash .revert.prominent summary { font-weight: 600; }

@@ -16,7 +16,10 @@ flowchart LR
 - **One container** serves the built UI and the API. State lives in a data volume:
   - `devices.json` and `secrets/<id>.pin` (mode 0600);
   - `library.json` with every earlier version in `history/`;
-  - `backups/<device>/` and `state/` (the last written presets hash per device).
+  - `backups/<device>/` and `state/` (the last written presets hash per device);
+  - `flashes/<device>/`: each flash and revert, with what the device ran before (`before`). Both
+    swap WLED's two firmware slots, so the latest one that reached the device says what the other
+    slot holds (`GET /api/devices/<id>/previous-firmware`; unknown before the app's first).
 - **The library is the source of truth.** A device's `presets.json` is generated from it: looks are
   stored with effect and palette *names* and a snapshot of each effect's metadata, and resolved to
   the device's ids when written (see `backend/src/wledstudio/library.py` for the change-check

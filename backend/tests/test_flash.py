@@ -261,3 +261,26 @@ def test_a_flash_whose_effects_dont_show_ends_with_warnings(make, device):
     run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE},
                          headers=CSRF).json()["id"])
     assert run["state"] == "warnings" and run["result"]["image_running"] is False
+
+
+def test_what_the_other_slot_holds(make, device):
+    """Unknown until the app swaps the slots; then what the device ran before the last flash or revert."""
+    c, dev, s = make()
+    assert c.get(f"/api/devices/{dev}/previous-firmware").json() == {"known": False}
+    assert c.get("/api/devices/nope/previous-firmware").status_code == 404
+    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE},
+                         headers=CSRF).json()["id"])
+    assert run["before"]["ver"] == "16.0.1"
+    prev = c.get(f"/api/devices/{dev}/previous-firmware").json()
+    assert prev["known"] and prev["ver"] == "16.0.1" and prev["kind"] == "flash" and prev["when"] == run["finished"]
+    # a revert swaps them back
+    time.sleep(1.05)                                             # records are named by the second
+    run = wait(c, c.post(f"/api/devices/{dev}/revert", json={"confirm": "Desk", "notice": NOTICE}, headers=CSRF).json()["id"])
+    assert run["state"] == "done"
+    assert c.get(f"/api/devices/{dev}/previous-firmware").json()["kind"] == "revert"
+    # a record from before `before` was kept: unknown; an unreadable one is skipped
+    rec = s.data_dir / "flashes" / dev / "29991231T235959-flash.json"
+    rec.write_text('{"kind": "flash", "steps": [{"name": "upload", "state": "ok"}]}', encoding="utf-8")
+    assert c.get(f"/api/devices/{dev}/previous-firmware").json() == {"known": False}
+    rec.write_text("not json", encoding="utf-8")
+    assert c.get(f"/api/devices/{dev}/previous-firmware").json()["kind"] == "revert"

@@ -174,6 +174,10 @@ self-built image on a spare board first. Open a build that's *ready to flash*:
    against the backup) with *Do not power off* while it runs, then says plainly how it went:
    *Flashed and running: … runs WLED 16.0.1 with 218 effects*, or what went wrong and what that
    means for the device, and what to do next.
+5. **Go back to the previous firmware** boots the image in the device's other slot again (WLED
+   keeps it there), with the name typed and a backup first. After a flash it's part of the result;
+   otherwise it's folded away, saying what it would boot: what the device ran before the app last
+   flashed or switched it, or *unknown* if the app never has. A virtual device has no way back.
 
 ## What's not here yet
 

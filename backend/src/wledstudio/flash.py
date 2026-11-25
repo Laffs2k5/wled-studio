@@ -72,6 +72,8 @@ class Run:
     # what the device runs afterwards, for the verdict: ver, effects (a count), and for a flash
     # image_running (the effect list is the image's), presets_changed, cfg_changed, heap_low
     result: dict = field(default_factory=dict)
+    # what the device ran before (ver, release): after the swap, that's what its other slot holds
+    before: dict = field(default_factory=dict)
 
     def step(self, name: str) -> dict:
         s = {"name": name, "state": "running", "detail": ""}
@@ -80,7 +82,8 @@ class Run:
 
     def public(self) -> dict:
         return {"id": self.id, "kind": self.kind, "device": self.device, "job": self.job, "notice": self.notice, "state": self.state,
-                "steps": self.steps, "started": self.started, "finished": self.finished, "result": self.result}
+                "steps": self.steps, "started": self.started, "finished": self.finished, "result": self.result,
+                "before": self.before}
 
 
 def _runs(request: Request) -> dict[str, Run]:
@@ -264,6 +267,7 @@ async def _flash(request: Request, run: Run, g: dict, image: dict) -> None:
     from .firmware import _call, _job_id
 
     dev = g["dev"]
+    run.before = {k: g["info"].get(k) for k in ("ver", "release")}
     async with make_client(request, dev) as c:
         s = run.step("backup")
         try:
@@ -332,9 +336,11 @@ async def _revert(request: Request, run: Run, dev) -> None:
     async with make_client(request, dev) as c:
         s = run.step("backup")
         try:
+            info = await c.info()
+            run.before = {k: info.get(k) for k in ("ver", "release")}
             s["detail"] = _backup(request, dev.id, "before-revert", {
                 "presets.json": await c.presets_text(), "cfg.json": json.dumps(await c.cfg_file(), indent=1),
-                "info.json": json.dumps(await c.info(), indent=1)})
+                "info.json": json.dumps(info, indent=1)})
             s["state"] = "ok"
             s = run.step("revert")
             sent = time.monotonic()
@@ -416,6 +422,36 @@ async def revert(device_id: str, body: RevertIn, request: Request):
         raise HTTPException(409, "a flash or revert is already running for this device")
     run = Run(id=uuid.uuid4().hex, kind="revert", device=dev.id, notice=body.notice)
     return _start(request, run, _revert(request, run, dev))
+
+
+def _swapped(record: dict) -> bool:
+    """Whether a recorded flash or revert got as far as changing which image the device boots."""
+    step = "upload" if record.get("kind") == "flash" else "revert"
+    return any(isinstance(s, dict) and s.get("name") == step and s.get("state") == "ok" for s in record.get("steps") or [])
+
+
+@router.get("/api/devices/{device_id}/previous-firmware")
+def previous_firmware(device_id: str, request: Request):
+    """What the device's other OTA slot holds, as far as this app knows: what it ran before the
+    last flash or revert from here (each swaps the slots). Unknown if the app never swapped them,
+    or recorded the run before it kept `before`. Reads the app's records only, not the device."""
+    from .api import device_or_404
+
+    dev = device_or_404(device_id, request)
+    d = request.app.state.settings.data_dir / "flashes" / dev.id
+    for f in sorted(d.glob("*.json"), reverse=True) if d.is_dir() else []:
+        try:
+            record = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(record, dict) or not _swapped(record):
+            continue
+        before = record.get("before") if isinstance(record.get("before"), dict) else {}
+        if not before.get("ver"):
+            return {"known": False}
+        return {"known": True, "ver": before.get("ver"), "release": before.get("release") or None,
+                "kind": record.get("kind"), "when": record.get("finished") or record.get("started")}
+    return {"known": False}
 
 
 @router.get("/api/flashes/{rid}")

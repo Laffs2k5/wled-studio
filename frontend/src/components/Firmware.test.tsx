@@ -123,14 +123,14 @@ test("a virtual device gets one line instead of the flash step", async () => {
   fireEvent.click(await screen.findByRole("cell", { name: "board · q" }));
   expect(await screen.findByText(/Twin is a virtual device: a software copy of WLED for testing/)).toBeInTheDocument();
   expect(screen.queryByText("Plan the flash")).toBeNull();
-  expect(screen.queryByText(/The way back/)).toBeNull();
+  expect(screen.queryByText(/Go back to the previous firmware/)).toBeNull();
   // the device is the header's: no picker of its own here
   expect(screen.queryByLabelText("Device to check for")).toBeNull();
   rerender(<Firmware notify={() => {}} device="desk" devices={devices} />);
   expect(await screen.findByText("Plan the flash")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /Flash it to Desk/ })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /Before flashing: your looks on Desk with this image/ })).toBeInTheDocument();
-  expect(screen.getByText(/The way back/)).toBeInTheDocument();
+  expect(screen.getByText(/Go back to the previous firmware/)).toBeInTheDocument();
 });
 
 test("preselects the target that matches the header's device, and remembers a different choice", async () => {

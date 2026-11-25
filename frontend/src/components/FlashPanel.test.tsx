@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { FlashPanel, runVerdict } from "./FlashPanel";
+import { FlashPanel, forgetRuns, runVerdict } from "./FlashPanel";
 
 const JOB = "j".repeat(32);
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); forgetRuns(); });
 
 const NOTICE = { version: "v1", title: "Flashing firmware: no warranty", text: "No support.", accepted: null };
+
+let previous: object = { known: false };
+beforeEach(() => { previous = { known: false }; });
 
 function stub(plan: object, runs: object[], remembered = false) {
   const calls: string[] = [];
@@ -16,6 +19,7 @@ function stub(plan: object, runs: object[], remembered = false) {
     if (url === "/api/notices/flash") return reply({ version: "v1", remembered: JSON.parse(String(init?.body ?? "{}")).remember ?? false });
     if (url.includes("/flash-plan")) return reply(plan);
     if (url.endsWith("/pin")) return reply(null);
+    if (url.endsWith("/previous-firmware")) return reply(previous);
     if (url.endsWith("/flash") || url.endsWith("/revert")) return reply(runs[0], 202);
     if (url.startsWith("/api/flashes/")) return reply(runs.length > 1 ? runs.splice(0, 1)[0] && runs[0] : runs[0]);
     return reply({ detail: "no" }, 404);
@@ -122,13 +126,13 @@ test("with the notice accepted for good, flashing doesn't ask again", async () =
 test("revert needs the name typed too, and the notice", async () => {
   const calls = stub(okPlan, [{ id: "v", kind: "revert", device: "d", state: "done", steps: [] }]);
   render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
-  const button = screen.getByText("Revert Desk");
+  const button = screen.getByText("Go back on Desk");
   expect(button).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Type the device's name to revert"), { target: { value: "Desk" } });
+  fireEvent.change(screen.getByLabelText("Type the device's name to go back"), { target: { value: "Desk" } });
   fireEvent.click(button);
   fireEvent.click(await screen.findByLabelText(/I have read this notice and accept it/));
   fireEvent.click(screen.getByLabelText(/Don't show this again/));
-  fireEvent.click(screen.getByText("Accept and revert"));
+  fireEvent.click(screen.getByText("Accept and go back"));
   await waitFor(() => expect(calls.some((c) => c.startsWith("POST /api/devices/d/revert") && c.includes('"notice":"v1"'))).toBe(true));
   expect(calls.some((c) => c.startsWith("POST /api/notices/flash") && c.includes('"remember":true'))).toBe(true);
 });
@@ -137,10 +141,10 @@ test("a plan that finds a virtual device hides the way back", async () => {
   stub({ ...okPlan, running: { ver: "16.0.1", arch: "virtual" }, can_flash: false,
     checks: [{ id: "arch", level: "block", text: "This is a virtual device." }] }, []);
   render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
-  expect(screen.getByText(/The way back/)).toBeInTheDocument();
+  expect(screen.getByText(/Go back to the previous firmware/)).toBeInTheDocument();
   fireEvent.click(screen.getByText("Plan the flash"));
   expect(await screen.findByText(/This is a virtual device/)).toBeInTheDocument();
-  expect(screen.queryByText(/The way back/)).toBeNull();
+  expect(screen.queryByText(/Go back to the previous firmware/)).toBeNull();
 });
 
 test("a finished run in plain words", () => {
@@ -161,4 +165,38 @@ test("a finished run in plain words", () => {
     .toBe("Back on the previous firmware: Desk runs WLED 16.0.0 with 2 effects.");
   expect(runVerdict(run({ kind: "revert", state: "failed", steps: steps(["backup", "revert"], "failed", "Rollback failed") }), "Desk"))
     .toEqual({ level: "bad", text: "Couldn't go back: Rollback failed. Look at Desk." });
+});
+
+test("the way back: what it would boot, folded away until a flash reached the device; the run stays with its device", async () => {
+  previous = { known: true, ver: "16.0.0", release: "Acme", kind: "flash", when: Date.now() / 1000 - 60 };
+  stub(okPlan, [{ id: "r", kind: "flash", device: "d", state: "warnings", result: { ver: "16.0.1", effects: 3, image_running: false },
+    steps: [{ name: "backup", state: "ok", detail: "" }, { name: "image", state: "ok", detail: "" }, { name: "upload", state: "ok", detail: "" },
+      { name: "restart", state: "ok", detail: "" }, { name: "checks", state: "warn", detail: "" }] }], true);
+  const { rerender, unmount } = render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
+  const back = () => screen.getByText("Go back to the previous firmware").closest("details")!;
+  expect(back()).not.toHaveAttribute("open");
+  expect(await screen.findByText(/Desk's other firmware slot holds WLED 16.0.0 \(Acme\): what it ran before this app flashed it today/))
+    .toBeInTheDocument();
+  fireEvent.click(screen.getByText("Plan the flash"));
+  fireEvent.change(await screen.findByLabelText("Type the device's name to flash"), { target: { value: "Desk" } });
+  fireEvent.click(screen.getByText("Flash Desk"));
+  expect(await screen.findByText(/^Flashed, but Desk doesn't report the new effects/)).toBeInTheDocument();
+  await waitFor(() => expect(back()).toHaveAttribute("open"));        // part of the result now
+  expect(back()).toHaveClass("prominent");
+  // another device: not this device's run (known bug 14), and the way back folded again
+  rerender(<FlashPanel job={JOB} device="e" deviceName="Shelf" notify={() => {}} />);
+  expect(screen.queryByLabelText("Flash progress")).toBeNull();
+  expect(back()).not.toHaveAttribute("open");
+  rerender(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
+  expect(screen.getByLabelText("Flash progress")).toBeInTheDocument();
+  // the panel goes (another view, a virtual device) and comes back: the run is still there
+  unmount();
+  render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
+  expect(screen.getByText(/^Flashed, but Desk doesn't report the new effects/)).toBeInTheDocument();
+});
+
+test("without a flash from this app, what going back would boot is unknown", async () => {
+  stub(okPlan, []);
+  render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
+  expect(await screen.findByText(/What Desk's other firmware slot holds isn't known: the app knows only after it has flashed the device/)).toBeInTheDocument();
 });
