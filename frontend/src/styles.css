@@ -177,3 +177,9 @@ button.code-place { font: inherit; text-align: left; }
 .jobs tr.open td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .jobs tr:focus-visible { outline: 1px solid var(--accent); }
 .state-running td:last-child, .state-queued td:last-child { color: var(--accent); }
+.gate-checks.pending { list-style: none; padding: 0; }
+.gate-checks .step-running { color: var(--accent); }
+.gate-checks .step-stopped { color: var(--bad); }
+.gate-checks .step-pending, .gate-checks .step-skipped { color: var(--muted); }
+.build-time { margin: .3rem 0; }
+.build-log summary { cursor: pointer; margin: .4rem 0; }

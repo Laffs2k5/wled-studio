@@ -52,6 +52,26 @@ const LINES: Record<string, (ok: boolean, r: Report) => GateLine> = {
   },
 };
 
+/** The gate's four checks before their results: what each one is, for the checklist a build starts with. */
+export const GATE_STEPS: { key: string; text: string; explain: string }[] = [
+  { key: "stock_matches_verified", text: "The vendor's own image, rebuilt here, matches the verified one",
+    explain: "Proves this build machine makes the vendor's firmware exactly, so anything new comes from your effects." },
+  { key: "only_usermod_objects_changed", text: "Only your effect code is added",
+    explain: "Everything else in the image must be the vendor's code, unchanged." },
+  { key: "fits_app_slot", text: "It fits the firmware slot", explain: "The device must have room for it, with a safety margin left free." },
+  { key: "virtual_twin", text: "Every effect runs in the virtual twin without crashing",
+    explain: "The image's own WLED code runs each effect on the build machine, with no device at stake." },
+];
+
+/** Which of GATE_STEPS a gate build's log has reached: 0 rebuilding the vendor's image, 1 building
+ * with your effects (checks 2 and 3 come from that build), 3 the virtual twin. Read from the
+ * commands the builder logs (studio/gate.py prints each with "+ "). */
+export function gatePhase(log: string): number {
+  if (/^\+ .*virtual_check\.py/m.test(log)) return 3;
+  if (/^\+ .*studio\/build\.py .*--out \S*\/custom/m.test(log)) return 1;
+  return 0;
+}
+
 /** The gate report's checks in plain words, in the builder's order. */
 export function gateLines(report: Report | undefined): GateLine[] {
   return Object.entries(report?.checks ?? {}).map(([key, ok]) => LINES[key]?.(ok, report!) ?? (ok

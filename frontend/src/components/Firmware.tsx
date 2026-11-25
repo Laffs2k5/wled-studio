@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FlashPanel } from "./FlashPanel";
+import { BuildChecks } from "./BuildChecks";
 import { api, firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
 import { buildResult, buildTitle, gateLines, releaseOf } from "../gate";
 import { when } from "../time";
@@ -127,8 +128,8 @@ export function Firmware({ notify, devices = [], device = null, request = null }
     <section className="firmware">
       <h2>Build firmware with your effects</h2>
       <p className="muted small">
-        Each build runs the gate: the vendor's stock image is rebuilt and checked first, then rebuilt with your
-        usermods; only images whose sole change is your code pass.
+        Builds WLED for your board with your effects added. Before it may be flashed, the build must pass four
+        safety checks; they're listed when it starts. A build takes a few minutes.
       </p>
       <form className="build-form" onSubmit={(e) => {
         e.preventDefault();
@@ -201,17 +202,7 @@ export function Firmware({ notify, devices = [], device = null, request = null }
       {open && (
         <div className="job">
           <h2>{buildTitle(open)}</h2>
-          {open.report?.checks && (
-            <ul className="gate-checks" aria-label="Gate checks">
-              {gateLines(open.report).map((c, i) => (
-                <li key={i} className={c.ok ? "ok" : "bad"}>
-                  {c.ok ? "✓" : "✗"} {c.text}
-                  {c.meaning && <span className="small muted meaning">{c.meaning}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {open.report?.error && <p className="warn">{open.report.error}</p>}
+          <BuildChecks job={open} log={log} />
           {open.state === "passed" && open.kind !== "preview" && !dev && (
             <p className="muted small">Add a device in the header to check your looks against this image and flash it.</p>
           )}
@@ -262,7 +253,6 @@ export function Firmware({ notify, devices = [], device = null, request = null }
           ) : (
             <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} />
           ))}
-          <pre className="log" aria-label="Build log">{log.slice(-8000)}</pre>
         </div>
       )}
     </section>

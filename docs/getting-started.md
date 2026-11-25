@@ -132,11 +132,18 @@ repository over SSH.
 
 ## 6. Firmware with your effects
 
-**Firmware** builds an image through the **gate**
+**Firmware** builds WLED for your board with your effects added. Before an image may be flashed it
+must pass four safety checks, the **gate**
 ([chain of trust](https://github.com/Laffs2k5/wled-studio-builder/blob/main/docs/chain-of-trust.md)):
-1. your vendor's stock image is rebuilt and checked against what's been verified for that board;
-2. it's rebuilt with your effects;
-3. only images whose sole difference is your code pass, and they must fit the firmware slot.
+1. the vendor's own image, rebuilt here, matches what's been verified for that board;
+2. only your effect code is added: everything else is the vendor's, unchanged;
+3. it fits the firmware slot, with a safety margin;
+4. every effect runs in the virtual twin (the image's own WLED code, on the build machine) without
+   crashing.
+
+A build shows these as a checklist from the start, marks the one running, and shows the time so
+far (usually 2–5 minutes); each line then says whether it passed and why not. The build log is
+behind **Show build log**.
 
 Pick the **board and WLED release** and **your effect folders to include**, then **Build**. The
 target that matches the header's device is preselected and marked "matches"; an amber line says
