@@ -13,12 +13,15 @@ const cells = (names: Record<number, string>) => [40, 41, 45, 46].map((pid, i) =
 
 function stub(initial: object, sharedId = false) {
   const calls: string[] = [];
-  let state = initial;
+  let state = initial as { grid: object | null; cells: object[] };
   let shared = sharedId;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const key = `${init?.method ?? "GET"} ${url}`;
     calls.push(`${key} ${init?.body ?? ""}`);
     const reply = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
+    if (key === "GET /api/slots/grids") return reply(state.grid
+      ? { current: "grid-1", grids: [{ ...state, id: "grid-1", name: "Remote A" }] }
+      : { current: null, grids: [] });
     if (key === "GET /api/slots") return reply(state);
     if (key === "GET /api/looks") return reply([
       { name: "Fire", preset_id: 3 }, { name: "G1-1 Calm", preset_id: 40 },
@@ -26,9 +29,14 @@ function stub(initial: object, sharedId = false) {
     ]);
     if (key === "GET /api/playlists") return reply([{ name: "Evening" }]);
     if (key === "PUT /api/slots/grid") { state = { grid: JSON.parse(String(init!.body)), cells: cells({}) }; return reply(state); }
-    if (key === "PUT /api/slots/41") return reply({ grid: GRID, cells: cells({ 40: "G1-1 Calm", 41: "G1-2 Fire" }), filled: "G1-2 Fire", freed: [] });
-    if (key === "DELETE /api/slots/40") return reply({ grid: GRID, cells: cells({}), freed: ["G1-1 Calm"] });
+    if (key === "POST /api/slots/grids") {
+      state = { grid: JSON.parse(String(init!.body)).grid, cells: cells({}) };
+      return reply({ ...state, id: "grid-1", name: JSON.parse(String(init!.body)).name });
+    }
+    if (key.startsWith("PUT /api/slots/41")) return reply({ grid: GRID, cells: cells({ 40: "G1-1 Calm", 41: "Fire" }), filled: "Fire", freed: [] });
+    if (key.startsWith("DELETE /api/slots/40")) return reply({ grid: GRID, cells: cells({}), freed: ["G1-1 Calm"] });
     if (key === "DELETE /api/slots/grid") { state = { grid: null, cells: [] }; return reply(state); }
+    if (key === "DELETE /api/slots/grids/grid-1") { state = { grid: null, cells: [] }; return reply({ current: null, grids: [] }); }
     if (key === "PUT /api/looks/Extra/preset-id") { shared = false; return reply({ look: { name: "Extra" }, shared_with: [] }); }
     if (key === "POST /api/devices/desk/push") {
       const n = calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).length;
@@ -57,7 +65,7 @@ test("without a grid, it asks for its shape in plain words and shows the ids it 
   fireEvent.change(screen.getByLabelText("Name pattern"), { target: { value: "G{row}-{col} {name}" } });   // under Advanced
   expect(screen.getByText(/G2-3 Fire/)).toBeInTheDocument();
   fireEvent.click(screen.getByText("Save the grid"));
-  await waitFor(() => expect(calls.some((c) => c.startsWith("PUT /api/slots/grid") && c.includes('"rows":2'))).toBe(true));
+  await waitFor(() => expect(calls.some((c) => c.startsWith("POST /api/slots/grids") && c.includes('"rows":2'))).toBe(true));
   expect(await screen.findByLabelText("Slot grid")).toBeInTheDocument();
 });
 
@@ -181,12 +189,12 @@ test("removing the grid is explained and confirmed in grid settings", async () =
   render(<SlotGrid notify={() => {}} />);
   await screen.findByLabelText("Slot grid");
   fireEvent.click(screen.getByText("Grid settings"));
-  expect(screen.getByText("One grid for now.")).toBeInTheDocument();
+  expect(screen.getByText(/independent; preset ids remain global/)).toBeInTheDocument();
   fireEvent.click(screen.getByText("Remove the grid"));
   expect(screen.getByLabelText("Confirm removing the grid")).toHaveTextContent(
-    "The looks keep their preset ids; only this layout is forgotten.");
-  expect(calls.some((c) => c.startsWith("DELETE /api/slots/grid"))).toBe(false);
+    "The looks keep their primary preset ids; only this layout and its \"also use\" assignments are forgotten.");
+  expect(calls.some((c) => c.startsWith("DELETE /api/slots/grids/grid-1"))).toBe(false);
   fireEvent.click(screen.getByText("Yes, remove the grid"));
-  await waitFor(() => expect(calls.some((c) => c.startsWith("DELETE /api/slots/grid"))).toBe(true));
+  await waitFor(() => expect(calls.some((c) => c.startsWith("DELETE /api/slots/grids/grid-1"))).toBe(true));
   expect(await screen.findByLabelText("Banks (rows)")).toBeInTheDocument();
 });

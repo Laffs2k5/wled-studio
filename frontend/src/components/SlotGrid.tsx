@@ -94,11 +94,14 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   onChanged?: () => void;
 }) {
   const [data, setData] = useState<Slots | null>(null);
+  const [named, setNamed] = useState<Slots[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [editing, setEditing] = useState<SlotGridShape | null>(null);
   const [picked, setPicked] = useState<SlotCell | null>(null);
   const [over, setOver] = useState<number | null>(null);   // the slot a look is dragged over
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [gridName, setGridName] = useState("Remote A");
+  const [creating, setCreating] = useState(false);
   const [fillMode, setFillMode] = useState<"move" | "also" | null>(null);
   const [pendingItem, setPendingItem] = useState<Item | null>(null);
 
@@ -106,9 +109,11 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
     ...l.map((x): Item => ({ kind: "look", name: x.name, preset_id: x.preset_id })).sort((a, b) => a.name.localeCompare(b.name)),
     ...p.map((x): Item => ({ kind: "playlist", name: x.name, preset_id: x.preset_id })).sort((a, b) => a.name.localeCompare(b.name)),
   ])), []);
-  const load = useCallback(() => Promise.all([slotsApi.get(), loadItems()]).then(([s]) => {
+  const load = useCallback(() => Promise.all([slotsApi.list(), loadItems()]).then(([all]) => {
+    setNamed(all.grids);
+    const s = all.grids.find((grid) => grid.id === all.current) ?? { grid: null, cells: [] };
     setData(s);
-    if (!s.grid) setEditing((e) => e ?? DEFAULT);
+    if (!s.grid) { setEditing((e) => e ?? DEFAULT); setCreating(true); }
   }).catch((e) => notify((e as Error).message, true)), [notify, loadItems]);
   useEffect(() => { load(); }, [load]);
   const done = (s: Slots, msg: string) => {
@@ -120,7 +125,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   };
   const fail = (e: unknown) => notify((e as Error).message, true);
   const fill = (cell: SlotCell, item: Item, mode: "move" | "also" = "move") =>
-    slotsApi.fill(cell.preset_id, item.kind === "look" ? { look: item.name, mode } : { playlist: item.name, mode })
+    slotsApi.fill(cell.preset_id, item.kind === "look" ? { look: item.name, mode } : { playlist: item.name, mode }, data?.id ?? undefined)
       .then((s) => {
         setFillMode(null);
         setPendingItem(null);
@@ -163,6 +168,9 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
           bank 1 plays presets 101–104, say. Set where the ids start and how they step; the table below shows the
           result.
         </p>
+        <label className="field">Grid name
+          <input value={gridName} maxLength={64} onChange={(e) => setGridName(e.target.value)} />
+        </label>
         <div className="grid-form">
           <label>Banks (rows) <input type="number" min={1} max={20} value={num("rows")} onChange={set("rows")} /></label>
           <label>Buttons per bank (columns) <input type="number" min={1} max={20} value={num("cols")} onChange={set("cols")} /></label>
@@ -194,8 +202,9 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
         </details>
         {problem && <p className="warn small" role="alert">{problem}</p>}
         <div className="row">
-          <button className="primary" disabled={problem !== null}
-            onClick={() => slotsApi.setGrid(g).then((s) => { setEditing(null); done(s, "Slot grid saved (in the app)"); }).catch(fail)}>
+          <button className="primary" disabled={problem !== null || !gridName.trim()}
+            onClick={() => (creating ? slotsApi.create(gridName.trim(), g) : slotsApi.rename(data.id!, { name: gridName.trim(), grid: g }))
+              .then((s) => { setEditing(null); setCreating(false); done(s, "Grid saved (in the app)"); load(); }).catch(fail)}>
             Save the grid
           </button>
           {data.grid && <button onClick={() => setEditing(null)}>Cancel</button>}
@@ -224,6 +233,17 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   return (<>
     <section className="slots">
       <h2>Slot grid</h2>
+      <nav className="grid-tabs" aria-label="Named grids">
+        {named.map((grid) => (
+          <button key={grid.id} className={grid.id === data.id ? "primary" : ""}
+            onClick={() => slotsApi.select(grid.id!).then((selected) => { setData(selected); setPicked(null); }).catch(fail)}>
+            {grid.name}
+          </button>
+        ))}
+        <button onClick={() => { setGridName(`Remote ${String.fromCharCode(65 + named.length)}`); setEditing(DEFAULT); setCreating(true); }}>
+          + New grid
+        </button>
+      </nav>
       {items.length === 0 && (
         <p className="first-run-note">Fill this once you have saved some looks.</p>
       )}
@@ -308,7 +328,8 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
                   <button disabled={!deviceId} title={deviceId ? "Plays it on the strip now; nothing is stored on the device" : "Pick a device in the header"}
                     onClick={() => show(picked)}>Show on strip</button>
                 )}
-                {picked.name && <button onClick={() => slotsApi.clear(picked.preset_id).then((s) => done(s, "Slot emptied (in the library)")).catch(fail)}>
+                {picked.name && <button onClick={() => slotsApi.clear(picked.preset_id, data.id ?? undefined)
+                  .then((s) => done(s, "Slot emptied (in the library)")).catch(fail)}>
                   Empty the slot
                 </button>}
                 <button onClick={() => setPicked(null)}>Done</button>
@@ -348,13 +369,13 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
       </div>
       <details className="grid-settings">
         <summary>Grid settings</summary>
-        <p className="muted small">One grid for now.</p>
-        <button onClick={() => setEditing(g)}>Change the grid</button>
+        <p className="muted small">This named grid is independent; preset ids remain global on the device.</p>
+        <button onClick={() => { setGridName(data.name ?? "Remote A"); setEditing(g); setCreating(false); }}>Change the grid</button>
         {confirmRemove ? (
           <div className="inline-confirm warn" aria-label="Confirm removing the grid">
-            <p>The looks keep their preset ids; only this layout is forgotten.</p>
-            <button className="danger" onClick={() => slotsApi.removeGrid().then((s) => {
-              setConfirmRemove(false); setPicked(null); setData(s); setEditing(DEFAULT);
+            <p>The looks keep their primary preset ids; only this layout and its "also use" assignments are forgotten.</p>
+            <button className="danger" onClick={() => slotsApi.remove(data.id!).then(() => {
+              setConfirmRemove(false); setPicked(null); load();
             }).catch(fail)}>Yes, remove the grid</button>
             <button onClick={() => setConfirmRemove(false)}>Keep the grid</button>
           </div>

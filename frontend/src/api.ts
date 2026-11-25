@@ -159,15 +159,25 @@ export interface DeviceSet {
 /** The slot grid: preset ids as rows and columns (e.g. a remote's banks), filled from the library. */
 export interface SlotGridShape { rows: number; cols: number; first: number; row_step: number; col_step: number; name: string }
 export interface SlotCell { row: number; col: number; preset_id: number; kind: "look" | "playlist" | null; name: string | null; base: string | null; notes: string[] }
-export interface Slots { grid: SlotGridShape | null; cells: SlotCell[]; filled?: string; freed?: string[] }
+export interface Slots { grid: SlotGridShape | null; cells: SlotCell[]; id?: string | null; name?: string | null;
+  filled?: string; freed?: string[] }
+export interface NamedGrids { current: string | null; grids: Slots[] }
 
 export const slots = {
   get: () => request<Slots>("GET", "/api/slots"),
+  list: () => request<NamedGrids>("GET", "/api/slots/grids"),
   setGrid: (g: SlotGridShape) => request<Slots>("PUT", "/api/slots/grid", g),
+  create: (name: string, grid: SlotGridShape) => request<Slots>("POST", "/api/slots/grids", { name, grid }),
+  select: (id: string) => request<Slots>("POST", `/api/slots/grids/${encodeURIComponent(id)}/select`),
+  rename: (id: string, body: { name?: string; grid?: SlotGridShape }) =>
+    request<Slots>("PATCH", `/api/slots/grids/${encodeURIComponent(id)}`, body),
+  remove: (id: string) => request<{ current: string | null; grids: string[] }>(
+    "DELETE", `/api/slots/grids/${encodeURIComponent(id)}`),
   removeGrid: () => request<Slots>("DELETE", "/api/slots/grid"),
-  fill: (pid: number, item: { look: string; mode?: "move" | "also" } | { playlist: string; mode?: "move" | "also" }) =>
-    request<Slots>("PUT", `/api/slots/${pid}`, item),
-  clear: (pid: number) => request<Slots>("DELETE", `/api/slots/${pid}`),
+  fill: (pid: number, item: { look: string; mode?: "move" | "also" } | { playlist: string; mode?: "move" | "also" }, grid?: string) =>
+    request<Slots>("PUT", `/api/slots/${pid}${grid ? `?grid=${encodeURIComponent(grid)}` : ""}`, item),
+  clear: (pid: number, grid?: string) =>
+    request<Slots>("DELETE", `/api/slots/${pid}${grid ? `?grid=${encodeURIComponent(grid)}` : ""}`),
 };
 
 /** The notice accepted before flashing or reverting (no warranty, no liability, no support). */

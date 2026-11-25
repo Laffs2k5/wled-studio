@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: EUPL-1.2
 """The slot grid, with made-up numbers: 3 rows of 2, from preset 40, rows 5 apart."""
+import json
 from conftest import CSRF
 
 GRID = {"rows": 3, "cols": 2, "first": 40, "row_step": 5, "name": "G{row}-{col} {name}"}
@@ -108,3 +109,23 @@ def test_also_assignment_materializes_only_during_push(client):
     looks, playlists = expand_for_push(req, list(client.app.state.library.looks().values()), [])
     assert [(x["name"], x["preset_id"]) for x in looks] == [("Calm", 46), ("G1-1 Calm", 40)]
     assert client.app.state.library.looks()["Calm"]["preset_id"] == 46
+
+
+def test_named_grids_migrate_once_and_keep_assignments_independent(client):
+    setup(client, [look("Calm")])
+    # Existing /api/slots/grid wrote the v2 format; simulate an old file to exercise migration.
+    p = client.app.state.settings.data_dir / "slots.json"
+    p.write_text(json.dumps({"grid": GRID, "assignments": {}}), encoding="utf-8")
+    old = client.get("/api/slots/grids").json()
+    assert old["current"] == "grid-1" and old["grids"][0]["name"] == "Remote A"
+    created = client.post("/api/slots/grids", json={
+        "name": "Remote B", "grid": {**GRID, "first": 101},
+    }, headers=CSRF).json()
+    assert created["name"] == "Remote B"
+    assert len(client.get("/api/slots/grids").json()["grids"]) == 2
+    migrated = list(p.parent.glob("slots-*.json"))
+    assert len(migrated) == 1 and json.loads(migrated[0].read_text())["grid"] == GRID
+    client.post(f"/api/slots/grids/{created['id']}/select", headers=CSRF)
+    client.put("/api/slots/101", json={"look": "Calm"}, headers=CSRF)
+    assert client.get("/api/slots?grid=grid-1").json()["cells"][0]["name"] is None
+    assert cell(client.get("/api/slots").json(), 1, 1)["name"] == "Calm"

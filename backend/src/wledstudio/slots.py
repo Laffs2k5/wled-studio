@@ -14,6 +14,7 @@ user's, kept in the app's data (slots.json).
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import json
 import re
 
@@ -88,39 +89,101 @@ class FillIn(BaseModel):
         return self
 
 
+class Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class GridNameIn(Strict):
+    name: str = Field(min_length=1, max_length=64)
+    grid: Grid
+
+
+class GridEditIn(Strict):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    grid: Grid | None = None
+
+
 def _path(request: Request):
     return request.app.state.settings.data_dir / "slots.json"
 
 
-def _load(request: Request) -> dict:
+def _load(request: Request) -> tuple[dict, bool]:
     p = _path(request)
     if not p.exists():
-        return {"grid": None, "assignments": {}}
+        return {"version": 2, "current": None, "grids": []}, False
     raw = json.loads(p.read_text(encoding="utf-8"))
+    if raw.get("version") == 2:
+        if not isinstance(raw.get("grids"), list):
+            raise ValueError("slots.json has no grid list")
+        return raw, False
+    # old formats: the grid itself, or {"grid", "assignments"}
     if "grid" in raw:
-        return {"grid": raw.get("grid"), "assignments": raw.get("assignments", {})}
-    return {"grid": raw, "assignments": {}}
+        old = raw
+    else:
+        old = {"grid": raw, "assignments": {}}
+    if old.get("grid") is None:
+        return {"version": 2, "current": None, "grids": []}, True
+    return {
+        "version": 2, "current": "grid-1",
+        "grids": [{"id": "grid-1", "name": "Remote A", "grid": old["grid"],
+                   "assignments": old.get("assignments", {})}],
+    }, True
 
 
-def load_grid(request: Request) -> Grid | None:
-    raw = _load(request)["grid"]
-    return Grid(**raw) if raw else None
+def _entries(request: Request, grid_id: str | None = None) -> tuple[dict, dict]:
+    state, migrated = _load(request)
+    chosen = grid_id or state.get("current")
+    entry = next((g for g in state["grids"] if g["id"] == chosen), None)
+    return {"state": state, "migrated": migrated}, entry or {}
 
 
-def _assignments(request: Request) -> dict[str, dict]:
-    return _load(request)["assignments"]
+def load_grid(request: Request, grid_id: str | None = None) -> Grid | None:
+    _, entry = _entries(request, grid_id)
+    return Grid(**entry["grid"]) if entry.get("grid") else None
 
 
-def _save(request: Request, grid: Grid, assignments: dict | None = None) -> None:
+def _assignments(request: Request, grid_id: str | None = None) -> dict[str, dict]:
+    _, entry = _entries(request, grid_id)
+    return entry.get("assignments", {}) if entry else {}
+
+
+def _save_state(request: Request, state: dict) -> None:
     p = _path(request)
     p.parent.mkdir(parents=True, exist_ok=True)
-    current = _assignments(request) if assignments is None else assignments
-    valid = {str(pid): value for pid, value in current.items() if grid.place(int(pid)) is not None}
-    p.write_text(json.dumps({"grid": grid.model_dump(), "assignments": valid}, indent=1), encoding="utf-8")
+    if p.exists():
+        raw = json.loads(p.read_text(encoding="utf-8"))
+        if raw.get("version") != 2 and not (p.parent / ".slots-v1-migrated").exists():
+            stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            p.with_name(f"slots-{stamp}.json").write_text(json.dumps(raw, indent=1) + "\n", encoding="utf-8")
+            (p.parent / ".slots-v1-migrated").write_text(stamp + "\n", encoding="utf-8")
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=1) + "\n", encoding="utf-8")
+    tmp.replace(p)
 
 
-def _grid_or_404(request: Request) -> Grid:
-    g = load_grid(request)
+def _save_current(request: Request, grid: Grid, assignments: dict | None = None) -> str:
+    ctx, entry = _entries(request)
+    state = ctx["state"]
+    if not entry:
+        used = {g["id"] for g in state["grids"]}
+        n = 1
+        while f"grid-{n}" in used:
+            n += 1
+        entry = {"id": f"grid-{n}", "name": "Remote A", "grid": grid.model_dump(), "assignments": {}}
+        state["grids"].append(entry)
+        state["current"] = entry["id"]
+    current = entry["assignments"] if assignments is None else assignments
+    missing = {str(pid) for pid in current if grid.place(int(pid)) is None}
+    if missing:
+        raise HTTPException(409, f"Assignments at preset {', '.join(sorted(missing))} do not fit the new shape.")
+    entry["grid"] = grid.model_dump()
+    entry["assignments"] = current
+    _save_state(request, state)
+    return entry["id"]
+
+
+def _grid_or_404(request: Request, grid_id: str | None = None) -> Grid:
+    g = load_grid(request, grid_id)
     if g is None:
         raise HTTPException(404, "no slot grid set up")
     return g
@@ -137,15 +200,15 @@ def _occupants(lib: dict) -> dict[int, list[tuple[str, str]]]:
     return out
 
 
-@router.get("")
-def get_slots(request: Request):
+def _slots(request: Request, grid_id: str | None = None) -> dict:
     """The grid and what sits in each slot."""
-    g = load_grid(request)
+    ctx, entry = _entries(request, grid_id)
+    g = load_grid(request, grid_id)
     if g is None:
         return {"grid": None, "cells": []}
     lib = request.app.state.library.load()
     occ = _occupants(lib)
-    assignments = _assignments(request)
+    assignments = entry.get("assignments", {})
     cells = []
     for r in range(1, g.rows + 1):
         for c in range(1, g.cols + 1):
@@ -169,25 +232,101 @@ def get_slots(request: Request):
                 notes.append("its name is another slot's")
             cells.append({"row": r, "col": c, "preset_id": pid, "kind": kind, "name": name,
                           "base": g.base(name) if name else None, "notes": notes})
-    return {"grid": g.model_dump(), "cells": cells}
+    return {"grid": g.model_dump(), "cells": cells, "id": entry["id"], "name": entry["name"]}
+
+
+@router.get("")
+def get_slots(request: Request, grid: str | None = None):
+    return _slots(request, grid)
 
 
 @router.put("/grid")
 def put_grid(body: Grid, request: Request):
-    _save(request, body)
+    _save_current(request, body)
     return get_slots(request)
 
 
 @router.delete("/grid")
 def delete_grid(request: Request):
-    _path(request).unlink(missing_ok=True)
+    ctx, entry = _entries(request)
+    state = ctx["state"]
+    if entry:
+        state["grids"] = [g for g in state["grids"] if g["id"] != entry["id"]]
+        state["current"] = state["grids"][0]["id"] if state["grids"] else None
+        _save_state(request, state)
     return {"grid": None, "cells": []}
 
 
+@router.get("/grids")
+def grids(request: Request):
+    state, _ = _load(request)
+    return {"current": state["current"],
+            "grids": [{**_slots(request, item["id"])} for item in state["grids"]]}
+
+
+@router.post("/grids", status_code=201)
+def create_grid(body: GridNameIn, request: Request):
+    state, _ = _load(request)
+    if any(g["name"].casefold() == body.name.strip().casefold() for g in state["grids"]):
+        raise HTTPException(409, "A grid with that name already exists.")
+    used = {g["id"] for g in state["grids"]}
+    n = 1
+    while f"grid-{n}" in used:
+        n += 1
+    entry = {"id": f"grid-{n}", "name": body.name.strip(), "grid": body.grid.model_dump(), "assignments": {}}
+    state["grids"].append(entry)
+    if state["current"] is None:
+        state["current"] = entry["id"]
+    _save_state(request, state)
+    return _slots(request, entry["id"])
+
+
+@router.patch("/grids/{grid_id}")
+def edit_grid(grid_id: str, body: GridEditIn, request: Request):
+    state, _ = _load(request)
+    entry = next((g for g in state["grids"] if g["id"] == grid_id), None)
+    if not entry:
+        raise HTTPException(404, "no such grid")
+    if body.name is not None:
+        name = body.name.strip()
+        if any(g["id"] != grid_id and g["name"].casefold() == name.casefold() for g in state["grids"]):
+            raise HTTPException(409, "A grid with that name already exists.")
+        entry["name"] = name
+    if body.grid is not None:
+        missing = [pid for pid in entry["assignments"] if body.grid.place(int(pid)) is None]
+        if missing:
+            raise HTTPException(409, f"Assignments at preset {', '.join(sorted(missing))} do not fit the new shape.")
+        entry["grid"] = body.grid.model_dump()
+    _save_state(request, state)
+    return _slots(request, grid_id)
+
+
+@router.post("/grids/{grid_id}/select")
+def select_grid(grid_id: str, request: Request):
+    state, _ = _load(request)
+    if not any(g["id"] == grid_id for g in state["grids"]):
+        raise HTTPException(404, "no such grid")
+    state["current"] = grid_id
+    _save_state(request, state)
+    return _slots(request, grid_id)
+
+
+@router.delete("/grids/{grid_id}")
+def remove_named_grid(grid_id: str, request: Request):
+    state, _ = _load(request)
+    if not any(g["id"] == grid_id for g in state["grids"]):
+        raise HTTPException(404, "no such grid")
+    state["grids"] = [g for g in state["grids"] if g["id"] != grid_id]
+    if state["current"] == grid_id:
+        state["current"] = state["grids"][0]["id"] if state["grids"] else None
+    _save_state(request, state)
+    return {"current": state["current"], "grids": [g["id"] for g in state["grids"]]}
+
+
 @router.put("/{pid}")
-def fill(pid: int, body: FillIn, request: Request):
+def fill(pid: int, body: FillIn, request: Request, grid: str | None = None):
     """Reference a library item in a slot; optionally also write it at the source's existing id."""
-    g = _grid_or_404(request)
+    g = _grid_or_404(request, grid)
     where = g.place(pid)
     if where is None:
         raise HTTPException(404, "that preset id isn't a slot in the grid")
@@ -203,7 +342,8 @@ def fill(pid: int, body: FillIn, request: Request):
         if target is not source:
             target["preset_id"] = None
             freed.append(n)
-    assignments = _assignments(request)
+    ctx, entry = _entries(request, grid)
+    assignments = dict(entry.get("assignments", {}))
     if body.mode == "also" and source.get("preset_id") is not None and source.get("preset_id") != pid:
         assignments[str(pid)] = {"kind": kind, "name": source["name"]}
     else:
@@ -211,22 +351,24 @@ def fill(pid: int, body: FillIn, request: Request):
         assignments.pop(str(pid), None)
     try:
         store.save(lib)
-        _save(request, g, assignments)
+        entry["assignments"] = assignments
+        _save_state(request, ctx["state"])
     except LookError as e:
         raise HTTPException(422, str(e)) from None
-    return {**get_slots(request), "filled": source["name"], "freed": freed}
+    return {**_slots(request, entry["id"]), "filled": source["name"], "freed": freed}
 
 
 @router.delete("/{pid}")
-def clear(pid: int, request: Request):
+def clear(pid: int, request: Request, grid: str | None = None):
     """Empty a reference; a moved item's primary preset id is cleared too."""
-    g = _grid_or_404(request)
+    g = _grid_or_404(request, grid)
     if g.place(pid) is None:
         raise HTTPException(404, "that preset id isn't a slot in the grid")
     store = request.app.state.library
     lib = store.load()
     freed = []
-    assignments = _assignments(request)
+    ctx, entry = _entries(request, grid)
+    assignments = dict(entry.get("assignments", {}))
     assignment = assignments.pop(str(pid), None)
     if assignment:
         freed.append(assignment["name"])
@@ -235,28 +377,31 @@ def clear(pid: int, request: Request):
         freed.append(n)
     if freed:
         store.save(lib)
-        _save(request, g, assignments)
-    return {**get_slots(request), "freed": freed}
+        entry["assignments"] = assignments
+        _save_state(request, ctx["state"])
+    return {**_slots(request, entry["id"]), "freed": freed}
 
 
 def expand_for_push(request: Request, looks: list[dict], playlists: list[dict]) -> tuple[list[dict], list[dict]]:
     """Materialize slot 'also use here' references for one plan/write without storing copies in the library."""
-    g = load_grid(request)
-    if g is None:
+    state, _ = _load(request)
+    if not state["grids"]:
         return looks, playlists
     by_look = {look["name"]: look for look in looks}
     by_playlist = {playlist["name"]: playlist for playlist in playlists}
     extra_looks = list(looks)
     extra_playlists = list(playlists)
-    for pid, assignment in _assignments(request).items():
-        where = g.place(int(pid))
-        if where is None:
-            continue
-        source = (by_look if assignment["kind"] == "look" else by_playlist).get(assignment["name"])
-        if source is None:
-            continue
-        item = copy.deepcopy(source)
-        item["name"] = g.name_for(*where, g.base(source["name"]))
-        item["preset_id"] = int(pid)
-        (extra_looks if assignment["kind"] == "look" else extra_playlists).append(item)
+    for entry in state["grids"]:
+        g = Grid(**entry["grid"])
+        for pid, assignment in entry.get("assignments", {}).items():
+            where = g.place(int(pid))
+            if where is None:
+                continue
+            source = (by_look if assignment["kind"] == "look" else by_playlist).get(assignment["name"])
+            if source is None:
+                continue
+            item = copy.deepcopy(source)
+            item["name"] = g.name_for(*where, g.base(source["name"]))
+            item["preset_id"] = int(pid)
+            (extra_looks if assignment["kind"] == "look" else extra_playlists).append(item)
     return extra_looks, extra_playlists
