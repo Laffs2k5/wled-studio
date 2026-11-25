@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { SlotGrid } from "./SlotGrid";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { gridProblem, SlotGrid } from "./SlotGrid";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -32,15 +32,53 @@ function stub(initial: object) {
   return calls;
 }
 
-test("without a grid, it asks for its shape and previews the ids and names", async () => {
+test("without a grid, it asks for its shape in plain words and shows the ids it gives", async () => {
   const calls = stub({ grid: null, cells: [] });
   render(<SlotGrid notify={() => {}} />);
-  fireEvent.change(await screen.findByLabelText("Rows"), { target: { value: "2" } });
-  fireEvent.change(screen.getByLabelText("Name pattern"), { target: { value: "G{row}-{col} {name}" } });
+  fireEvent.change(await screen.findByLabelText("Banks (rows)"), { target: { value: "2" } });
+  fireEvent.change(screen.getByLabelText("Buttons per bank (columns)"), { target: { value: "3" } });
+  fireEvent.change(screen.getByLabelText("Preset id of bank 1, button 1"), { target: { value: "111" } });
+  fireEvent.change(screen.getByLabelText("Each next bank starts N ids later"), { target: { value: "10" } });
+  fireEvent.change(screen.getByLabelText("Each next button is N ids later"), { target: { value: "1" } });
+  const mini = screen.getByRole("table", { name: "Preset ids of the grid" });
+  expect(within(mini).getByRole("row", { name: "Bank 1 111 112 113" })).toBeInTheDocument();
+  expect(within(mini).getByRole("row", { name: "Bank 2 121 122 123" })).toBeInTheDocument();
+  expect(screen.queryByText(/first \+ \(r − 1\)/)).toBeNull();                // no formula
+  fireEvent.change(screen.getByLabelText("Name pattern"), { target: { value: "G{row}-{col} {name}" } });   // under Advanced
   expect(screen.getByText(/G2-3 Fire/)).toBeInTheDocument();
   fireEvent.click(screen.getByText("Save the grid"));
   await waitFor(() => expect(calls.some((c) => c.startsWith("PUT /api/slots/grid") && c.includes('"rows":2'))).toBe(true));
   expect(await screen.findByLabelText("Slot grid")).toBeInTheDocument();
+});
+
+test("a grid past 250, or with shared ids, can't be saved, and says why", async () => {
+  const calls = stub({ grid: null, cells: [] });
+  render(<SlotGrid notify={() => {}} />);
+  fireEvent.change(await screen.findByLabelText("Preset id of bank 1, button 1"), { target: { value: "240" } });
+  expect(screen.getByRole("alert")).toHaveTextContent("The last button would be preset 263, but WLED's presets end at 250.");
+  expect(screen.getByText("Save the grid")).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Preset id of bank 1, button 1"), { target: { value: "101" } });
+  fireEvent.change(screen.getByLabelText("Each next bank starts N ids later"), { target: { value: "2" } });
+  expect(screen.getByRole("alert")).toHaveTextContent("Two buttons would share preset 103: make each next bank start at least 4 ids later.");
+  fireEvent.change(screen.getByLabelText("Each next bank starts N ids later"), { target: { value: "" } });
+  expect(screen.getByRole("alert")).toHaveTextContent("The step between banks must be a whole number from 1 to 100.");
+  fireEvent.change(screen.getByLabelText("Each next bank starts N ids later"), { target: { value: "10" } });
+  fireEvent.change(screen.getByLabelText("Name pattern"), { target: { value: "R{row}·{col}" } });
+  expect(screen.getByRole("alert")).toHaveTextContent("must contain {name}");
+  fireEvent.change(screen.getByLabelText("Name pattern"), { target: { value: "R{row}·{col} {name}" } });
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByText("Save the grid")).toBeEnabled();
+  expect(calls.some((c) => c.startsWith("PUT"))).toBe(false);
+});
+
+test("the miniature shortens a tall grid", async () => {
+  stub({ grid: null, cells: [] });
+  render(<SlotGrid notify={() => {}} />);
+  fireEvent.change(await screen.findByLabelText("Banks (rows)"), { target: { value: "20" } });
+  fireEvent.change(screen.getByLabelText("Preset id of bank 1, button 1"), { target: { value: "1" } });
+  expect(screen.getByText("14 more banks, up to Bank 20: 191–194")).toBeInTheDocument();
+  expect(gridProblem({ rows: 20, cols: 4, first: 1, row_step: 10, col_step: 1, name: "R{row}·{col} {name}" })).toBeNull();
+  expect(gridProblem({ rows: 2, cols: 2, first: 1, row_step: 10, col_step: 1, name: `{name} ${"x".repeat(40)}` })).toMatch(/6 to 40 characters/);
 });
 
 test("shows what sits where, and fills and empties slots", async () => {

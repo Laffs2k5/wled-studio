@@ -155,6 +155,15 @@ button.link { background: none; border: none; padding: 0; color: var(--accent); 
 .grid-form { display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
 .grid-form label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; }
 .grid-form input[type=number] { width: 6rem; }
+.grid-form.steps { margin-top: .6rem; }
+.grid-form label.inline { flex-direction: row; align-items: center; gap: .4rem; }
+.grid-form label.inline input { width: 4.5rem; }
+.grid-mini { margin: .75rem 0 .25rem; border-collapse: collapse; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.grid-mini th, .grid-mini td { padding: .15rem .6rem; border: 1px solid var(--line); text-align: right; }
+.grid-mini th { color: var(--muted); font-weight: 500; }
+.grid-mini td.warn { font-weight: 600; }
+.grid-advanced { margin: .5rem 0; }
+.grid-advanced label { display: flex; gap: .4rem; align-items: center; }
 .slot-grid { border-collapse: separate; border-spacing: .35rem; }
 .slot-grid th { color: var(--muted); font-weight: 500; font-size: .85rem; }
 button.slot { width: 9.5rem; min-height: 3.2rem; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; }

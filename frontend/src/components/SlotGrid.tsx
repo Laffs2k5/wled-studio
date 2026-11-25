@@ -7,6 +7,60 @@ const DEFAULT: SlotGridShape = { rows: 3, cols: 4, first: 101, row_step: 10, col
 
 const idOf = (g: SlotGridShape, row: number, col: number) => g.first + (row - 1) * g.row_step + (col - 1) * g.col_step;
 
+/** The setup's fields: their limits (the backend's) and their names in the reasons. */
+const LIMITS: [keyof SlotGridShape, number, number, string][] = [
+  ["rows", 1, 20, "Banks"], ["cols", 1, 20, "Buttons per bank"], ["first", 1, 250, "The first preset id"],
+  ["row_step", 1, 100, "The step between banks"], ["col_step", 1, 100, "The step between buttons"],
+];
+
+/** Why a grid can't be saved, in words; null when it can. */
+export function gridProblem(g: SlotGridShape): string | null {
+  for (const [k, lo, hi, label] of LIMITS) {
+    const v = g[k] as number;
+    if (!Number.isInteger(v) || v < lo || v > hi) return `${label} must be a whole number from ${lo} to ${hi}.`;
+  }
+  const last = idOf(g, g.rows, g.cols);
+  if (last > 250) return `The last button would be preset ${last}, but WLED's presets end at 250. Use fewer banks or buttons, or smaller steps.`;
+  const ids = new Set<number>();
+  for (let r = 1; r <= g.rows; r++) for (let c = 1; c <= g.cols; c++) {
+    const id = idOf(g, r, c);
+    if (ids.has(id)) return `Two buttons would share preset ${id}: make each next bank start at least ${g.cols * g.col_step} ids later.`;
+    ids.add(id);
+  }
+  if (!g.name.includes("{name}") || /\{(?!row\}|col\}|name\})/.test(g.name)) {
+    return "The name pattern (under Advanced) must contain {name}, and may use {row} and {col}.";
+  }
+  if (g.name.length < 6 || g.name.length > 40) return "The name pattern (under Advanced) must be 6 to 40 characters.";
+  return null;
+}
+
+const MINI_ROWS = 6;
+
+/** The grid's preset ids as a small table, while setting it up: what each bank's buttons will be. */
+function Miniature({ g }: { g: SlotGridShape }) {
+  if (!LIMITS.every(([k, lo, hi]) => Number.isInteger(g[k]) && (g[k] as number) >= lo && (g[k] as number) <= hi)) return null;
+  const rows = Array.from({ length: Math.min(g.rows, MINI_ROWS) }, (_, i) => i + 1);
+  const cols = Array.from({ length: g.cols }, (_, i) => i + 1);
+  return (
+    <table className="grid-mini" aria-label="Preset ids of the grid">
+      <thead><tr><th />{cols.map((c) => <th key={c} scope="col">Button {c}</th>)}</tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r}>
+            <th scope="row">Bank {r}</th>
+            {cols.map((c) => { const id = idOf(g, r, c); return <td key={c} className={id > 250 ? "warn" : undefined}>{id}</td>; })}
+          </tr>
+        ))}
+        {g.rows > MINI_ROWS && (
+          <tr><th scope="row">…</th><td colSpan={g.cols} className="muted">
+            {g.rows - MINI_ROWS} more {g.rows - MINI_ROWS === 1 ? "bank" : "banks"}, up to Bank {g.rows}: {idOf(g, g.rows, 1)}–{idOf(g, g.rows, g.cols)}
+          </td></tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
 /** Preset ids as a grid (a remote's banks, say): which look sits in each slot, and filling slots
  * from the library. Writing to a device is the usual write. */
 export function SlotGrid({ notify, deviceId = null, deviceName }: {
@@ -46,32 +100,54 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
   if (editing) {
     const g = editing;
     const set = (k: keyof SlotGridShape) => (e: React.ChangeEvent<HTMLInputElement>) =>
-      setEditing({ ...g, [k]: k === "name" ? e.target.value : Number(e.target.value) });
-    const last = idOf(g, g.rows, g.cols);
+      setEditing({ ...g, [k]: k === "name" ? e.target.value : e.target.value === "" ? NaN : Number(e.target.value) });
+    const num = (k: keyof SlotGridShape) => (Number.isNaN(g[k]) ? "" : g[k]);
+    const problem = gridProblem(g);
     return (
       <section className="slots">
         <h2>Slot grid</h2>
         <p className="muted small">
-          A block of preset ids shown as rows and columns, for setups that give ids a meaning (a remote's banks of
-          looks, say). Row r, column c is preset first + (r − 1) × row step + (c − 1) × column step.
+          A block of preset ids laid out as banks and buttons, for setups that give ids a meaning: a remote whose
+          bank 1 plays presets 101–104, say. Set where the ids start and how they step; the table below shows the
+          result.
         </p>
         <div className="grid-form">
-          <label>Rows <input type="number" min={1} max={20} value={g.rows} onChange={set("rows")} /></label>
-          <label>Columns <input type="number" min={1} max={20} value={g.cols} onChange={set("cols")} /></label>
-          <label>First preset id <input type="number" min={1} max={250} value={g.first} onChange={set("first")} /></label>
-          <label>Row step <input type="number" min={1} max={100} value={g.row_step} onChange={set("row_step")} /></label>
-          <label>Column step <input type="number" min={1} max={100} value={g.col_step} onChange={set("col_step")} /></label>
-          <label>Name pattern <input value={g.name} onChange={set("name")} aria-label="Name pattern" /></label>
+          <label>Banks (rows) <input type="number" min={1} max={20} value={num("rows")} onChange={set("rows")} /></label>
+          <label>Buttons per bank (columns) <input type="number" min={1} max={20} value={num("cols")} onChange={set("cols")} /></label>
+          <label>Preset id of bank 1, button 1 <input type="number" min={1} max={250} value={num("first")} onChange={set("first")} /></label>
         </div>
-        <p className="small">
-          Presets {g.first}–{last}{last > 250 ? " (past 250: too many)" : ""}; a look in row 2, column 3 is named “
-          {g.name.replace("{row}", "2").replace("{col}", "3").replace("{name}", "Fire")}”.
-        </p>
+        <div className="grid-form steps">
+          <label className="inline">
+            <span>Each next bank starts</span>
+            <input type="number" min={1} max={100} value={num("row_step")} onChange={set("row_step")}
+              aria-label="Each next bank starts N ids later" />
+            <span>ids later</span>
+          </label>
+          <label className="inline">
+            <span>Each next button is</span>
+            <input type="number" min={1} max={100} value={num("col_step")} onChange={set("col_step")}
+              aria-label="Each next button is N ids later" />
+            <span>ids later</span>
+          </label>
+        </div>
+        <Miniature g={g} />
+        <details className="small grid-advanced">
+          <summary>Advanced: how looks in the grid are named</summary>
+          <p className="muted">
+            A look copied into a slot gets this name. {"{row}"} is the bank, {"{col}"} the button and {"{name}"} the
+            look's own name.
+          </p>
+          <label>Name pattern <input value={g.name} onChange={set("name")} aria-label="Name pattern" /></label>
+          <p>A look “Fire” in bank 2, button 3 is named “{g.name.replace("{row}", "2").replace("{col}", "3").replace("{name}", "Fire")}”.</p>
+        </details>
+        {problem && <p className="warn small" role="alert">{problem}</p>}
         <div className="row">
-          <button className="primary" onClick={() => slotsApi.setGrid(g).then((s) => { setEditing(null); done(s, "Slot grid saved (in the app)"); }).catch(fail)}>
+          <button className="primary" disabled={problem !== null}
+            onClick={() => slotsApi.setGrid(g).then((s) => { setEditing(null); done(s, "Slot grid saved (in the app)"); }).catch(fail)}>
             Save the grid
           </button>
           {data.grid && <button onClick={() => setEditing(null)}>Cancel</button>}
+          <span className="muted small">Saving changes only this view's shape: no look and nothing on the device.</span>
         </div>
       </section>
     );
