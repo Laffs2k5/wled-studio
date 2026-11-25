@@ -134,6 +134,7 @@ export function App() {
       ) :
         current ? <DevicePanel key={`${current}@${cur?.host ?? ""}`} deviceId={current} notify={notify}
           deviceName={cur?.name} host={cur?.host} roomVersion={roomVersion}
+          viewMode={view === "library" ? "library" : view === "legacy" ? "legacy" : "design"}
           openLook={lookToOpen} onLookOpened={() => setLookToOpen(null)}
           onRoomShape={() => setSettings({ focus: "room" })} onEditAddress={() => setSettings({ focus: "address" })} onVirtual={(v) => {
           // the list says what the device was when last read; a different answer now: list again

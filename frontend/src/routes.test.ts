@@ -2,7 +2,8 @@
 import { parseRoute, routeHash } from "./routes";
 
 test("routes name the five views, compatibility view, device, firmware job and source file", () => {
-  expect(parseRoute("#/?device=desk")).toEqual({ view: "design", device: "desk" });
+  expect(parseRoute("")).toEqual({ view: "legacy", device: null });
+  expect(parseRoute("#/?device=desk")).toEqual({ view: "legacy", device: "desk" });
   expect(parseRoute("#/design?device=desk")).toEqual({ view: "design", device: "desk" });
   expect(parseRoute("#/saved?device=desk")).toEqual({ view: "library", device: "desk" });
   expect(parseRoute("#/presets?device=desk")).toEqual({ view: "presets", device: "desk" });

@@ -32,6 +32,8 @@ interface Props {
   onEditAddress?: () => void;
   openLook?: string | null;
   onLookOpened?: () => void;
+  /** Stable legacy view, or one of the separated Design/Library task views. */
+  viewMode?: "design" | "library" | "legacy";
 }
 
 /** What the panel shows instead of the live controls while the device doesn't answer: what's wrong,
@@ -62,7 +64,7 @@ export function DeviceOffline({ name, host, error, trying, onRetry, onEditAddres
 const SEND_DELAY_MS = 120;
 
 export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roomVersion = 0, onRoomShape, onEditAddress,
-  openLook, onLookOpened }: Props) {
+  openLook, onLookOpened, viewMode = "legacy" }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -269,6 +271,24 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
         pending={offlineName ? null : pendingPalettes} onCheckAndWrite={offlineName ? undefined : () => setOpenPlan((n) => n + 1)} />
     </aside>
   );
+  if (viewMode === "library") {
+    if (editing && profile && roomRead) {
+      return (
+        <div className="library-view editing-look">
+          <LookEditor deviceId={deviceId} name={editing} profile={profile} room={room} notify={notify}
+            onClose={closeEditor} looks={looks} playlists={playlists} deviceName={profile.device.name}
+            pick={null} onSaved={setSaved} />
+          <button onClick={() => closeEditor(false)}>Back to Library</button>
+        </div>
+      );
+    }
+    return (
+      <div className="library-view">
+        {offline !== null && <p className="first-run-note warn">{deviceName ?? deviceId} does not answer. The local library remains available; strip actions wait.</p>}
+        {library(offline !== null ? (deviceName ?? deviceId) : undefined)}
+      </div>
+    );
+  }
   if (offline !== null && !(profile && state)) {
     const name = deviceName ?? deviceId;
     return (
@@ -292,12 +312,12 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
 
   return (<>
     <nav className="mobile-column-tabs" aria-label="Looks view columns">
-      {(["effects", "strip", "library"] as const).map((tab) => (
+      {(["effects", "strip", ...(viewMode === "legacy" ? ["library"] : [])] as ("effects" | "strip" | "library")[]).map((tab) => (
         <button key={tab} className={mobileTab === tab ? "primary" : ""} aria-pressed={mobileTab === tab}
           onClick={() => setMobileTab(tab)}>{tab === "effects" ? "Effects" : tab === "strip" ? "Strip" : "Library"}</button>
       ))}
     </nav>
-    <div className="device-panel" data-mobile-tab={mobileTab}>
+    <div className={`device-panel ${viewMode === "design" ? "design-only" : ""}`} data-mobile-tab={mobileTab}>
       <aside className={`effects-column${editing ? " editing" : ""}`}>
         {editing ? (<>
           <p className="small edit-note">Picks the effect of the segment you're editing in “{editing}”. The strip does not change.</p>
@@ -422,10 +442,12 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
         )}
         </>)}
       </main>
-      {library()}
+      {viewMode === "legacy" && library()}
     </div>
-    <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan}
-      onLibraryChanged={reloadLooks}
-      onPlan={(p) => setPendingPalettes(p ? (p.palettes ?? []).map((x) => x.palette) : null)} />
+    {viewMode === "legacy" && (
+      <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan}
+        onLibraryChanged={reloadLooks}
+        onPlan={(p) => setPendingPalettes(p ? (p.palettes ?? []).map((x) => x.palette) : null)} />
+    )}
   </>);
 }

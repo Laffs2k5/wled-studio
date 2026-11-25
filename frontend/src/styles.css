@@ -71,6 +71,10 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .action-result.error { border-left-color: var(--bad); }
 @media (max-width: 600px) { .gear-text { display: none; } }
 .device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 27rem); gap: 1rem; padding: 1rem 1.25rem; }
+.device-panel.design-only { grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); }
+.library-view { max-width: 70rem; margin: 1rem auto; padding: 0 1.25rem; }
+.library-view > aside { max-width: none; }
+.library-view.editing-look { display: grid; gap: 1rem; }
 @media (max-width: 1000px) { .device-panel { grid-template-columns: 1fr; } }
 .mobile-column-tabs { display: none; }
 .file-tabs { display: flex; gap: .35rem; overflow-x: auto; margin: .4rem 0; }

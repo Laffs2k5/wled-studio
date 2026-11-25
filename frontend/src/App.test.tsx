@@ -30,6 +30,28 @@ test("view navigation and the selected device are in the URL", async () => {
   expect(location.hash).toBe("#/presets?device=desk");
 });
 
+test("Design and Library are separate jobs; the legacy root remains combined", async () => {
+  backend({
+    "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
+    "GET /api/devices/desk/profile": () => profile,
+    "GET /api/devices/desk/state": () => state,
+    "GET /api/devices/desk/room": () => null,
+    "GET /api/looks": () => [{ name: "Evening", preset_id: 3, segments: [] }],
+    "GET /api/playlists": () => [], "GET /api/palettes": () => [],
+    "GET /api/devices/desk/check": () => [],
+  });
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Looks" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Design" }));
+  expect(screen.queryByRole("region", { name: "Looks" })).toBeNull();
+  expect(screen.getByRole("heading", { name: "Comet" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Library" }));
+  expect(await screen.findByRole("region", { name: "Looks" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Comet" })).toBeNull();
+  expect(screen.queryByRole("listbox", { name: "Effects" })).toBeNull();
+});
+
 test("first run asks for a device in a card of its own", async () => {
   backend({ "GET /api/devices": () => [] });
   render(<App />);
