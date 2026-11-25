@@ -8,7 +8,7 @@ import { GitPanel } from "./GitPanel";
 // CodeMirror loads when a file is first opened, not with the page
 const Code = lazy(() => import("./Code").then((m) => ({ default: m.Code })));
 import type { Device } from "../types";
-import type { Place } from "../compileLog";
+import type { CompileDiagnostic, Place } from "../compileLog";
 
 /** An effect id in use, and by what. */
 export interface UsedId { id: number; by: string }
@@ -22,7 +22,7 @@ export function nextFreeId(used: UsedId[]): number | null {
 
 /** Edit your effect usermods' files (./effects), and start new ones from a template. */
 export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null, previewIds = [], onCreated, onCompile,
-  openFile = null, onFileOpen, showGit = true, onFolder, onVersion }: {
+  openFile = null, onFileOpen, showGit = true, onFolder, onVersion, diagnostics = [] }: {
   notify: (msg: string, error?: boolean) => void;
   onSaved?: (folder: string) => void;
   /** Effect ids the preview has (the built-in example's, say), besides the folders' own. */
@@ -44,6 +44,7 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   showGit?: boolean;
   onFolder?: (folder: string | null) => void;
   onVersion?: (folder: string) => void;
+  diagnostics?: CompileDiagnostic[];
 }) {
   const [folders, setFolders] = useState<EffectFolder[] | null>(null);
   const [file, setFile] = useState<{ folder: string; name: string } | null>(null);
@@ -277,7 +278,9 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
       )}
       {file && (
         <Suspense fallback={<p className="muted small">Loading the editor…</p>}>
-          <Code value={text} fileName={file.name} line={line} onChange={(next) => {
+          <Code value={text} fileName={file.name} line={line}
+            diagnostics={diagnostics.filter((item) => item.folder === file.folder && item.file === file.name)}
+            onChange={(next) => {
             setText(next); setDirty(true);
             setBuffers((all) => ({ ...all, [`${file.folder}/${file.name}`]: { text: next, dirty: true } }));
           }} />

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { compileMessages } from "./compileLog";
+import { compileDiagnostics, compileMessages } from "./compileLog";
 
 const LOG = [
   "WARNING: arm64-linux binaries are not available for all releases.",
@@ -20,7 +20,7 @@ test("keeps the compiler's messages, from the first error to the count, and shor
     "/builder/preview/shim/wled.h:132:9: note: 'sin8_t' declared here",   // not one of your folders
     "1 error generated.",
   ]);
-  expect(lines[0].at).toEqual({ folder: "my_wave", file: "my_wave.cpp", line: 29 });
+  expect(lines[0].at).toEqual({ folder: "my_wave", file: "my_wave.cpp", line: 29, column: 26 });
   expect(lines[2].at).toBeUndefined();
 });
 
@@ -35,6 +35,13 @@ test("many errors: the first ones, and a mark that there are more", () => {
   const log = Array.from({ length: 30 }, (_, i) => `fx/a.cpp:${i + 1}:1: error: e${i}`).join("\n");
   const { lines, more } = compileMessages(log, ["fx"], 10);
   expect(lines).toHaveLength(10);
-  expect(lines[0].at).toEqual({ folder: "fx", file: "a.cpp", line: 1 });
+  expect(lines[0].at).toEqual({ folder: "fx", file: "a.cpp", line: 1, column: 1 });
   expect(more).toBe(true);
+});
+
+test("parses uncapped diagnostics for the editor", () => {
+  expect(compileDiagnostics(LOG, ["my_wave"])).toEqual([{
+    folder: "my_wave", file: "my_wave.cpp", line: 29, column: 26, severity: "error",
+    message: "use of undeclared identifier 'sin8_tx'; did you mean 'sin8_t'?",
+  }]);
 });

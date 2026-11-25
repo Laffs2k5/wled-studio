@@ -3,6 +3,7 @@ import { Text } from "@codemirror/state";
 import { render, screen, waitFor } from "@testing-library/react";
 import { Code, languageFor, viewOf } from "./Code";
 import { guideLevels, indentOf } from "./indentGuides";
+import { diagnosticCount } from "@codemirror/lint";
 
 test("indent: spaces count one column, a tab to the next multiple of four, blank lines have none", () => {
   expect(indentOf("    x")).toBe(4);
@@ -31,4 +32,11 @@ test("the editor runs in a shadow root, labelled, with the document given", asyn
   expect(host.shadowRoot).not.toBeNull();
   await waitFor(() => expect(viewOf(host)?.state.doc.toString()).toBe("int x;\n"));
   expect(host.shadowRoot!.querySelector(".cm-content")!.getAttribute("aria-label")).toBe("Code");
+});
+
+test("compiler diagnostics are shown at the requested line", async () => {
+  render(<Code value={"int a;\nint b;\n"} fileName="fx.cpp" onChange={() => {}}
+    diagnostics={[{ line: 2, column: 3, severity: "error", message: "unknown name" }]} />);
+  const host = await screen.findByLabelText("Code");
+  await waitFor(() => expect(diagnosticCount(viewOf(host)!.state)).toBe(1));
 });

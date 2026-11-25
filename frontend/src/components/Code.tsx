@@ -14,6 +14,7 @@ import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
+import { lintGutter, setDiagnostics, type Diagnostic } from "@codemirror/lint";
 import { useEffect, useRef } from "react";
 import { indentGuides } from "./indentGuides";
 
@@ -41,10 +42,11 @@ const frame = EditorView.theme({
 // "&light" works only in a base theme.
 const lightBackground = EditorView.baseTheme({ "&light": { backgroundColor: "var(--panel, #fff)" } });
 
-export function Code({ value, fileName, onChange, label = "Code", line }: {
+export function Code({ value, fileName, onChange, label = "Code", line, diagnostics = [] }: {
   value: string; fileName: string; onChange: (text: string) => void; label?: string;
   /** A line to put the cursor on and show (1-based), e.g. from a compiler message; a new `seq` jumps again. */
   line?: { line: number; seq: number } | null;
+  diagnostics?: CompileEditorDiagnostic[];
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -67,6 +69,7 @@ export function Code({ value, fileName, onChange, label = "Code", line }: {
         doc: value,
         extensions: [
           basicSetup,
+          lintGutter(),
           keymap.of([indentWithTab]),   // Tab indents, as in VS Code (Esc, then Tab, leaves the editor)
           indentUnit.of("  "),
           EditorState.tabSize.of(4),
@@ -112,5 +115,24 @@ export function Code({ value, fileName, onChange, label = "Code", line }: {
     host.current?.scrollIntoView?.({ block: "nearest" });
   }, [line, value, fileName]);
 
+  useEffect(() => {
+    const v = view.current;
+    if (!v) return;
+    const items: Diagnostic[] = diagnostics.flatMap((diagnostic) => {
+      const line = v.state.doc.line(Math.min(Math.max(1, diagnostic.line), v.state.doc.lines));
+      const from = Math.min(line.to, line.from + Math.max(0, (diagnostic.column ?? 1) - 1));
+      return [{ from, to: Math.min(line.to, from + 1), severity: diagnostic.severity,
+        message: diagnostic.message, source: "compiler" }];
+    });
+    v.dispatch(setDiagnostics(v.state, items));
+  }, [diagnostics, value, fileName]);
+
   return <div ref={host} className="code" role="group" aria-label={label} />;
+}
+
+export interface CompileEditorDiagnostic {
+  line: number;
+  column?: number;
+  severity: "error" | "warning";
+  message: string;
 }
