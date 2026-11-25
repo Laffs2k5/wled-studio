@@ -16,6 +16,7 @@ from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, che
                       import_presets, mic_for,
                       playlist_from_preset, resolve_look, resolve_playlist, segment_from_state, tag_areas)
 from .push import DuplicatePresetIds, StateStore, fetch_lists, push
+from .preset_admin import backup_details, inspect_device, mutate_presets, preset_summary, PresetChanged, PresetVerification
 from .session import SEG_RESTORE, Sessions, restore_payload
 from .wled import WLEDClient, WLEDError, WLEDLocked
 
@@ -207,6 +208,13 @@ class PushIn(Strict):
     accept_review: bool | list[Annotated[str, Field(max_length=64)]] = Field(default=False, max_length=500)
 
 
+class PresetMutationIn(Strict):
+    confirm: str = Field(min_length=1, max_length=64)
+    inspected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preset_ids: list[Annotated[int, Field(ge=1, le=250)]] = Field(default_factory=list, max_length=250)
+    backup: str | None = Field(default=None, max_length=100, pattern=r"^[^/\\]+-presets\.json$")
+
+
 # --- dependencies ---------------------------------------------------------------
 
 def stores(request: Request) -> tuple[DeviceStore, LibraryStore, StateStore]:
@@ -218,6 +226,11 @@ def device_or_404(device_id: str, request: Request) -> Device:
     if dev is None:
         raise HTTPException(404, "no such device")
     return dev
+
+
+def destructive_auth(request: Request) -> None:
+    if not request.app.state.settings.token:
+        raise HTTPException(409, "Enable WLED Studio access-token protection before deleting or restoring presets.")
 
 
 def make_client(request: Request, dev: Device) -> WLEDClient:
@@ -982,5 +995,85 @@ def delete_room(device_id: str, request: Request):
 def backups(device_id: str, request: Request):
     device_or_404(device_id, request)
     return request.app.state.statestore.list_backups(device_id)
+
+
+@router.get("/devices/{device_id}/backups/{name}")
+def backup(device_id: str, name: str, request: Request):
+    device_or_404(device_id, request)
+    try:
+        return backup_details(request.app.state.statestore.backup_path(device_id, name))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        raise HTTPException(404, "no such backup") from None
+
+
+@router.get("/devices/{device_id}/presets-on-device")
+async def presets_on_device(device_id: str, request: Request):
+    dev = device_or_404(device_id, request)
+    async with make_client(request, dev) as client:
+        try:
+            text, presets = await inspect_device(client)
+        except (WLEDError, json.JSONDecodeError) as e:
+            raise device_errors(e) from None
+    lib = request.app.state.library.load()
+    all_named_ids = {item.get("preset_id") for kind in ("looks", "playlists")
+                     for item in lib[kind].values() if item.get("preset_id") is not None}
+    assigned_looks, assigned_playlists, _ = request.app.state.library.for_device(device_id)
+    assigned_ids = {item.get("preset_id") for item in assigned_looks + assigned_playlists
+                    if item.get("preset_id") is not None}
+    rows = preset_summary(presets)
+    for row in rows:
+        row["library"] = row["id"] in all_named_ids
+        row["on_device_set"] = row["id"] in assigned_ids
+    return {"name": dev.name, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "presets": rows}
+
+
+@router.post("/devices/{device_id}/presets/delete")
+async def delete_presets(device_id: str, body: PresetMutationIn, request: Request):
+    destructive_auth(request)
+    dev = device_or_404(device_id, request)
+    if body.confirm != dev.name:
+        raise HTTPException(400, "The device name did not match.")
+    if not body.preset_ids or body.backup is not None:
+        raise HTTPException(422, "Choose preset ids and do not supply a backup.")
+    try:
+        async with make_client(request, dev) as client:
+            _, current = await inspect_device(client)
+            expected = json.loads(json.dumps(current))
+            for preset_id in body.preset_ids:
+                expected.pop(str(preset_id), None)
+            backup = await mutate_presets(client, request.app.state.statestore, dev.id,
+                                          body.inspected_sha256, expected)
+    except PresetChanged as e:
+        raise HTTPException(409, str(e)) from None
+    except PresetVerification as e:
+        raise HTTPException(502, str(e)) from None
+    except WLEDError as e:
+        raise device_errors(e) from None
+    return {"deleted": body.preset_ids, "backup": backup}
+
+
+@router.post("/devices/{device_id}/presets/restore")
+async def restore_presets(device_id: str, body: PresetMutationIn, request: Request):
+    destructive_auth(request)
+    dev = device_or_404(device_id, request)
+    if body.confirm != dev.name:
+        raise HTTPException(400, "The device name did not match.")
+    if body.backup is None or body.preset_ids:
+        raise HTTPException(422, "Choose exactly one backup and no preset ids.")
+    try:
+        path = request.app.state.statestore.backup_path(device_id, body.backup)
+        expected = json.loads(path.read_text(encoding="utf-8"))
+        async with make_client(request, dev) as client:
+            backup = await mutate_presets(client, request.app.state.statestore, dev.id,
+                                          body.inspected_sha256, expected)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        raise HTTPException(404, "no such backup") from None
+    except PresetChanged as e:
+        raise HTTPException(409, str(e)) from None
+    except PresetVerification as e:
+        raise HTTPException(502, str(e)) from None
+    except WLEDError as e:
+        raise device_errors(e) from None
+    return {"restored": body.backup, "backup": backup}
 
 

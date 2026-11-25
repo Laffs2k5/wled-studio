@@ -5,6 +5,7 @@ import type { Look, Playlist, PushResult } from "../types";
 import { DeviceSetPanel } from "./DeviceSetPanel";
 import { SlotGrid } from "./SlotGrid";
 import { WriteBar } from "./WriteBar";
+import { PresetSafety } from "./PresetSafety";
 
 export function PresetsView({ deviceId, deviceName, notify, libraryVersion, onLibraryChanged, onOpenLook }: {
   deviceId: string;
@@ -45,6 +46,8 @@ export function PresetsView({ deviceId, deviceName, notify, libraryVersion, onLi
       <WriteBar key={`${deviceId}:${libraryVersion}`}
         deviceId={deviceId} deviceName={deviceName} notify={notify} version={libraryVersion}
         onPlan={setPlan} onLibraryChanged={onLibraryChanged} />
+      <PresetSafety deviceId={deviceId} deviceName={deviceName} notify={notify}
+        version={libraryVersion} onChanged={onLibraryChanged} />
     </section>
   );
 }

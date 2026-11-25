@@ -118,6 +118,15 @@ export const firmware = {
   forgetNotice: () => request<{ remembered: boolean }>("DELETE", "/api/notices/flash"),
   run: (id: string) => request<FlashRun>("GET", `/api/flashes/${encodeURIComponent(id)}`),
   previous: (device: string) => request<PreviousFirmware>("GET", `/api/devices/${encodeURIComponent(device)}/previous-firmware`),
+  backups: (device: string) => request<string[]>("GET", `/api/devices/${encodeURIComponent(device)}/backups`),
+  backup: (device: string, name: string) =>
+    request<PresetBackup>("GET", `/api/devices/${encodeURIComponent(device)}/backups/${encodeURIComponent(name)}`),
+  presetsOnDevice: (device: string) =>
+    request<PresetsOnDevice>("GET", `/api/devices/${encodeURIComponent(device)}/presets-on-device`),
+  deletePresets: (device: string, body: { confirm: string; inspected_sha256: string; preset_ids: number[] }) =>
+    request<{ deleted: number[]; backup: string }>("POST", `/api/devices/${encodeURIComponent(device)}/presets/delete`, body),
+  restorePresets: (device: string, body: { confirm: string; inspected_sha256: string; backup: string }) =>
+    request<{ restored: string; backup: string }>("POST", `/api/devices/${encodeURIComponent(device)}/presets/restore`, body),
 };
 
 /** What a device's other firmware slot holds, as far as the app knows (from its own flashes and reverts). */
@@ -163,6 +172,18 @@ export const slots = {
 
 /** The notice accepted before flashing or reverting (no warranty, no liability, no support). */
 export interface FlashNotice { version: string; title: string; text: string; remembered: boolean; accepted: string | null }
+
+export interface PresetsOnDevice {
+  name: string;
+  sha256: string;
+  presets: { id: number; name: string; library: boolean; on_device_set: boolean }[];
+}
+export interface PresetBackup {
+  name: string;
+  bytes: number;
+  sha256: string;
+  presets: { id: number; name: string }[];
+}
 
 /** A flash or revert as it runs. */
 export interface FlashRun {

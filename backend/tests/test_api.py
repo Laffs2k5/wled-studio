@@ -1,11 +1,61 @@
 # SPDX-License-Identifier: EUPL-1.2
 import json
 
-from conftest import CSRF
+from conftest import CSRF, private_resolver
+from dataclasses import replace
+from fastapi.testclient import TestClient
+from wledstudio.app import create_app
 
 
 def test_health(client):
     assert client.get("/api/health").json() == {"status": "ok"}
+
+
+def test_destructive_preset_delete_and_restore_are_authenticated_and_verified(
+        settings, device_transport):
+    protected = replace(settings, token="secret")
+    app = create_app(protected, transport_for=lambda dev: device_transport, resolver=private_resolver)
+    with TestClient(app) as client:
+        dev = client.post("/api/devices", json={"name": "Desk", "host": "wled.lan"},
+                          headers={**CSRF, "Authorization": "Bearer secret"}).json()
+        did = dev["id"]
+        h = {**CSRF, "Authorization": "Bearer secret"}
+        inspect = client.get(f"/api/devices/{did}/presets-on-device", headers=h).json()
+        current_hash = inspect["sha256"]
+        device = app.state.transport_for(dev) if False else None
+        # No shared token: the operation is refused before inspecting or writing.
+        raw = TestClient(create_app(settings, transport_for=lambda d: device_transport, resolver=private_resolver))
+        raw_dev = raw.post("/api/devices", json={"name": "Desk", "host": "wled.lan"}, headers=CSRF).json()
+        raw_inspect = raw.get(f"/api/devices/{raw_dev['id']}/presets-on-device").json()
+        refused = raw.post(f"/api/devices/{raw_dev['id']}/presets/delete",
+                           json={"confirm": "Desk", "inspected_sha256": raw_inspect["sha256"], "preset_ids": [1]},
+                           headers=CSRF)
+        assert refused.status_code == 409
+
+        app.state.library.put({"name": "Owned", "preset_id": 1, "segments": []})
+        # Seed the fake device, inspect it, then delete an unmanaged entry.
+        import_presets = client.post(f"/api/devices/{did}/push", json={"dry_run": False}, headers=h).json()
+        inspect = client.get(f"/api/devices/{did}/presets-on-device", headers=h).json()
+        assert any(p["id"] == 1 and p["library"] for p in inspect["presets"])
+
+        body = {"confirm": "Desk", "inspected_sha256": inspect["sha256"], "preset_ids": [1]}
+        deleted = client.post(f"/api/devices/{did}/presets/delete", json=body, headers=h)
+        assert deleted.status_code == 200, deleted.text
+        backup_name = deleted.json()["backup"]
+        assert backup_name.endswith("-presets.json")
+        after = client.get(f"/api/devices/{did}/presets-on-device", headers=h).json()
+        assert after["presets"] == []
+
+        restore_hash = after["sha256"]
+        restored = client.post(f"/api/devices/{did}/presets/restore",
+                               json={"confirm": "Desk", "inspected_sha256": restore_hash, "backup": backup_name},
+                               headers=h)
+        assert restored.status_code == 200, restored.text
+        assert client.get(f"/api/devices/{did}/presets-on-device", headers=h).json()["sha256"] != restore_hash
+
+        stale = client.post(f"/api/devices/{did}/presets/delete",
+                            json={"confirm": "Desk", "inspected_sha256": current_hash, "preset_ids": [1]}, headers=h)
+        assert stale.status_code == 409
 
 
 def test_add_list_remove_device(client):

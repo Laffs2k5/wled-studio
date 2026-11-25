@@ -96,6 +96,15 @@ class StateStore:
         d = self.backups / device_id
         return sorted(p.name for p in d.glob("*-presets.json")) if d.exists() else []
 
+    def backup_path(self, device_id: str, name: str) -> Path:
+        """Resolve one known backup below this device's directory; no traversal or cross-device path."""
+        if name != Path(name).name or not name.endswith("-presets.json"):
+            raise FileNotFoundError(name)
+        p = self.backups / device_id / name
+        if not p.is_file():
+            raise FileNotFoundError(name)
+        return p
+
 
 class DuplicatePresetIds(Exception):
     """Two looks (or a look and a playlist) want the same preset id: the write is refused."""
