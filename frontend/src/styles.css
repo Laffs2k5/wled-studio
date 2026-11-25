@@ -55,6 +55,21 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .keep-confirm p { margin: 0 0 .4rem; }
 .library-line { margin: -.25rem 0 .5rem; }
 .device-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+/* the current device's settings: a panel below the header, on every view */
+.device-settings { margin: 1rem 1.25rem 0; max-width: 40rem; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: .5rem 1.25rem .75rem; }
+.device-settings h2 { margin: .4rem 0; }
+.device-settings h3 { margin: .2rem 0; font-size: .95rem; }
+.device-settings p { margin: .2rem 0; }
+.settings-group { border-top: 1px solid var(--line); padding: .5rem 0; display: grid; gap: .4rem; }
+.settings-group .field { display: grid; gap: .25rem; }
+.settings-group > button { justify-self: start; }
+.settings-group .field input { width: 100%; max-width: 24rem; }
+.room-editor summary { cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* the result of an action, where the action was, until the next one */
+.action-result { margin: .3rem 0; padding: .3rem .6rem; border-left: 3px solid var(--ok); background: var(--deep); }
+.action-result.error { border-left-color: var(--bad); }
+@media (max-width: 600px) { .gear-text { display: none; } }
 .device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 27rem); gap: 1rem; padding: 1rem 1.25rem; }
 @media (max-width: 1000px) { .device-panel { grid-template-columns: 1fr; } }
 aside, main { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; min-width: 0; }

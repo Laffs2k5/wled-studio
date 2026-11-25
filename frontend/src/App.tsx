@@ -8,6 +8,7 @@ import { EffectStudio } from "./components/EffectStudio";
 import { SlotGrid } from "./components/SlotGrid";
 import { Firmware } from "./components/Firmware";
 import { TokenPrompt } from "./components/TokenPrompt";
+import { DeviceSettings } from "./components/DeviceSettings";
 import type { Device } from "./types";
 import { rememberedDevice } from "./devices";
 
@@ -22,6 +23,10 @@ export function App() {
   // the Effect studio's "Build firmware with these effects": the folders the Firmware view opens with
   const [buildRequest, setBuildRequest] = useState<{ folders: string[]; seq: number } | null>(null);
   const setView = (v: typeof view) => { setBuildRequest(null); setViewState(v); };
+  // the current device's settings, open below the header (and what to bring into view there)
+  const [settings, setSettings] = useState<{ focus: "room" | "address" | null } | null>(null);
+  // bumped when a room shape is saved: the views that draw it read it again
+  const [roomVersion, setRoomVersion] = useState(0);
 
   const notify = useCallback((msg: string, error = false) => {
     setToast({ msg, error });
@@ -46,6 +51,8 @@ export function App() {
 
   useEffect(reload, [reload]);
 
+  const cur = devices?.find((d) => d.id === current);
+
   if (needToken) {
     return (
       <div className="app">
@@ -66,13 +73,19 @@ export function App() {
           <button className={view === "firmware" ? "primary" : ""} onClick={() => setView("firmware")}>Firmware</button>
         </nav>
         {devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify}
-          hideAdd={devices.length === 0 && view === "looks"} />}
+          hideAdd={devices.length === 0 && view === "looks"}
+          settingsOpen={settings !== null} onSettings={() => setSettings(settings ? null : { focus: null })} />}
       </header>
-      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={devices?.find((d) => d.id === current)?.name} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} request={buildRequest} onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
+      {settings && cur && (
+        <DeviceSettings key={cur.id} device={cur} focus={settings.focus} notify={notify} onClose={() => setSettings(null)}
+          onChanged={reload} onRemoved={() => { setSettings(null); reload(); }} onRoomSaved={() => setRoomVersion((n) => n + 1)} />
+      )}
+      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={cur?.name} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} request={buildRequest} onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
         <EffectStudio notify={notify} device={current} onBuild={(folders) => { setViewState("firmware"); setBuildRequest({ folders, seq: Date.now() }); }} />
       ) :
-        current ? <DevicePanel key={current} deviceId={current} notify={notify}
-          deviceName={devices?.find((d) => d.id === current)?.name} host={devices?.find((d) => d.id === current)?.host} onVirtual={(v) => {
+        current ? <DevicePanel key={`${current}@${cur?.host ?? ""}`} deviceId={current} notify={notify}
+          deviceName={cur?.name} host={cur?.host} roomVersion={roomVersion}
+          onRoomShape={() => setSettings({ focus: "room" })} onEditAddress={() => setSettings({ focus: "address" })} onVirtual={(v) => {
           // the list says what the device was when last read; a different answer now: list again
           if (Boolean(devices?.find((d) => d.id === current)?.virtual) !== v) reload();
         }} /> : devices && (

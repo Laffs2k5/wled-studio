@@ -20,6 +20,50 @@ def test_add_list_remove_device(client):
     assert client.delete("/api/devices/desk", headers=CSRF).status_code == 404
 
 
+def test_edit_a_devices_name_and_address(client, dev_id):
+    r = client.patch(f"/api/devices/{dev_id}", json={"name": " Desk ", "host": "wled-other.lan"}, headers=CSRF)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"id": dev_id, "name": "Desk", "host": "wled-other.lan", "has_pin": False, "virtual": False}
+    assert client.get("/api/devices").json()[0]["host"] == "wled-other.lan"
+    # the address is checked as when adding; the name alone can change
+    assert client.patch(f"/api/devices/{dev_id}", json={"host": "wled.lan/path"}, headers=CSRF).status_code == 422
+    assert client.patch(f"/api/devices/{dev_id}", json={"name": "   "}, headers=CSRF).status_code == 422
+    assert client.patch(f"/api/devices/{dev_id}", json={"name": ""}, headers=CSRF).status_code == 422
+    assert client.patch(f"/api/devices/{dev_id}", json={"name": "Desk 2"}, headers=CSRF).json()["host"] == "wled-other.lan"
+    assert client.patch(f"/api/devices/{dev_id}", json={"pin": "1"}, headers=CSRF).status_code == 422
+    assert client.patch("/api/devices/nope", json={"name": "x"}, headers=CSRF).status_code == 404
+    assert client.patch(f"/api/devices/{dev_id}", json={"name": "x"}).status_code == 403   # the cross-site guard
+
+
+def test_removing_a_device_forgets_the_apps_records_of_it(client, dev_id, settings):
+    data = settings.data_dir
+    edges = [{"direction": "right", "pixels": 30}, {"direction": "down", "pixels": 30}]
+    assert client.put(f"/api/devices/{dev_id}/room", json={"edges": edges}, headers=CSRF).status_code == 200
+    assert client.put(f"/api/devices/{dev_id}/pin", json={"pin": "42"}, headers=CSRF).status_code == 204
+    client.post(f"/api/devices/{dev_id}/capture/Glow?preset_id=5", headers=CSRF)
+    assert client.put(f"/api/devices/{dev_id}/set", json={"looks": ["Glow"]}, headers=CSRF).status_code == 200
+    assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]
+    assert client.post(f"/api/devices/{dev_id}/session", headers=CSRF).status_code == 200
+    (data / "flashes" / dev_id).mkdir(parents=True)
+    (data / "flashes" / dev_id / "20260101T000000-flash.json").write_text("{}")
+    backups = list((data / "backups" / dev_id).glob("*-presets.json"))
+    assert backups and (data / "state" / f"{dev_id}.json").exists()
+
+    assert client.delete(f"/api/devices/{dev_id}", headers=CSRF).status_code == 204
+    assert not (data / "rooms" / f"{dev_id}.json").exists()
+    assert not (data / "state" / f"{dev_id}.json").exists()
+    assert not (data / "secrets" / f"{dev_id}.pin").exists()
+    assert not (data / "flashes" / dev_id).exists()
+    assert list((data / "backups" / dev_id).glob("*-presets.json")) == backups   # backups stay
+    assert [lk["name"] for lk in client.get("/api/looks").json()] == ["Glow"]    # the library stays
+    # added again under the same name: nothing of the old one comes back
+    r = client.post("/api/devices", json={"name": "Desk strip", "host": "wled-desk.lan"}, headers=CSRF)
+    assert r.json()["id"] == dev_id and r.json()["has_pin"] is False
+    assert client.get(f"/api/devices/{dev_id}/room").json() is None
+    assert client.get(f"/api/devices/{dev_id}/session").json()["active"] is False
+    assert client.get(f"/api/devices/{dev_id}/set").json()["all"] is True
+
+
 def test_device_host_is_validated(client):
     r = client.post("/api/devices", json={"name": "x", "host": "http://evil/path"}, headers=CSRF)
     assert r.status_code == 422

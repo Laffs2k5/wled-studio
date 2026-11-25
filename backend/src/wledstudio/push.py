@@ -52,6 +52,12 @@ class StateStore:
         p = self.dir / f"{device_id}.json"
         return json.loads(p.read_text()).get("written") if p.exists() else None
 
+    def forget(self, device_id: str) -> None:
+        """Drop the record of what was last written to a device (its drift baseline and palette
+        manifest), when the device is removed from the app. Backups stay."""
+        (self.dir / f"{device_id}.json").unlink(missing_ok=True)
+        (self.dir / f"{device_id}.palettes.json").unlink(missing_ok=True)
+
     def backup(self, device_id: str, text: str) -> Path:
         d = self.backups / device_id
         d.mkdir(parents=True, exist_ok=True)

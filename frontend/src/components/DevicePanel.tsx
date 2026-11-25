@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { VIRTUAL } from "../devices";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError } from "../api";
+import { api, ApiError, request } from "../api";
 import type { CheckItem, DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
 import { areas, type Room } from "../room";
 import { LiveStrip } from "./LiveStrip";
 import { LookEditor } from "./LookEditor";
-import { RoomEditor } from "./RoomEditor";
 import { SegmentLayout, SOUND_SIMULATIONS } from "./SegmentLayout";
 import { SegmentMap } from "./SegmentMap";
 import { SessionBar } from "./SessionBar";
@@ -26,12 +25,17 @@ interface Props {
   /** The device's name and address as listed, for the message when it doesn't answer. */
   deviceName?: string;
   host?: string;
+  /** Bumped when the room shape was saved (in the device settings): read it again. */
+  roomVersion?: number;
+  /** Open the device settings at the room shape, or at the address. */
+  onRoomShape?: () => void;
+  onEditAddress?: () => void;
 }
 
 /** What the panel shows instead of the live controls while the device doesn't answer: what's wrong,
  * what to check, and Try again. The library next to it stays usable. */
-export function DeviceOffline({ name, host, error, trying, onRetry }: {
-  name: string; host?: string; error: string; trying: boolean; onRetry: () => void;
+export function DeviceOffline({ name, host, error, trying, onRetry, onEditAddress }: {
+  name: string; host?: string; error: string; trying: boolean; onRetry: () => void; onEditAddress?: () => void;
 }) {
   const unreachable = /does not answer/.test(error);
   return (
@@ -47,6 +51,7 @@ export function DeviceOffline({ name, host, error, trying, onRetry }: {
       </p>
       <div className="row">
         <button className="primary" disabled={trying} onClick={onRetry}>{trying ? "Trying…" : "Try again"}</button>
+        {onEditAddress && <button onClick={onEditAddress}>Change the address…</button>}
       </div>
     </section>
   );
@@ -54,7 +59,7 @@ export function DeviceOffline({ name, host, error, trying, onRetry }: {
 
 const SEND_DELAY_MS = 120;
 
-export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host }: Props) {
+export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roomVersion = 0, onRoomShape, onEditAddress }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -70,6 +75,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host }: P
   const [openPlan, setOpenPlan] = useState(0);
   const [segId, setSegId] = useState(0);
   const [room, setRoom] = useState<Room | null>(null);
+  const [roomRead, setRoomRead] = useState(false);
   // bumped whenever the library is read again after a change: the write bar checks the device again
   const [version, setVersion] = useState(0);
   // the device didn't answer when the panel opened: why, and whether "Try again" is running
@@ -111,6 +117,14 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host }: P
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId, notify, reloadLooks, attempt]);
+
+  // the room shape (edited in the device settings): drawn by the live view and the segment map
+  useEffect(() => {
+    let live = true;
+    request<Room | null>("GET", `/api/devices/${encodeURIComponent(deviceId)}/room`)
+      .then((r) => { if (live) { setRoom(r); setRoomRead(true); } }).catch(() => {});
+    return () => { live = false; };
+  }, [deviceId, roomVersion]);
 
   const segment = state?.seg.find((s) => s.id === segId) ?? state?.seg[0];
 
@@ -219,7 +233,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host }: P
     return (
       <div className="device-panel offline">
         <main>
-          <DeviceOffline name={name} host={host} error={offline} trying={trying} onRetry={() => setAttempt((n) => n + 1)} />
+          <DeviceOffline name={name} host={host} error={offline} trying={trying} onRetry={() => setAttempt((n) => n + 1)}
+            onEditAddress={onEditAddress} />
         </main>
         {library(name)}
       </div>
@@ -338,7 +353,12 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host }: P
         <p className="muted small">
           {String(profile.info.product ?? "")} · WLED {String(profile.info.ver ?? "")} · {profile.leds.count} LEDs
         </p>
-        <RoomEditor deviceId={deviceId} ledCount={profile.leds.count} onSaved={setRoom} notify={notify} />
+        {roomRead && !room && onRoomShape && (
+          <p className="small muted row room-link">
+            <span>No room shape yet: the live view and the segment map show the strip as one line.</span>
+            <button className="small" onClick={onRoomShape}>Set the room shape…</button>
+          </p>
+        )}
         </>)}
       </main>
       {library()}

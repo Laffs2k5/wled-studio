@@ -27,12 +27,21 @@ test("builds a room shape, shows the LED total, saves it", async () => {
   expect(JSON.parse(put.body!)).toEqual({ edges: [{ direction: "right", pixels: 12, label: "A" }, { direction: "down", pixels: 8 }] });
 });
 
-test("loads an existing shape", async () => {
+test("loads an existing shape; saved is only said after a save", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ edges: [{ direction: "left", pixels: 5 }] }), { status: 200 })));
   const onSaved = vi.fn();
   render(<RoomEditor deviceId="desk" ledCount={5} onSaved={onSaved} notify={() => {}} />);
-  await waitFor(() => expect(onSaved).toHaveBeenCalledWith({ edges: [{ direction: "left", pixels: 5 }] }));
-  expect(screen.getByText("Room shape (1 walls)")).toBeInTheDocument();
+  expect(await screen.findByText("Room shape (1 walls)")).toBeInTheDocument();
+  expect(onSaved).not.toHaveBeenCalled();
+});
+
+test("without a known LED count, only the total; opened on request", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("null", { status: 200 })));
+  render(<RoomEditor deviceId="desk" onSaved={() => {}} notify={() => {}} defaultOpen />);
+  expect(await screen.findByText("Room shape (not set)")).toBeInTheDocument();
+  expect(screen.getByText("Add wall")).toBeVisible();
+  fireEvent.click(screen.getByText("Add wall"));
+  expect(screen.getByText("10 LEDs")).toBeInTheDocument();
 });
 
 test("zones are edited and saved with the shape", async () => {

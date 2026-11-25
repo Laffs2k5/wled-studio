@@ -17,18 +17,15 @@ function stub() {
   return calls;
 }
 
-test("sets the PIN of the current device; the PIN is write-only", async () => {
-  const calls = stub();
-  const onChanged = vi.fn();
-  render(<DeviceBar devices={devices} current="desk" onSelect={() => {}} onChanged={onChanged} notify={() => {}} />);
-  fireEvent.click(screen.getByText("PIN"));
-  const input = screen.getByLabelText("New settings PIN");
-  expect(input).toHaveAttribute("type", "password");
-  fireEvent.change(input, { target: { value: "4321" } });
-  fireEvent.click(screen.getByText("Save PIN"));
-  await waitFor(() => expect(onChanged).toHaveBeenCalled());
-  expect(calls[0].key).toBe("PUT /api/devices/desk/pin");
-  expect(JSON.parse(calls[0].body!)).toEqual({ pin: "4321" });
+test("the gear opens the current device's settings; there is no PIN button any more", () => {
+  stub();
+  const onSettings = vi.fn();
+  render(<DeviceBar devices={devices} current="desk" onSelect={() => {}} onChanged={() => {}} notify={() => {}} onSettings={onSettings} />);
+  expect(screen.queryByText("PIN")).toBeNull();
+  const gear = screen.getByRole("button", { name: "Device settings" });
+  expect(gear).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(gear);
+  expect(onSettings).toHaveBeenCalled();
 });
 
 test("adds a device from the header; a pasted URL is taken as its host", async () => {

@@ -3,15 +3,21 @@ import { useEffect, useState } from "react";
 import { request } from "../api";
 import { gapText, totalPixels, type Direction, type Room, type RoomEdge, type RoomZone } from "../room";
 
-/** The strip's shape: edges in LED index order. Used to draw the live view and previews. */
-export function RoomEditor({ deviceId, ledCount, onSaved, notify }: {
-  deviceId: string; ledCount: number; onSaved: (room: Room | null) => void; notify: (msg: string, error?: boolean) => void;
+/** The strip's shape: edges in LED index order. Used to draw the live view and previews. Lives in
+ * the device settings; `onSaved` is called after a save (not when the shape is first read). */
+export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = false }: {
+  deviceId: string;
+  /** The device's LED count, if known (unknown while it doesn't answer). */
+  ledCount?: number;
+  onSaved: (room: Room | null) => void;
+  notify: (msg: string, error?: boolean) => void;
+  defaultOpen?: boolean;
 }) {
   const [edges, setEdges] = useState<RoomEdge[]>([]);
   const [zones, setZones] = useState<RoomZone[]>([]);
   useEffect(() => {
     request<Room | null>("GET", `/api/devices/${encodeURIComponent(deviceId)}/room`)
-      .then((r) => { setEdges(r?.edges ?? []); setZones(r?.zones ?? []); onSaved(r); })
+      .then((r) => { setEdges(r?.edges ?? []); setZones(r?.zones ?? []); })
       .catch(() => { setEdges([]); setZones([]); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId]);
@@ -20,8 +26,10 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify }: {
   const setZone = (i: number, z: Partial<RoomZone>) => setZones(zones.map((x, j) => (j === i ? { ...x, ...z } : x)));
 
   return (
-    <details className="room-editor">
-      <summary>Room shape {edges.length ? `(${edges.length} walls)` : ""}</summary>
+    <details className="room-editor" open={defaultOpen || undefined}>
+      <summary>Room shape {edges.length ? `(${edges.length} walls)` : "(not set)"}</summary>
+      <p className="muted small">Which LEDs are on which wall. The live view and the segment map draw it, looks can follow
+        its walls, and room-aware effects take each LED's position from it.</p>
       <p className="muted small">Walls in LED order, from the first LED: a direction and how many LEDs.</p>
       {edges.map((e, i) => (
         <div className="row" key={i}>
@@ -58,7 +66,8 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify }: {
         <button onClick={() => setEdges([...edges, { direction: (["right", "down", "left", "up"] as Direction[])[edges.length % 4], pixels: 10 }])}>
           Add wall
         </button>
-        <span className={`small ${total === ledCount ? "muted" : "warn"}`}>{total} of {ledCount} LEDs</span>
+        {ledCount === undefined ? <span className="small muted">{total} LEDs</span>
+          : <span className={`small ${total === ledCount ? "muted" : "warn"}`}>{total} of {ledCount} LEDs</span>}
         {edges.length > 1 && gapText({ edges }) && (
           <span className="small warn" title="Fine for a strip along some walls only; round a whole room, opposite walls have the same LED count">
             {gapText({ edges })}: round a whole room, opposite walls need the same count.

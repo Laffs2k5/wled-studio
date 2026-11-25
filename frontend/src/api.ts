@@ -223,6 +223,7 @@ export const api = {
   devices: () => request<Device[]>("GET", "/api/devices"),
   addDevice: (name: string, host: string, pin?: string) =>
     request<Device>("POST", "/api/devices", pin ? { name, host, pin } : { name, host }),
+  editDevice: (id: string, body: { name?: string; host?: string }) => request<Device>("PATCH", `/api/devices/${enc(id)}`, body),
   removeDevice: (id: string) => request<null>("DELETE", `/api/devices/${enc(id)}`),
   setPin: (id: string, pin: string | null) => request<null>("PUT", `/api/devices/${enc(id)}/pin`, { pin }),
   profile: (id: string) => request<Profile>("GET", `/api/devices/${enc(id)}/profile`),

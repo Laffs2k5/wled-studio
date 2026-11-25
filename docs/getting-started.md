@@ -37,12 +37,21 @@ the Slot grid's write bar, the Effect studio's preview and room map, and the dev
 checks and flashes. The browser remembers it across reloads. Headings that name the device have a
 **Change device** link back to it.
 
-If the device has a **settings PIN** (WLED → Security), set it with the **PIN** button. It's needed
-only to write presets and palettes, and it's never shown again.
+**Device settings** (⚙ next to the Device select) holds what the app keeps about the current
+device; none of it is sent to the device:
+- **Name** and **Address**: change the address when the device got a new one (it's checked as when
+  adding);
+- **Settings PIN** (WLED → Security): needed to write presets, palettes and firmware, and never
+  shown again. **Save PIN** stores a new one; **Remove PIN** is a button of its own;
+- **Room shape** (section 4);
+- **Remove device…**: asks first and says what goes: the app's records of the device (its address,
+  PIN, room shape, which looks go on it, and the record of what the app last wrote and flashed).
+  Nothing on the device changes, the library stays, and backups of its presets stay in the data
+  folder.
 
 **A device that doesn't answer** (switched off, off the network, a wrong address): Looks & effects
 says so where the live controls would be ("Desk does not answer at 192.168.1.40. Check that it is
-powered and on the network."), with **Try again**. The library beside it stays usable: organise,
+powered and on the network."), with **Try again** and **Change the address…**. The library beside it stays usable: organise,
 rename and delete looks; showing, editing, importing and writing wait until the device answers.
 
 ## 3. Looks: effects with their own controls
@@ -100,9 +109,10 @@ the library too, and are written with the looks.
 
 ## 4. The room's shape
 
-Under **Room shape**, describe the strip as walls in LED order: a direction and how many LEDs each.
-The live view (**Live view of the strip**) and the Effect studio's preview are then drawn in that
-shape.
+Under **Room shape** in the device settings, describe the strip as walls in LED order: a direction
+and how many LEDs each. The live view (**Live view of the strip**) and the Effect studio's preview
+are then drawn in that shape. Until a device has one, Looks & effects links to it (**Set the room
+shape…**).
 
 ## 5. Effect studio: your own effects
 

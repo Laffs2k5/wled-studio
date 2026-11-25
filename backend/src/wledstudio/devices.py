@@ -64,6 +64,21 @@ class DeviceStore:
         self._save(devices)
         return dev
 
+    def update(self, device_id: str, name: str | None = None, host: str | None = None) -> Device | None:
+        """Change a device's name or address; its id (and so its PIN, set and room shape) stays.
+        A new address may be another device: whether it's virtual is learned again at the next read."""
+        devices = self._load()
+        dev = devices.get(device_id)
+        if dev is None:
+            return None
+        if name is not None:
+            dev.name = name
+        if host is not None and host != dev.host:
+            dev.host = host
+            dev.virtual = False
+        self._save(devices)
+        return dev
+
     def mark_virtual(self, device_id: str, virtual: bool) -> None:
         """Remember whether the device is virtual (written only when that changes)."""
         devices = self._load()

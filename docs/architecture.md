@@ -20,6 +20,9 @@ flowchart LR
   - `flashes/<device>/`: each flash and revert, with what the device ran before (`before`). Both
     swap WLED's two firmware slots, so the latest one that reached the device says what the other
     slot holds (`GET /api/devices/<id>/previous-firmware`; unknown before the app's first).
+  - Removing a device (`DELETE /api/devices/<id>`) deletes its entry, PIN, set, room shape,
+    `state/` files and `flashes/<device>/`, and ends its editing session; `backups/<device>/`
+    stays. So a device added again under the same name (and so the same id) starts clean.
 - **The library is the source of truth.** A device's `presets.json` is generated from it: looks are
   stored with effect and palette *names* and a snapshot of each effect's metadata, and resolved to
   the device's ids when written (see `backend/src/wledstudio/library.py` for the change-check

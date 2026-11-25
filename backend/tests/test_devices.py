@@ -43,3 +43,14 @@ def test_remove_deletes_pin(tmp_path):
     assert s.remove(d.id)
     assert s.pin(d.id) is None
     assert not s.remove(d.id)
+
+
+def test_update_keeps_the_id_and_forgets_virtual_on_a_new_address(tmp_path):
+    s = DeviceStore(tmp_path)
+    d = s.add("Desk", "a.lan")
+    s.mark_virtual(d.id, True)
+    assert s.update(d.id, name="Desk 2").virtual is True
+    u = s.update(d.id, host="b.lan")
+    assert (u.id, u.name, u.host, u.virtual) == (d.id, "Desk 2", "b.lan", False)
+    assert s.get(d.id).host == "b.lan"
+    assert s.update("nope", name="x") is None

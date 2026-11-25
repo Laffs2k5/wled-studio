@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -33,6 +34,11 @@ class DeviceIn(Strict):
     name: str = Field(min_length=1, max_length=64)
     host: str = Field(min_length=1, max_length=260)
     pin: SecretStr | None = Field(default=None, max_length=16)
+
+
+class DeviceEditIn(Strict):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    host: str | None = Field(default=None, min_length=1, max_length=260)
 
 
 class PinIn(Strict):
@@ -248,11 +254,14 @@ def health():
     return {"status": "ok"}
 
 
+def device_view(ds: DeviceStore, d: Device) -> dict:
+    return {"id": d.id, "name": d.name, "host": d.host, "has_pin": ds.pin(d.id) is not None, "virtual": d.virtual}
+
+
 @router.get("/devices")
 def list_devices(request: Request):
     ds = request.app.state.devices
-    return [{"id": d.id, "name": d.name, "host": d.host, "has_pin": ds.pin(d.id) is not None, "virtual": d.virtual}
-            for d in ds.list()]
+    return [device_view(ds, d) for d in ds.list()]
 
 
 @router.post("/devices", status_code=201)
@@ -269,11 +278,39 @@ def add_device(body: DeviceIn, request: Request):
     return {"id": dev.id, "name": dev.name, "host": dev.host, "has_pin": body.pin is not None, "virtual": dev.virtual}
 
 
+@router.patch("/devices/{device_id}")
+def edit_device(device_id: str, body: DeviceEditIn, request: Request):
+    """Change a device's name or address (checked as when adding). Nothing is sent to the device."""
+    device_or_404(device_id, request)
+    host = None
+    if body.host is not None:
+        s = request.app.state.settings
+        try:
+            host = netcheck.check_device_host(body.host, s.allow_public_devices, request.app.state.resolver)
+        except netcheck.HostError as e:
+            raise HTTPException(422, str(e)) from None
+    name = body.name.strip() if body.name is not None else None
+    if name == "":
+        raise HTTPException(422, "the name can't be empty")
+    ds = request.app.state.devices
+    return device_view(ds, ds.update(device_id, name=name, host=host))
+
+
 @router.delete("/devices/{device_id}", status_code=204)
 def remove_device(device_id: str, request: Request):
+    """Forget a device: the app's records of it go (its entry, PIN, set, room shape, the record of
+    what the app last wrote and flashed, an open editing session). Nothing on the device changes,
+    and the library's looks stay. Backups of its presets stay in the data folder."""
     if not request.app.state.devices.remove(device_id):
         raise HTTPException(404, "no such device")
     request.app.state.library.put_set(device_id, None)   # its set goes with it
+    data = request.app.state.settings.data_dir
+    (data / "rooms" / f"{device_id}.json").unlink(missing_ok=True)
+    request.app.state.statestore.forget(device_id)
+    request.app.state.sessions.end(device_id)
+    flashes = data / "flashes" / device_id
+    if flashes.is_dir():
+        shutil.rmtree(flashes)
 
 
 class SetIn(Strict):

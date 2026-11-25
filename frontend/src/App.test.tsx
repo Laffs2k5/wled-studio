@@ -266,3 +266,36 @@ test("a device that doesn't answer: the address, what to check, Try again, and t
   expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Device not answering" })).toBeNull();
 });
+
+test("device settings: a wrong address is changed from the offline card; the panel then reads the new address", async () => {
+  let host = "wled.lan";
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    const ok = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
+    if (url === "/api/devices") return ok([{ id: "desk", name: "Desk", host, has_pin: false }]);
+    if (method === "PATCH" && url === "/api/devices/desk") {
+      host = JSON.parse(String(init!.body)).host;
+      return ok({ id: "desk", name: "Desk", host, has_pin: false });
+    }
+    if (url.endsWith("/profile") || url.endsWith("/state") || url.endsWith("/check")) {
+      if (host === "wled.lan") return new Response(JSON.stringify({ detail: "http://wled.lan/json/info: ConnectError" }), { status: 502 });
+      return ok(url.endsWith("/profile") ? profile : url.endsWith("/state") ? state : []);
+    }
+    if (url.endsWith("/room")) return ok(null);
+    return ok([]);
+  }));
+  render(<App />);
+  const card = await screen.findByRole("region", { name: "Device not answering" });
+  fireEvent.click(within(card).getByRole("button", { name: "Change the address…" }));
+  const settings = screen.getByRole("region", { name: "Device settings" });
+  const address = within(settings).getByLabelText("Address (IP or host name)");
+  await waitFor(() => expect(address).toHaveFocus());
+  fireEvent.change(address, { target: { value: "wled-desk.lan" } });
+  fireEvent.click(within(settings).getByRole("button", { name: "Save name and address" }));
+  expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();
+  // no room shape yet: a link to it from the live column opens the settings there
+  fireEvent.click(within(settings).getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("region", { name: "Device settings" })).toBeNull();
+  fireEvent.click(await screen.findByRole("button", { name: "Set the room shape…" }));
+  expect(await within(screen.getByRole("region", { name: "Device settings" })).findByText("Room shape (not set)")).toBeVisible();
+});
