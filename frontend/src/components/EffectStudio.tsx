@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { deviceLabel } from "../devices";
 import { useEffect, useRef, useState } from "react";
 import { api, firmware, request, token } from "../api";
 import { drawPixels, type Room } from "../room";
@@ -12,6 +11,7 @@ import { EffectControls } from "./EffectControls";
 import { compileMessages, type Place } from "../compileLog";
 import { remembered } from "../remember";
 import { elapsed, timeOfDay, useElapsed } from "../time";
+import { GitPanel } from "./GitPanel";
 
 const LENGTH = 60;
 // a preview without WLED's own colour code has two stand-ins: the colour slot, and a colour wheel
@@ -62,16 +62,16 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   const [failure, setFailure] = useState<{ job: string; log: string } | null>(null);
   const [jump, setJump] = useState<(Place & { seq: number }) | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
-  const [target, setTarget] = useState(device ?? "");
   const socket = useRef<WebSocket | null>(null);
-  // a new device in the header becomes the preview's device (not while streaming to another)
-  useEffect(() => { if (!socket.current) setTarget(device ?? ""); }, [device]);
+  const target = device ?? "";
   const [streaming, setStreaming] = useState(false);
   // sound for sound effects in the preview: null = WLED's simulated beat, else a level 0-255.
   // A newly loaded preview starts with the simulation.
   const [level, setLevel] = useState<number | null>(null);
   useEffect(() => { setLevel(null); }, [preview]);
   const [room, setRoom] = useState<Room | null>(null);
+  const [codeFolder, setCodeFolder] = useState<string | null>(null);
+  const [codeVersion, setCodeVersion] = useState(0);
 
   // a chosen device's room shape (and LED count) shapes the preview
   useEffect(() => {
@@ -88,6 +88,12 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   }, [target, preview]);
 
   useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
+  useEffect(() => {
+    if (!socket.current) return;
+    socket.current.close();
+    socket.current = null;
+    setStreaming(false);
+  }, [device]);
   // streaming stops when the view is left (unmounted) or the tab is closed or reloaded
   useEffect(() => {
     const stop = () => { socket.current?.close(); socket.current = null; };
@@ -243,8 +249,12 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   // the code editor works with or without a preview: without one, it's how the first preview starts
   const editor = (
     <CodeEditor notify={notify} device={device} jump={jump} openFile={openFile} onFileOpen={onOpenFile}
+      showGit={false}
+      onFolder={(folder) => setCodeFolder(folder)}
+      onVersion={(folder) => { setCodeFolder(folder); setCodeVersion((version) => version + 1); }}
       previewIds={effects.filter((e) => e.id >= 200).map((e) => ({ id: e.id, by: e.name }))}
       onCreated={(folder) => {
+        setCodeFolder(folder);
         // a new folder: compilable at once, and ticked (known gap 11: it waited for a reload)
         if (mine && !mine.includes(folder)) setMine([...mine, folder]);
         setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
@@ -254,7 +264,9 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
       if (mine && !mine.includes(folder)) setMine([...mine, folder]);
       setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
       if (shown?.folders.includes(folder)) setStale(true);
+      setCodeVersion((version) => version + 1);
     }} onOpen={(folder) => {
+      setCodeFolder(folder);
       // the open file's folder is the one to compile: only a folder the builder knows (before its list
       // has come, it's ticked anyway; the list, when it comes, drops a folder it doesn't have)
       if (mine === null || mine.includes(folder)) setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
@@ -267,8 +279,9 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
         <h2>Effect studio</h2>
         {!device && <p className="first-run-note">You can try effects in the browser without a device; add one to stream to the strip.</p>}
         <p>This build has no effect preview ({error}). Previews are compiled with Emscripten by wled-studio-builder.</p>
-        {compileBox}
         {editor}
+        <h2>2. Compile</h2>
+        {compileBox}
       </section>
     );
   }
@@ -291,7 +304,11 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
           <button onClick={stopStream}>Stop</button>
         </div>
       )}
+      <h2>1. Edit</h2>
+      {editor}
+      <h2>2. Compile</h2>
       {compileBox}
+      <h2>3. Preview and stream</h2>
       <p className="small preview-caption" aria-label="What the preview shows">
         {shown
           ? <>Showing: <strong>{shown.folders.join(", ")}</strong>, compiled {timeOfDay(shown.at)}.</>
@@ -303,13 +320,11 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
         )}
       </p>
       <canvas ref={canvas} width={960} height={room ? 360 : 32} className={room ? "room" : "strip"} aria-label="Preview strip" />
-      {devices.length > 0 && (
+      {target && (
         <div className="row">
-          <label className="small" htmlFor="studio-device">Device <span className="muted">(the preview takes its room shape and LED count)</span></label>
-          <select id="studio-device" value={target} disabled={streaming} onChange={(e) => setTarget(e.target.value)}>
-            <option value="">No device: a plain strip</option>
-            {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
-          </select>
+          <p className="small grow" aria-label="Preview device">Device: <strong>{devices.find((d) => d.id === target)?.name ?? target}</strong>
+            <span className="muted"> (the preview takes its room shape and LED count)</span>
+          </p>
           {!streaming && (
             <button disabled={!target} onClick={toggleStream}
               title="The device's LEDs show this preview live (DDP) instead of their own effect, until you stop">
@@ -367,13 +382,15 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
           <p className="muted small">Browser microphone input is not available in this build.</p>
         </fieldset>
       )}
+      <h2>4. Commit and push</h2>
+      {codeFolder ? <GitPanel folder={codeFolder} version={codeVersion} notify={notify} />
+        : <p className="muted small">Open an effect folder to review its Git changes.</p>}
       {shown && onBuild && (
         <p className="next-step small">
           Happy with it? To run it on the controller it must be built into firmware.{" "}
           <button className="link" onClick={() => onBuild(shown.folders)}>Build firmware with {shown.folders.join(", ")} →</button>
         </p>
       )}
-      {editor}
     </section>
   );
 }

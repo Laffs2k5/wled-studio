@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { deviceLabel } from "../devices";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { api, effects, type EffectFolder, type RoomMapStatus } from "../api";
 import { when } from "./WriteBar";
 import { GitPanel } from "./GitPanel";
@@ -22,7 +22,7 @@ export function nextFreeId(used: UsedId[]): number | null {
 
 /** Edit your effect usermods' files (./effects), and start new ones from a template. */
 export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null, previewIds = [], onCreated, onCompile,
-  openFile = null, onFileOpen }: {
+  openFile = null, onFileOpen, showGit = true, onFolder, onVersion }: {
   notify: (msg: string, error?: boolean) => void;
   onSaved?: (folder: string) => void;
   /** Effect ids the preview has (the built-in example's, say), besides the folders' own. */
@@ -40,6 +40,10 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   /** A file from the app URL, opened after the folder list is read. */
   openFile?: { folder: string; name: string } | null;
   onFileOpen?: (folder: string, name: string) => void;
+  /** The Effect code view renders Git later in the process; other callers can keep it here. */
+  showGit?: boolean;
+  onFolder?: (folder: string | null) => void;
+  onVersion?: (folder: string) => void;
 }) {
   const [folders, setFolders] = useState<EffectFolder[] | null>(null);
   const [file, setFile] = useState<{ folder: string; name: string } | null>(null);
@@ -59,6 +63,8 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   const [saves, setSaves] = useState(0);      // refreshes the git panel (and the room map's line) after a save
   const [mapStatus, setMapStatus] = useState<RoomMapStatus | null>(null);
   const [mapResult, setMapResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const onFolderRef = useRef(onFolder);
+  onFolderRef.current = onFolder;
   const openFolder = file?.folder ?? null;
   useEffect(() => { setMapResult(null); }, [openFolder]);
   useEffect(() => {
@@ -67,7 +73,10 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   }, [openFolder, saves]);
   useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
 
-  const reload = useCallback(() => effects.list().then(setFolders).catch(() => setFolders(null)), []);
+  const reload = useCallback(() => effects.list().then((next) => {
+    setFolders(next);
+    onFolderRef.current?.(next[0]?.folder ?? null);
+  }).catch(() => setFolders(null)), []);
   useEffect(() => { reload(); }, [reload]);
 
   async function open(folder: string, name: string): Promise<boolean> {
@@ -166,6 +175,7 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
             setDirty(false);
             setBuffers((all) => ({ ...all, [`${file!.folder}/${file!.name}`]: { text, dirty: false } }));
             setSaves((n) => n + 1);
+            onVersion?.(file!.folder);
             notify(`Saved ${file!.folder}/${file!.name}`);
             onSaved?.(file!.folder);
           } catch (e) { notify((e as Error).message, true); }
@@ -228,7 +238,7 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
           )}
         </form>
       )}
-      {(file?.folder ?? folders[0]?.folder) && (
+      {showGit && (file?.folder ?? folders[0]?.folder) && (
         <GitPanel folder={file?.folder ?? folders[0].folder} version={saves} notify={notify} />
       )}
       {file && devices.length > 0 && (
@@ -257,6 +267,7 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
                   setMapResult({ ok: true, text: `room_map.h generated: ${r.leds} LEDs.` });
                   await reload();
                   setSaves((n) => n + 1);           // the git panel lists the new or changed file
+                  onVersion?.(file.folder);
                   if (file.name === "room_map.h" && !dirty) open(file.folder, file.name);
                 })
                 .catch((e) => setMapResult({ ok: false, text: e.message }))}>Generate room_map.h</button>

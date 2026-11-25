@@ -224,12 +224,12 @@ test("streams to the header's device: sizes the preview to its LEDs and opens th
   m._preview_setup = (n: number) => { setups.push(n); };
   // the header's device is the preview's device, without picking it here
   render(<EffectStudio notify={() => {}} device="desk" load={async () => new Preview(m as never)} />);
-  expect(await screen.findByLabelText("Device (the preview takes its room shape and LED count)")).toHaveValue("desk");
+  expect(await screen.findByLabelText("Preview device")).toHaveTextContent("Device: Desk");
   fireEvent.click(screen.getByText("Show on the real strip"));
   // while streaming: a banner that says so, with Stop; the device can't change meanwhile
   const banner = await screen.findByLabelText("Streaming");
   expect(banner).toHaveTextContent("Streaming to Desk. The strip shows this preview instead of its own effect");
-  expect(screen.getByLabelText("Device (the preview takes its room shape and LED count)")).toBeDisabled();
+  expect(screen.queryByLabelText("Device (the preview takes its room shape and LED count)")).toBeNull();
   expect(setups).toContain(250);   // the room's LEDs, then the device's
   expect(screen.getByLabelText("Preview strip")).toHaveClass("room");
   expect(sockets[0].url).toMatch(/\/api\/devices\/desk\/stream$/);
