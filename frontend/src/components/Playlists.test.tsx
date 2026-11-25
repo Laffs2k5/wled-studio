@@ -97,6 +97,7 @@ test("lists and deletes playlists", async () => {
     playlists={[{ name: "Mix", preset_id: 9, entries: [{ look: "Calm", duration: 100, transition: 7 }], repeat: 0, shuffle: true }]} />);
   expect(screen.getByText("1 look, shuffled, 10 s per round · preset 9")).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Delete playlist Mix"));
+  fireEvent.click(screen.getByRole("button", { name: "Delete playlist" }));
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   expect(f).toHaveBeenCalledWith("/api/playlists/Mix", expect.objectContaining({ method: "DELETE" }));
 });

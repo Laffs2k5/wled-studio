@@ -54,6 +54,8 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
   const [seconds, setSeconds] = useState("30");
   const [shown, setShown] = useState<{ name: string; ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [newFolder, setNewFolder] = useState<{ name: string; value: string } | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const byName = new Map(looks.map((l) => [l.name, l]));
 
   function reset() {
@@ -125,7 +127,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
                 <button aria-label={`Edit playlist ${p.name}`} onClick={() => edit(p)}>Edit</button>
                 <select aria-label={`Folder for ${p.name}`} value={p.folder ?? ""} onChange={(e) => {
                   let to: string | null = e.target.value || null;
-                  if (to === "\u0000new") to = prompt("New folder name")?.trim() || null;
+                  if (to === "\u0000new") { setNewFolder({ name: p.name, value: "" }); return; }
                   if (to === (p.folder ?? null)) return;
                   api.setFolder("playlists", [p.name], to).then(onChanged).catch((er) => notify(er.message, true));
                 }}>
@@ -133,9 +135,27 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
                   {folders([...playlists, ...looks]).map((f) => <option key={f} value={f}>{f}</option>)}
                   <option value={"\u0000new"}>A new folder…</option>
                 </select>
+                {newFolder?.name === p.name && (
+                  <span className="inline-edit row">
+                    <input autoFocus aria-label={`New folder for playlist ${p.name}`} value={newFolder.value}
+                      onChange={(e) => setNewFolder({ ...newFolder, value: e.target.value })} />
+                    <button disabled={!newFolder.value.trim()} onClick={() => {
+                      api.setFolder("playlists", [p.name], newFolder.value.trim())
+                        .then(() => { setNewFolder(null); onChanged(); }).catch((er) => notify(er.message, true));
+                    }}>Move</button>
+                    <button onClick={() => setNewFolder(null)}>Cancel</button>
+                  </span>
+                )}
                 <button className="danger" aria-label={`Delete playlist ${p.name}`}
-                  onClick={() => confirm(`Delete playlist “${p.name}”?`) &&
-                    api.deletePlaylist(p.name).then(onChanged).catch((e) => notify(e.message, true))}>×</button>
+                  onClick={() => setDeleting(p.name)}>×</button>
+                {deleting === p.name && (
+                  <div className="inline-confirm" role="group" aria-label={`Delete playlist ${p.name}?`}>
+                    <p>Delete “{p.name}” from the library? Its preset stays on the device until you remove it there.</p>
+                    <button className="danger" onClick={() => api.deletePlaylist(p.name)
+                      .then(() => { setDeleting(null); onChanged(); }).catch((e) => notify(e.message, true))}>Delete playlist</button>
+                    <button onClick={() => setDeleting(null)}>Cancel</button>
+                  </div>
+                )}
                 {shown?.name === p.name && (
                   <div className={`row action-result ${shown.ok ? "done" : "error"}`} aria-label="Show result">
                     <span className="grow" role={shown.ok ? undefined : "alert"}>{shown.text}</span>

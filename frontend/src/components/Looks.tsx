@@ -71,6 +71,15 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [moveTo, setMoveTo] = useState("");
   const [copyTo, setCopyTo] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [libraryMenu, setLibraryMenu] = useState(false);
+  const [renamingLook, setRenamingLook] = useState<string | null>(null);
+  const [lookName, setLookName] = useState("");
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const [dissolving, setDissolving] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [newRowFolder, setNewRowFolder] = useState("");
   const [set, setSet] = useState<DeviceSet | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [imported, setImported] = useState<{ ok: boolean; text: string } | null>(null);
@@ -104,28 +113,27 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   function changeSet(f: () => Promise<DeviceSet>, ok: string) {
     setBusy(true);
     // what goes on the device changed: the lists (and the write bar) are read again
-    f().then((s) => { setSet(s); notify(ok); onChanged(); }).catch((e) => notify((e as Error).message, true)).finally(() => setBusy(false));
+    return f().then((s) => { setSet(s); notify(ok); onChanged(); })
+      .catch((e) => notify((e as Error).message, true)).finally(() => setBusy(false));
   }
-  function copySelected() {
-    const target = others.find((d) => d.id === copyTo);
+  function copySelected(value = copyTo) {
+    const target = others.find((d) => d.id === value);
     if (!target) return;
     const names = order.filter((n) => selected.has(n));
     setBusy(true);
     api.addToSet(target.id, names).then((s) => {
       notify(s.all ? `${target.name} takes everything in the library already` : `Copied ${names.length} to ${target.name}'s set`);
       setCopyTo("");
+      setSelected(new Set());
     }).catch((e) => notify((e as Error).message, true)).finally(() => setBusy(false));
   }
 
-  function moveSelected() {
-    let folder: string | null = moveTo === "\u0000none" ? null : moveTo;
-    if (moveTo === "\u0000new") {
-      folder = prompt("New folder name")?.trim() || "";
-      if (!folder) return;
-    }
+  function moveSelected(value = moveTo, newName = newFolderName) {
+    const folder: string | null = value === "\u0000none" ? null : value === "\u0000new" ? newName.trim() : value;
+    if (value === "\u0000new" && !folder) return;
     const names = order.filter((n) => selected.has(n));
     organise(() => api.setFolder("looks", names, folder), `Moved ${names.length} to ${folder ? `“${folder}”` : "no folder"}`)
-      .then(() => { setSelected(new Set()); setMoveTo(""); });
+      .then(() => { setSelected(new Set()); setMoveTo(""); setNewFolderName(""); });
   }
 
   // the import's result stays under its button until the next import (or OK)
@@ -160,14 +168,23 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
 
   return (
     <section className="looks" aria-label="Looks">
-      <h2>Looks</h2>
+      <div className="row library-heading">
+        <h2 className="grow">Looks</h2>
+        <span className="row-menu">
+          <button className="menu-button" aria-label="More library actions" aria-expanded={libraryMenu}
+            onClick={() => setLibraryMenu(!libraryMenu)}>⋯</button>
+          {libraryMenu && (
+            <div className="menu" role="menu" aria-label="Library actions">
+              <button role="menuitem" disabled={busy || !!offline}
+                onClick={() => { setLibraryMenu(false); importFromDevice(); }}>
+                Import presets from {deviceName}
+              </button>
+            </div>
+          )}
+        </span>
+      </div>
       <p className="muted small library-line">Library: kept in the app, shared by all devices. Nothing here is on a device until you write presets.</p>
       {offline && <p className="small warn">Not checked against {offline}: it does not answer. Showing, editing and importing wait until it does.</p>}
-      <div className="row">
-        <button disabled={busy || !!offline} title={offline ? `${offline} does not answer` : undefined} onClick={importFromDevice}>
-          Import from device
-        </button>
-      </div>
       {imported && (
         <div className={`row action-result ${imported.ok ? "done" : "error"}`} aria-label="Import result">
           <span className="grow" role={imported.ok ? undefined : "alert"}>{imported.text}</span>
@@ -195,24 +212,36 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       {selected.size > 0 && (
         <div className="row bulk" aria-label="Selected looks">
           <span className="small">{selected.size} selected:</span>
-          <select aria-label="Move the selected looks to" value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+          <select aria-label="Move the selected looks to" value={moveTo} onChange={(e) => {
+            setMoveTo(e.target.value);
+            if (e.target.value && e.target.value !== "\u0000new") moveSelected(e.target.value);
+          }}>
             <option value="">Move to…</option>
             {known.map((f) => <option key={f} value={f}>{f}</option>)}
             <option value={"\u0000new"}>A new folder…</option>
             <option value={"\u0000none"}>No folder</option>
           </select>
-          <button disabled={busy || !moveTo} onClick={moveSelected}>Move</button>
+          {moveTo === "\u0000new" && (
+            <label className="row small">New folder
+              <input autoFocus aria-label="New folder for selected looks" value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); moveSelected(); } }} />
+              <button disabled={busy || !newFolderName.trim()} onClick={() => moveSelected()}>Create and move</button>
+            </label>
+          )}
           {others.length > 0 && (
             <>
-              <select aria-label="Copy the selected looks to device" value={copyTo} onChange={(e) => setCopyTo(e.target.value)}>
+              <select aria-label="Copy the selected looks to device" value={copyTo} onChange={(e) => {
+                setCopyTo(e.target.value);
+                if (e.target.value) copySelected(e.target.value);
+              }}>
                 <option value="">Copy to device…</option>
                 {others.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
               </select>
-              <button disabled={busy || !copyTo} onClick={copySelected}>Copy</button>
             </>
           )}
           <button disabled={busy} onClick={() => changeSet(() => api.removeFromSet(deviceId, order.filter((n) => selected.has(n))),
-            `Took ${selected.size} off ${deviceName}'s set`)}>Take off this device</button>
+            `Took ${selected.size} off ${deviceName}'s set`).then(() => setSelected(new Set()))}>Take off this device</button>
           <button onClick={() => setSelected(new Set())}>Clear selection</button>
         </div>
       )}
@@ -227,16 +256,47 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                 <button className="link" aria-expanded={open} onClick={() => setClosed(toggle(closed, key))}>
                   {open ? "▾" : "▸"} {folder ?? "Not in a folder"} ({items.length})
                 </button>
+                <label className="small">
+                  <input type="checkbox" aria-label={`Select all in ${folder ?? "Not in a folder"}`}
+                    checked={group.every((name) => selected.has(name))}
+                    onChange={(e) => setSelected((old) => {
+                      const next = new Set(old);
+                      group.forEach((name) => e.target.checked ? next.add(name) : next.delete(name));
+                      return next;
+                    })} />
+                  {" "}Select all
+                </label>
                 <button className="small" disabled={busy || items.length < 2} title="Sort this group A–Z"
                   onClick={() => organise(() => api.setOrder("looks", sortWithin(order, group)), "Sorted A–Z")}>A–Z</button>
-                {folder && <button className="small" disabled={busy} aria-label={`Rename folder ${folder}`} onClick={() => {
-                  const to = prompt(`New name for the folder “${folder}”`, folder)?.trim();
-                  if (to && to !== folder) organise(() => api.renameFolder(folder, to), `Renamed to “${to}”`);
-                }}>✎</button>}
-                {folder && <button className="small" disabled={busy} aria-label={`Dissolve folder ${folder}`}
+                {folder && renamingFolder === folder ? (
+                  <span className="inline-edit row">
+                    <input autoFocus aria-label={`New name for folder ${folder}`} value={folderName}
+                      onChange={(e) => setFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setRenamingFolder(null);
+                        if (e.key === "Enter" && folderName.trim() && folderName.trim() !== folder) {
+                          organise(() => api.renameFolder(folder, folderName.trim()), `Renamed to “${folderName.trim()}”`)
+                            .then(() => setRenamingFolder(null));
+                        }
+                      }} />
+                    <button disabled={busy || !folderName.trim() || folderName.trim() === folder}
+                      onClick={() => organise(() => api.renameFolder(folder, folderName.trim()), `Renamed to “${folderName.trim()}”`)
+                        .then(() => setRenamingFolder(null))}>Save</button>
+                    <button onClick={() => setRenamingFolder(null)}>Cancel</button>
+                  </span>
+                ) : folder && <button className="small" disabled={busy} aria-label={`Rename folder ${folder}`}
+                  onClick={() => { setRenamingFolder(folder); setFolderName(folder); }}>✎</button>}
+                {folder && dissolving === folder ? (
+                  <span className="inline-confirm" role="group" aria-label={`Dissolve folder ${folder}?`}>
+                    Looks and playlists stay in the library, in no folder.
+                    <button className="danger" disabled={busy}
+                      onClick={() => organise(() => api.renameFolder(folder, null), "Folder dissolved")
+                        .then(() => setDissolving(null))}>Dissolve folder</button>
+                    <button onClick={() => setDissolving(null)}>Cancel</button>
+                  </span>
+                ) : folder && <button className="small" disabled={busy} aria-label={`Dissolve folder ${folder}`}
                   title="Take its looks and playlists out of the folder (nothing is deleted)"
-                  onClick={() => confirm(`Dissolve the folder “${folder}”? Its looks and playlists stay, in no folder.`)
-                    && organise(() => api.renameFolder(folder, null), "Folder dissolved")}>×</button>}
+                  onClick={() => setDissolving(folder)}>×</button>}
               </div>
             )}
             {open && (
@@ -246,7 +306,23 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                 <input type="checkbox" aria-label={`Select ${l.name}`} checked={selected.has(l.name)}
                   onChange={() => setSelected(toggle(selected, l.name))} />
                 <div className="look-main">
-                  <span className="name" title={l.name}>{l.name}</span>
+                  {renamingLook === l.name ? (
+                    <span className="inline-edit row">
+                      <input autoFocus aria-label={`New name for ${l.name}`} value={lookName}
+                        onChange={(e) => setLookName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") setRenamingLook(null);
+                          if (e.key === "Enter" && lookName.trim() && lookName.trim() !== l.name) {
+                            run(() => api.renameLook(l.name, lookName.trim()), (r) => `Renamed to “${r.name}” in the library`)
+                              .then(() => { setRenamingLook(null); onChanged(); });
+                          }
+                        }} />
+                      <button disabled={busy || !lookName.trim() || lookName.trim() === l.name}
+                        onClick={() => run(() => api.renameLook(l.name, lookName.trim()), (r) => `Renamed to “${r.name}” in the library`)
+                          .then(() => { setRenamingLook(null); onChanged(); })}>Save</button>
+                      <button onClick={() => setRenamingLook(null)}>Cancel</button>
+                    </span>
+                  ) : <span className="name" title={l.name}>{l.name}</span>}
                   <div className="look-meta small">
                     <PresetIdEdit look={l} looks={looks} playlists={playlists} disabled={busy}
                       onSave={(pid) => api.setPresetId(l.name, pid).then((r) => {
@@ -302,18 +378,18 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                     {menu === l.name && (
                       <div className="menu" role="menu" aria-label={`Actions for ${l.name}`}>
                         <button role="menuitem" title="Rename; playlists that use it follow" onClick={() => {
-                          setMenu(null);
-                          const to = prompt(`New name for “${l.name}”`, l.name)?.trim();
-                          if (to && to !== l.name) run(() => api.renameLook(l.name, to), (r) => `Renamed to “${r.name}” in the library`).then(onChanged);
+                          setMenu(null); setRenamingLook(l.name); setLookName(l.name);
                         }}>Rename…</button>
                         <button role="menuitem" disabled={i === 0}
                           onClick={() => { setMenu(null); organise(() => api.setOrder("looks", moveWithin(order, group, l.name, -1))); }}>Move up</button>
                         <button role="menuitem" disabled={i === group.length - 1}
                           onClick={() => { setMenu(null); organise(() => api.setOrder("looks", moveWithin(order, group, l.name, 1))); }}>Move down</button>
                         {folderFor === l.name ? (
-                          <select autoFocus aria-label={`Folder for ${l.name}`} value="" onChange={(e) => {
+                          <span className="inline-edit">
+                            <select autoFocus aria-label={`Folder for ${l.name}`} value="" onChange={(e) => {
                             const v = e.target.value;
-                            const folder = v === "\u0000new" ? prompt("New folder name")?.trim() || "" : v === "\u0000none" ? null : v;
+                            if (v === "\u0000new") return;
+                            const folder = v === "\u0000none" ? null : v;
                             setMenu(null); setFolderFor(null);
                             if (folder === "") return;
                             organise(() => api.setFolder("looks", [l.name], folder), `Moved “${l.name}” to ${folder ? `“${folder}”` : "no folder"}`);
@@ -322,7 +398,15 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                             {known.filter((f) => f !== l.folder).map((f) => <option key={f} value={f}>{f}</option>)}
                             <option value={"\u0000new"}>A new folder…</option>
                             {l.folder && <option value={"\u0000none"}>No folder</option>}
-                          </select>
+                            </select>
+                            <input aria-label={`New folder for ${l.name}`} placeholder="New folder name" value={newRowFolder}
+                              onChange={(e) => setNewRowFolder(e.target.value)} />
+                            <button disabled={!newRowFolder.trim()} onClick={() => {
+                              const folder = newRowFolder.trim();
+                              setMenu(null); setFolderFor(null); setNewRowFolder("");
+                              organise(() => api.setFolder("looks", [l.name], folder), `Moved “${l.name}” to “${folder}”`);
+                            }}>Move</button>
+                          </span>
                         ) : (
                           <button role="menuitem" onClick={() => setFolderFor(l.name)}>Move to folder…</button>
                         )}
@@ -335,14 +419,19 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                           : <button role="menuitem" title={`Add it to ${deviceName}'s set`}
                               onClick={() => { setMenu(null); changeSet(() => api.addToSet(deviceId, [l.name]), `Added “${l.name}” to ${deviceName}'s set`); }}>
                               Put on this device</button>)}
-                        <button role="menuitem" className="danger" onClick={() => {
-                          setMenu(null);
-                          if (confirm(`Delete “${l.name}” from the library?`)) run(() => api.deleteLook(l.name)).then(onChanged);
-                        }}>Delete…</button>
+                        <button role="menuitem" className="danger" onClick={() => { setMenu(null); setDeleting(l.name); }}>Delete…</button>
                       </div>
                     )}
                   </span>
                 </div>
+                {deleting === l.name && (
+                  <div className="inline-confirm" role="group" aria-label={`Delete ${l.name}?`}>
+                    <p>Delete “{l.name}” from the library? Its preset stays on the device until you remove it there.</p>
+                    <button className="danger" disabled={busy}
+                      onClick={() => run(() => api.deleteLook(l.name)).then(() => { setDeleting(null); onChanged(); })}>Delete look</button>
+                    <button onClick={() => setDeleting(null)}>Cancel</button>
+                  </div>
+                )}
                 {keeping === l.name && (() => {
                   const item = status.get(l.name);
                   const fx = changedEffects(item);

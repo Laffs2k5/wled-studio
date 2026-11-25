@@ -41,7 +41,8 @@ test("import calls the API, refreshes, and leaves its result under the button", 
   const onChanged = vi.fn();
   const notify = vi.fn();
   render(<Looks deviceId="desk" looks={[]} onChanged={onChanged} onApplied={() => {}} notify={notify} />);
-  fireEvent.click(screen.getByText("Import from device"));
+  fireEvent.click(screen.getByLabelText("More library actions"));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Import presets from desk" }));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   expect(screen.getByLabelText("Import result")).toHaveTextContent(
     "Imported 1 new look from desk into the library. 2 looks already in the library were left as they are.");
@@ -54,7 +55,8 @@ test("import calls the API, refreshes, and leaves its result under the button", 
 test("a failed import says so where the import was", async () => {
   stubFetch({});
   render(<Looks deviceId="desk" looks={[]} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
-  fireEvent.click(screen.getByText("Import from device"));
+  fireEvent.click(screen.getByLabelText("More library actions"));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Import presets from desk" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't import from desk: no route");
 });
 
@@ -113,11 +115,11 @@ test("a refused preset id keeps the field open", async () => {
 test("show a look live; delete asks first", async () => {
   const calls = stubFetch({ "POST /api/devices/desk/apply/": { status: "ok", notes: [] }, "DELETE /api/looks/": null });
   const onApplied = vi.fn();
-  vi.stubGlobal("confirm", vi.fn(() => true));
   render(<Looks deviceId="desk" looks={looks} onChanged={() => {}} onApplied={onApplied} notify={() => {}} />);
   fireEvent.click(screen.getAllByText("Show on strip")[0]);
   await waitFor(() => expect(onApplied).toHaveBeenCalled());
   fireEvent.click(menu("Evening", "Delete…"));
+  fireEvent.click(screen.getByRole("button", { name: "Delete look" }));
   await waitFor(() => expect(calls.some((c) => c.key === "DELETE /api/looks/Evening")).toBe(true));
 });
 
@@ -176,13 +178,14 @@ test("Edit opens a look in the editor", () => {
 
 test("rename a look, and see which playlists use it", async () => {
   const calls = stubFetch({ "POST /api/looks/Evening/rename": { name: "Dusk", segments: [] } });
-  vi.stubGlobal("prompt", vi.fn(() => "Dusk"));
   const onChanged = vi.fn();
   const notify = vi.fn();
   render(<Looks deviceId="desk" looks={looks} onChanged={onChanged} onApplied={() => {}} notify={notify}
     playlists={[{ name: "Mix", entries: [{ look: "Evening", duration: 100, transition: 7 }], repeat: 0, shuffle: false }]} />);
   expect(screen.getByTitle("In Mix")).toHaveTextContent("in 1 playlist");
   fireEvent.click(menu("Evening", "Rename…"));
+  fireEvent.change(screen.getByLabelText("New name for Evening"), { target: { value: "Dusk" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   const call = calls.find((c) => c.key === "POST /api/looks/Evening/rename")!;
   expect(JSON.parse(call.body!)).toEqual({ to: "Dusk" });
@@ -223,21 +226,21 @@ describe("folders and order", () => {
     fireEvent.click(screen.getByLabelText("Select Party"));
     fireEvent.click(screen.getByLabelText("Select Calm"));
     fireEvent.change(screen.getByLabelText("Move the selected looks to"), { target: { value: "Storms" } });
-    fireEvent.click(screen.getByText("Move"));
     await waitFor(() => expect(libCalls(calls).length).toBe(1));
     expect(libCalls(calls)[0]).toEqual({ url: "/api/library/looks/folder", body: { names: ["Calm", "Party"], folder: "Storms" } });
   });
 
   test("collapses a folder, renames and dissolves it", async () => {
     const calls = stubLib();
-    vi.stubGlobal("prompt", () => "Weather");
-    vi.stubGlobal("confirm", () => true);
     render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
     fireEvent.click(screen.getByText(/Storms \(2\)/));
     expect(screen.queryByText("Rain")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Rename folder Storms"));
+    fireEvent.change(screen.getByLabelText("New name for folder Storms"), { target: { value: "Weather" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(libCalls(calls).at(-1)).toEqual({ url: "/api/library/folders/rename", body: { from: "Storms", to: "Weather" } }));
     fireEvent.click(screen.getByLabelText("Dissolve folder Storms"));
+    fireEvent.click(screen.getByRole("button", { name: "Dissolve folder" }));
     await waitFor(() => expect(libCalls(calls).at(-1)).toEqual({ url: "/api/library/folders/rename", body: { from: "Storms", to: null } }));
   });
 });
@@ -291,7 +294,6 @@ describe("what goes on this device", () => {
     await screen.findByText(/Desk has its own set/);
     fireEvent.click(screen.getByLabelText("Select Fire"));
     fireEvent.change(screen.getByLabelText("Copy the selected looks to device"), { target: { value: "test" } });
-    fireEvent.click(screen.getByText("Copy"));
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Copied 1 to Test board's set"));
     expect(calls.find((c) => c.key === "POST /api/devices/test/set/add")?.body).toEqual({ looks: ["Fire"], playlists: [] });
   });
