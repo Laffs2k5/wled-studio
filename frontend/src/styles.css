@@ -173,3 +173,7 @@ button.code-place { font: inherit; text-align: left; }
 .build-form p { margin: 0; }
 .firmware .ok { color: var(--ok); }
 .next-step { margin: .8rem 0 0; padding: .4rem .7rem; border-left: 3px solid var(--accent); }
+.jobs tr.open td { background: var(--hover); }
+.jobs tr.open td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.jobs tr:focus-visible { outline: 1px solid var(--accent); }
+.state-running td:last-child, .state-queued td:last-child { color: var(--accent); }

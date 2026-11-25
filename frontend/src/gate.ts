@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import type { FirmwareJob } from "./api";
+import { when } from "./time";
 
 /** One of the gate's checks, as the user reads it: the outcome, why it failed, what it means. */
 export interface GateLine { ok: boolean; text: string; meaning: string }
@@ -56,4 +57,22 @@ export function gateLines(report: Report | undefined): GateLine[] {
   return Object.entries(report?.checks ?? {}).map(([key, ok]) => LINES[key]?.(ok, report!) ?? (ok
     ? { ok, text: "A further check by the builder passed", meaning: "" }
     : { ok, text: "A further check by the builder failed", meaning: `${CANT} The build log says why.` }));
+}
+
+/** A build's result in a few words: "ready to flash", "failed check 1", "running", "waiting". */
+export function buildResult(j: FirmwareJob): string {
+  if (j.state === "queued") return "waiting";
+  if (j.state === "running") return "running";
+  if (j.state === "passed") return "ready to flash";
+  const i = Object.values(j.report?.checks ?? j.checks ?? {}).indexOf(false);
+  return i >= 0 ? `failed check ${i + 1}` : "failed";
+}
+
+/** The release a build's pins file names: "quinled-16.0.1" for quinled-16.0.1.json. */
+export const releaseOf = (pins: string) => pins.replace(/\.json$/, "");
+
+/** A firmware build as a heading: "dig-next-2 · quinled-16.0.1 with my_fx, built today 23:54: ready to flash". */
+export function buildTitle(j: FirmwareJob, now?: Date): string {
+  const done = j.state === "passed" || j.state === "failed";
+  return `${j.target} · ${releaseOf(j.pins)} with ${j.usermods.join(", ")}, ${done ? "built" : "started"} ${when(j.created, now)}: ${buildResult(j)}`;
 }

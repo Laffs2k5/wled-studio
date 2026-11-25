@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FlashPanel } from "./FlashPanel";
 import { api, firmware, type FirmwareJob, type FirmwareTarget, type Preflight } from "../api";
-import { gateLines } from "../gate";
+import { buildResult, buildTitle, gateLines, releaseOf } from "../gate";
+import { when } from "../time";
 import type { Device } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { ChangeDevice } from "./ChangeDevice";
@@ -117,6 +118,8 @@ export function Firmware({ notify, devices = [], device = null, request = null }
   const [pins, tgt] = target.split("|");
   const dev = devices.find((d) => d.id === device);
   const current = targets.find((t) => t.pins === pins && t.target === tgt);
+  // firmware builds only: the studio's preview compiles are its own business
+  const builds = jobs.filter((j) => j.kind !== "preview");
   const fitOf = (t: typeof targets[number]) => (dev && !dev.virtual ? targetFit(t, info) : null);
   const fit = current ? fitOf(current) : null;
   const match = dev && !dev.virtual ? matchingTarget(targets, info) : undefined;
@@ -175,20 +178,29 @@ export function Firmware({ notify, devices = [], device = null, request = null }
         </div>
       </form>
       {current && !current.verified.length && <p className="warn small">This target has no verified result yet, so its gate will fail.</p>}
-      <table className="jobs">
-        <thead><tr><th>Started</th><th>Target</th><th>Usermods</th><th>State</th></tr></thead>
-        <tbody>
-          {jobs.map((j) => (
-            <tr key={j.id} className={`state-${j.state}`} onClick={() => setOpen(j)}>
-              <td>{new Date(j.created * 1000).toLocaleString()}</td><td>{j.target}</td>
-              <td>{j.usermods.join(", ")}</td><td>{j.state}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {builds.length > 0 && (
+        <>
+          <h2>Your builds</h2>
+          <table className="jobs" aria-label="Your builds">
+            <thead><tr><th>When</th><th>Board and release</th><th>Effects</th><th>Result</th></tr></thead>
+            <tbody>
+              {builds.map((j) => (
+                <tr key={j.id} className={`state-${j.state}${open?.id === j.id ? " open" : ""}`} tabIndex={0}
+                  aria-selected={open?.id === j.id} title="Open this build"
+                  onClick={() => setOpen(j)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(j); } }}>
+                  <td>{when(j.created)}</td><td>{j.target} · {releaseOf(j.pins)}</td>
+                  <td>{j.usermods.join(", ")}</td>
+                  <td title={j.state === "failed" ? gateLines({ passed: false, checks: j.report?.checks ?? j.checks, error: j.error })
+                    .find((c) => !c.ok)?.text ?? j.error ?? undefined : undefined}>{buildResult(j)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
       {open && (
         <div className="job">
-          <h2>Build {open.id.slice(0, 8)}: {open.state}</h2>
+          <h2>{buildTitle(open)}</h2>
           {open.report?.checks && (
             <ul className="gate-checks" aria-label="Gate checks">
               {gateLines(open.report).map((c, i) => (
@@ -203,7 +215,7 @@ export function Firmware({ notify, devices = [], device = null, request = null }
           {open.state === "passed" && open.kind !== "preview" && !dev && (
             <p className="muted small">Add a device in the header to check your looks against this image and flash it.</p>
           )}
-          {open.state === "passed" && dev && (
+          {open.state === "passed" && open.kind !== "preview" && dev && (
             <div className="preflight">
               <h2>Before flashing: your looks on {dev.name} with this image <ChangeDevice /></h2>
               <div className="row">

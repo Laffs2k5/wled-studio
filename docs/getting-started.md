@@ -144,6 +144,10 @@ when the chosen one is another board or release than the device runs. The app te
 what the device reports (`/json/info`: its release name or product, and its version). Your last
 choice per device and the ticked folders are remembered in the browser.
 
+**Your builds** lists the firmware builds (the Effect studio's preview compiles aren't among them):
+when, board and release, effects, and the result: *ready to flash*, *failed check N* (hover for
+which) or *running*. Click one to open it.
+
 Supported boards are those with a pins file in wled-studio-builder (today: QuinLED's 16.0.0 and
 16.0.1 releases). **Flashing from the app isn't built yet**, by design: a self-built image goes to
 a spare board first.

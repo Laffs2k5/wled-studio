@@ -77,7 +77,7 @@ test("checks the library against a passed image before flashing", async () => {
     [`GET /api/firmware/jobs/${JID}/preflight?device=desk`]: json(preflight),
   });
   render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
-  fireEvent.click(await screen.findByText("board"));
+  fireEvent.click(await screen.findByRole("cell", { name: "board · q" }));
   fireEvent.click(await screen.findByRole("button", { name: "Check the library" }));
   expect(await screen.findByText("220 effects in the image. 2 ok, 1 review")).toBeInTheDocument();
   expect(screen.getByText("Tail")).toBeInTheDocument();
@@ -100,7 +100,7 @@ test("says so when flashing changes nothing", async () => {
     [`GET /api/firmware/jobs/${JID}/preflight?device=desk`]: json({ job: JID, device: "desk", effects: 3, counts: {}, rows: [] }),
   });
   render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
-  fireEvent.click(await screen.findByText("board"));
+  fireEvent.click(await screen.findByRole("cell", { name: "board · q" }));
   fireEvent.click(await screen.findByRole("button", { name: "Check the library" }));
   expect(await screen.findByText(/changes nothing for the library/)).toBeInTheDocument();
   expect(screen.getByText("3 effects in the image. Nothing in the library.")).toBeInTheDocument();
@@ -120,7 +120,7 @@ test("a virtual device gets one line instead of the flash step", async () => {
   const devices = [{ id: "desk", name: "Desk", host: "h", has_pin: false },
     { id: "twin", name: "Twin", host: "t", has_pin: false, virtual: true }];
   const { rerender } = render(<Firmware notify={() => {}} device="twin" devices={devices} />);
-  fireEvent.click(await screen.findByText("board"));
+  fireEvent.click(await screen.findByRole("cell", { name: "board · q" }));
   expect(await screen.findByText(/Twin is a virtual device: a software copy of WLED for testing/)).toBeInTheDocument();
   expect(screen.queryByText("Plan the flash")).toBeNull();
   expect(screen.queryByText(/The way back/)).toBeNull();
@@ -193,4 +193,39 @@ test("from the Effect studio: its folders ticked, and the matching target over t
   await waitFor(() => expect(screen.getByLabelText("Board and WLED release")).toHaveValue("a.json|dig-next-2"));
   expect(await screen.findByLabelText("other_fx")).toBeChecked();
   expect(screen.getByLabelText("my_fx")).not.toBeChecked();
+});
+
+test("lists firmware builds only, in plain words, and heads the open one with what it is", async () => {
+  const now = Date.now() / 1000;
+  const passed = { id: JID, kind: "gate", state: "passed", pins: "acme-16.0.1.json", target: "dig-next-2", usermods: ["my_fx"], created: now - 60,
+    report: { passed: true, checks: { stock_matches_verified: true } } };
+  const failed = { id: "b".repeat(32), kind: "gate", state: "failed", pins: "acme-16.0.1.json", target: "dig-next-2", usermods: ["my_fx"],
+    created: now - 120, checks: { stock_matches_verified: true, only_usermod_objects_changed: false }, error: null };
+  const running = { id: "c".repeat(32), kind: "gate", state: "running", pins: "acme-16.0.0.json", target: "board", usermods: ["a", "b"], created: now - 10 };
+  const preview = { id: "d".repeat(32), kind: "preview", state: "passed", pins: "acme-16.0.1.json", usermods: ["my_fx"], created: now - 5 };
+  stub({
+    "GET /api/firmware/status": json({ enabled: true }),
+    "GET /api/firmware/targets": json([]),
+    "GET /api/firmware/usermods": json([]),
+    "GET /api/firmware/jobs": json([preview, running, passed, failed]),
+    [`GET /api/firmware/jobs/${JID}`]: json(passed),
+    [`GET /api/firmware/jobs/${JID}/log`]: () => new Response("", { status: 200 }),
+  });
+  render(<Firmware notify={() => {}} />);
+  const table = await screen.findByRole("table", { name: "Your builds" });
+  const rows = [...table.querySelectorAll("tbody tr")].map((r) => [...r.querySelectorAll("td")].map((td) => td.textContent));
+  expect(rows).toHaveLength(3);                                    // no preview compile
+  expect(rows.map((r) => r.slice(1))).toEqual([
+    ["board · acme-16.0.0", "a, b", "running"],
+    ["dig-next-2 · acme-16.0.1", "my_fx", "ready to flash"],
+    ["dig-next-2 · acme-16.0.1", "my_fx", "failed check 2"],
+  ]);
+  expect(rows[0][0]).toMatch(/^today \d\d:\d\d$/);
+  expect(table.querySelectorAll("tbody tr")[2].querySelector("td:last-child")).toHaveAttribute("title",
+    expect.stringMatching(/^Something besides your effect code changed/));
+  fireEvent.click(screen.getByText("ready to flash"));
+  expect(await screen.findByRole("heading", { name: /^dig-next-2 · acme-16.0.1 with my_fx, built today \d\d:\d\d: ready to flash$/ }))
+    .toBeInTheDocument();
+  expect(table.querySelectorAll("tbody tr")[1]).toHaveClass("open");
+  expect(table.querySelectorAll("tbody tr")[1]).toHaveAttribute("aria-selected", "true");
 });

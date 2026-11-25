@@ -8,6 +8,7 @@ the configuration is ever contacted.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Annotated
 
@@ -86,9 +87,32 @@ async def usermods(request: Request):
     return (await _call(request, "GET", "/usermods")).json()
 
 
+MAX_LOOKUPS = 20   # failed jobs looked up per listing; the rest on later listings (they're cached)
+
+
 @router.get("/jobs")
 async def jobs(request: Request):
-    return (await _call(request, "GET", "/jobs")).json()
+    """The builder's jobs. A failed gate job also carries its report's `checks` and `error`, so a
+    list can say which check failed; the builder's list leaves the report out. A finished job
+    doesn't change, so its summary is kept."""
+    listed = (await _call(request, "GET", "/jobs")).json()
+    if not hasattr(request.app.state, "job_summaries"):
+        request.app.state.job_summaries = {}
+    known: dict[str, dict] = request.app.state.job_summaries
+    wanted = [j for j in listed if isinstance(j, dict) and j.get("state") == "failed" and j.get("kind", "gate") != "preview"
+              and isinstance(j.get("id"), str) and JOB_ID.match(j["id"]) and j["id"] not in known][:MAX_LOOKUPS]
+
+    async def summary(jid: str) -> None:
+        try:
+            report = (await _call(request, "GET", f"/jobs/{jid}")).json().get("report") or {}
+        except HTTPException:
+            return
+        checks = report.get("checks")
+        known[jid] = {"checks": checks if isinstance(checks, dict) else {},
+                      "error": report.get("error") if isinstance(report.get("error"), str) else None}
+
+    await asyncio.gather(*(summary(j["id"]) for j in wanted))
+    return [{**j, **known[j["id"]]} if isinstance(j, dict) and j.get("id") in known else j for j in listed]
 
 
 @router.post("/jobs", status_code=202)

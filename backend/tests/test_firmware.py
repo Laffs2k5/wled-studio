@@ -152,3 +152,31 @@ def test_effect_lists_are_checked():
     for bad in (None, {"effects": []}, {"effects": [{"id": 999, "name": "x", "meta": ""}]}):
         with pytest.raises(HTTPException):
             effect_lists(bad)
+
+
+def test_job_list_says_which_check_failed(tmp_path):
+    """A failed gate job in the list carries its report's checks (looked up once), so the UI can say
+    "failed check 1"; passed and preview jobs are listed as the builder has them."""
+    failed, preview = "f" * 32, "e" * 32
+    seen = []
+
+    def handle(request: httpx.Request):
+        seen.append(request.url.path)
+        if request.url.path == "/jobs":
+            return httpx.Response(200, json=[{"id": JID, "state": "passed", "kind": "gate"},
+                                             {"id": failed, "state": "failed", "kind": "gate"},
+                                             {"id": preview, "state": "failed", "kind": "preview"}])
+        if request.url.path == f"/jobs/{failed}":
+            return httpx.Response(200, json={"id": failed, "state": "failed", "report": {
+                "passed": False, "checks": {"stock_matches_verified": False, "fits_app_slot": True}, "error": None}})
+        return httpx.Response(404, json={"detail": "not found"})
+
+    s = Settings(data_dir=tmp_path, allowed_hosts=["testserver"], builder_url="http://builder:8090")
+    c = TestClient(create_app(s, resolver=private_resolver, builder_transport=httpx.MockTransport(handle)))
+    listed = c.get("/api/firmware/jobs").json()
+    assert listed[0] == {"id": JID, "state": "passed", "kind": "gate"}
+    assert listed[1]["checks"] == {"stock_matches_verified": False, "fits_app_slot": True} and listed[1]["error"] is None
+    assert "checks" not in listed[2]
+    c.get("/api/firmware/jobs")
+    assert seen.count(f"/jobs/{failed}") == 1                       # a finished job is looked up once
+    assert f"/jobs/{preview}" not in seen

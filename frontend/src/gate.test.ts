@@ -40,3 +40,12 @@ test("without details, a failed line still reads; an unknown check isn't shown b
   expect(gateLines(undefined)).toEqual([]);
   expect(gateLines({ passed: true, checks: { new_thing: true } })[0].text).toBe("A further check by the builder passed");
 });
+
+test("a build's result in a few words", async () => {
+  const { buildResult, buildTitle } = await import("./gate");
+  const base = { id: "x", pins: "acme-16.0.1.json", target: "board", usermods: ["fx"], created: new Date(2026, 10, 24, 23, 54).getTime() / 1000 };
+  expect(buildResult({ ...base, state: "queued" })).toBe("waiting");
+  expect(buildResult({ ...base, state: "failed" })).toBe("failed");                       // no checks: failed before them
+  expect(buildResult({ ...base, state: "failed", report: { passed: false, checks: { a: true, b: true, c: false } } })).toBe("failed check 3");
+  expect(buildTitle({ ...base, state: "running" }, new Date(2026, 10, 25, 1, 0))).toBe("board · acme-16.0.1 with fx, started yesterday 23:54: running");
+});

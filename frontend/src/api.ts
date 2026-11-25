@@ -57,6 +57,11 @@ export interface FirmwareJob {
   target: string;
   usermods: string[];
   created: number;
+  started?: number;
+  finished?: number;
+  /** In the job list, for a failed gate job: its report's checks and error (the list has no report). */
+  checks?: Record<string, boolean>;
+  error?: string | null;
   /** The builder's gate report, passed through as it is (wled-studio-builder: studio/gate.py). */
   report?: { passed: boolean; checks?: Record<string, boolean>; error?: string | null;
     app_slot_bytes?: number | null;
