@@ -21,13 +21,16 @@ interface Props {
   onEdit?: (name: string) => void;
   /** To show where each look is used. */
   playlists?: Playlist[];
+  /** The device's name while it doesn't answer: the library stays usable; showing and editing wait. */
+  offline?: string;
 }
 
-export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [] }: Props) {
+export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [], offline }: Props) {
   const usedIn = (name: string) => playlists.filter((p) => p.entries.some((e) => e.look === name) || p.end === name).map((p) => p.name);
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
   // a look whose effect (or palette, or wall) this device lacks can't be shown or edited here
-  const showable = (name: string) => status.get(name)?.status !== "unavailable";
+  const showable = (name: string) => !offline && status.get(name)?.status !== "unavailable";
+  const whyNot = (name: string) => (offline ? `${offline} does not answer` : explain(status.get(name), deviceName));
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -107,8 +110,9 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
     <section className="looks" aria-label="Looks">
       <h2>Looks</h2>
       <p className="muted small library-line">Library: kept in the app, shared by all devices. Nothing here is on a device until you write presets.</p>
+      {offline && <p className="small warn">Not checked against {offline}: it does not answer. Showing, editing and importing wait until it does.</p>}
       <div className="row">
-        <button disabled={busy} onClick={() => run(() => api.importPresets(deviceId),
+        <button disabled={busy || !!offline} title={offline ? `${offline} does not answer` : undefined} onClick={() => run(() => api.importPresets(deviceId),
           (r) => `Imported ${r.imported.length} preset${r.imported.length === 1 ? "" : "s"} from ${deviceName} into the library, kept ${r.kept_existing.length} existing`).then(onChanged)}>
           Import from device
         </button>
@@ -223,13 +227,13 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                     Accept
                   </button>
                 )}
-                <button disabled={busy || !showable(l.name)} title={showable(l.name) ? "Show it on the strip now" : explain(status.get(l.name), deviceName)}
+                <button disabled={busy || !showable(l.name)} title={showable(l.name) ? "Show it on the strip now" : whyNot(l.name)}
                   onClick={() => run(() => api.apply(deviceId, l.name), (r) => `Showing “${l.name}” on ${deviceName}${r.status === "ok" ? "" : ` (${r.status})`}`).then(onApplied)}>
                   Show
                 </button>
                 {onEdit && (
                   <button disabled={busy || !showable(l.name)} aria-label={`Edit ${l.name}`}
-                    title={showable(l.name) ? "Edit it in the library, without showing it" : explain(status.get(l.name), deviceName)}
+                    title={showable(l.name) ? "Edit it in the library, without showing it" : whyNot(l.name)}
                     onClick={() => onEdit(l.name)}>Edit</button>
                 )}
                 <button disabled={busy} aria-label={`Rename ${l.name}`} title="Rename; playlists that use it follow"

@@ -20,6 +20,19 @@ function detail(body: unknown, fallback: string): string {
   return fallback;
 }
 
+// the backend's word for a device that failed: "<url>: <exception class>" or "<url>: HTTP <code>"
+const DEVICE_FAILURE = /^(?:https?:\/\/(?<host>[^/\s]+)\S*|presets\.json): (?:HTTP (?<code>\d+)|(?<exc>\w+))$/;
+
+/** A device failure in plain words, without the exception's class name; other messages unchanged. */
+export function plainDeviceError(message: string): string {
+  const m = message.match(DEVICE_FAILURE);
+  if (!m?.groups) return message;
+  const at = m.groups.host ? `the device at ${m.groups.host}` : "the device";
+  if (m.groups.code) return `The ${at.slice(4)} answered with an error (HTTP ${m.groups.code}).`;
+  if (/^Connect|Timeout$/.test(m.groups.exc ?? "")) return `The ${at.slice(4)} does not answer. Check that it is powered and on the network.`;
+  return `The connection to ${at} broke off. Try again.`;
+}
+
 const TOKEN_KEY = "wledstudio.token";
 
 /** The optional access token (WLEDSTUDIO_TOKEN), kept for this browser session only. */
@@ -42,7 +55,10 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   const r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await r.text();
   const data = text ? JSON.parse(text) : null;
-  if (!r.ok) throw new ApiError(r.status, detail(data, `${r.status} ${r.statusText}`));
+  if (!r.ok) {
+    const msg = detail(data, `${r.status} ${r.statusText}`);
+    throw new ApiError(r.status, r.status === 502 ? plainDeviceError(msg) : msg);
+  }
   return data as T;
 }
 

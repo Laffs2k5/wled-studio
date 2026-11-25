@@ -227,3 +227,39 @@ test("the look editor: a frame of its own, the effect list picks for it, and aft
   fireEvent.click(screen.getByRole("button", { name: "OK" }));
   expect(screen.queryByRole("note", { name: "Saved look" })).toBeNull();
 });
+
+test("a device that doesn't answer: the address, what to check, Try again, and the library still usable", async () => {
+  let up = false;
+  const down = () => new Response(JSON.stringify({ detail: "http://wled.lan/json/info: ConnectError" }), { status: 502 });
+  const routes: Record<string, () => unknown> = {
+    "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
+    "GET /api/devices/desk/profile": () => profile,
+    "GET /api/devices/desk/state": () => state,
+    "GET /api/looks": () => [{ name: "Evening", preset_id: 3, segments: [] }],
+    "GET /api/playlists": () => [],
+    "GET /api/palettes": () => [],
+    "GET /api/devices/desk/room": () => null,
+  };
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    if (!up && (url.endsWith("/profile") || url.endsWith("/state") || url.endsWith("/check"))) return down();
+    const route = routes[key];
+    return route ? new Response(JSON.stringify(route()), { status: 200 })
+      : new Response(JSON.stringify({ detail: `no route ${key}` }), { status: 404 });
+  }));
+  render(<App />);
+  const card = await screen.findByRole("region", { name: "Device not answering" });
+  expect(card).toHaveTextContent("Desk does not answer at wled.lan.");
+  expect(card).toHaveTextContent("Check that it is powered and on the network");
+  expect(screen.queryByText(/ConnectError/)).toBeNull();
+  expect(screen.queryByRole("status")).toBeNull();                       // no raw toast
+  const looks = screen.getByRole("region", { name: "Looks" });
+  expect(within(looks).getByText("Evening")).toBeInTheDocument();
+  expect(within(looks).getByText(/Not checked against Desk: it does not answer/)).toBeInTheDocument();
+  expect(within(looks).getByRole("button", { name: "Show" })).toBeDisabled();
+  expect(within(looks).getByRole("button", { name: "Import from device" })).toBeDisabled();
+  up = true;
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Device not answering" })).toBeNull();
+});

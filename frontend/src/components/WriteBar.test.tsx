@@ -63,7 +63,7 @@ test("two looks on one preset id: the bar says nothing can be written", async ()
 test("a device that doesn't answer: said so, with Check again", async () => {
   const bodies = stub([new Error("http://wled.lan: ConnectError"), { ...base, palettes: [{ palette: "Ice", file: "palette0.json", id: 200 }] }]);
   render(<WriteBar deviceId="desk" deviceName="Desk" notify={() => {}} version={0} />);
-  expect(await screen.findByText("Couldn't check Desk: http://wled.lan: ConnectError", undefined, LATER)).toBeInTheDocument();
+  expect(await screen.findByText("Desk does not answer, so it can't be compared with the library. Check that it is powered and on the network.", undefined, LATER)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Check again" }));
   expect(await screen.findByText("Desk: presets match, 1 palette to upload")).toBeInTheDocument();
   expect(bodies.length).toBe(2);

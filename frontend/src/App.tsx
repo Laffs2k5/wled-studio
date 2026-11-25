@@ -69,10 +69,11 @@ export function App() {
       {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={devices?.find((d) => d.id === current)?.name} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} request={buildRequest} onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
         <EffectStudio notify={notify} device={current} onBuild={(folders) => { setViewState("firmware"); setBuildRequest({ folders, seq: Date.now() }); }} />
       ) :
-        current ? <DevicePanel key={current} deviceId={current} notify={notify} onVirtual={(v) => {
+        current ? <DevicePanel key={current} deviceId={current} notify={notify}
+          deviceName={devices?.find((d) => d.id === current)?.name} host={devices?.find((d) => d.id === current)?.host} onVirtual={(v) => {
           // the list says what the device was when last read; a different answer now: list again
           if (Boolean(devices?.find((d) => d.id === current)?.virtual) !== v) reload();
-        }} /> : devices && <p className="muted">Add a WLED device to start.</p>}
+        }} /> : devices && <p className="muted pad">Add a WLED device to start.</p>}
       {toast && <div role="status" className={`toast ${toast.error ? "error" : ""}`}>{toast.msg}</div>}
     </div>
   );

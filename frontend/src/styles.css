@@ -45,6 +45,10 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .saved-note { margin: 0 0 .5rem; padding: .3rem .6rem; border-left: 3px solid var(--ok); background: var(--deep); }
 .confirm { padding: .3rem .6rem; border: 1px solid var(--warn); border-radius: 6px; }
 .pad { padding: 1rem 1.25rem; }
+/* a device that doesn't answer: the message where the live controls were, the library beside it */
+.device-panel.offline { grid-template-columns: 1fr minmax(18rem, 24rem); }
+@media (max-width: 1000px) { .device-panel.offline { grid-template-columns: 1fr; } }
+.offline-card h2 { margin-top: .25rem; color: var(--warn); }
 .library-line { margin: -.25rem 0 .5rem; }
 .device-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 24rem); gap: 1rem; padding: 1rem 1.25rem; }

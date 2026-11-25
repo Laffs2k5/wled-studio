@@ -110,7 +110,7 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open?.id]);
 
-  if (enabled === null) return <p className="muted">Loading…</p>;
+  if (enabled === null) return <p className="muted pad">Loading…</p>;
   if (!enabled) {
     return (
       <section className="firmware">

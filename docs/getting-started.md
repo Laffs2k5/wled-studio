@@ -34,6 +34,11 @@ checks and flashes. The browser remembers it across reloads. Headings that name 
 If the device has a **settings PIN** (WLED → Security), set it with the **PIN** button. It's needed
 only to write presets and palettes, and it's never shown again.
 
+**A device that doesn't answer** (switched off, off the network, a wrong address): Looks & effects
+says so where the live controls would be ("Desk does not answer at 192.168.1.40. Check that it is
+powered and on the network."), with **Try again**. The library beside it stays usable: organise,
+rename and delete looks; showing, editing, importing and writing wait until the device answers.
+
 ## 3. Looks: effects with their own controls
 
 The effect list shows the device's effects (2D-only effects are hidden on strips; ♪ marks

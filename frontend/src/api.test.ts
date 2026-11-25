@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { api, ApiError, request } from "./api";
+import { api, ApiError, plainDeviceError, request } from "./api";
 
 function mockFetch(status: number, body: unknown) {
   const fn = vi.fn().mockImplementation(async () => new Response(body === null ? "" : JSON.stringify(body), { status }));
@@ -39,4 +39,14 @@ test("names in paths are encoded", async () => {
   expect(f.mock.calls[0][0]).toBe("/api/devices/desk/capture/Evening%20%2F%20warm?preset_id=4");
   await api.addDevice("A", "wled.lan", "1234");
   expect(JSON.parse(f.mock.calls[1][1].body)).toEqual({ name: "A", host: "wled.lan", pin: "1234" });
+});
+
+test("a device failure reads in plain words, without the exception's class name", () => {
+  expect(plainDeviceError("http://192.0.2.7:8081/json/info: ConnectError"))
+    .toBe("The device at 192.0.2.7:8081 does not answer. Check that it is powered and on the network.");
+  expect(plainDeviceError("http://wled.lan: ReadTimeout")).toBe("The device at wled.lan does not answer. Check that it is powered and on the network.");
+  expect(plainDeviceError("presets.json: ConnectTimeout")).toBe("The device does not answer. Check that it is powered and on the network.");
+  expect(plainDeviceError("http://wled.lan/json/state: HTTP 500")).toBe("The device at wled.lan answered with an error (HTTP 500).");
+  expect(plainDeviceError("http://wled.lan: RemoteProtocolError")).toBe("The connection to the device at wled.lan broke off. Try again.");
+  expect(plainDeviceError("the device is locked")).toBe("the device is locked");
 });

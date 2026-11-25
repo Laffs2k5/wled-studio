@@ -78,7 +78,7 @@ test("a failed save keeps the name and the id", async () => {
   fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Night" } });
   fireEvent.change(screen.getByLabelText(/^Preset id/), { target: { value: "7" } });
   fireEvent.click(screen.getByText("Save in the library"));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("http://wled.lan: ConnectError", true));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("The device at wled.lan does not answer. Check that it is powered and on the network.", true));
   expect(screen.getByLabelText("Look name")).toHaveValue("Night");
   expect(screen.getByLabelText(/^Preset id/)).toHaveValue("7");
   expect(onSaved).not.toHaveBeenCalled();

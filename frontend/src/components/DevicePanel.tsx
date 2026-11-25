@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { VIRTUAL } from "../devices";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import type { CheckItem, DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
@@ -23,11 +23,38 @@ interface Props {
   notify: (msg: string, error?: boolean) => void;
   /** Called with whether the device turned out virtual, once its profile is read. */
   onVirtual?: (virtual: boolean) => void;
+  /** The device's name and address as listed, for the message when it doesn't answer. */
+  deviceName?: string;
+  host?: string;
+}
+
+/** What the panel shows instead of the live controls while the device doesn't answer: what's wrong,
+ * what to check, and Try again. The library next to it stays usable. */
+export function DeviceOffline({ name, host, error, trying, onRetry }: {
+  name: string; host?: string; error: string; trying: boolean; onRetry: () => void;
+}) {
+  const unreachable = /does not answer/.test(error);
+  return (
+    <section className="offline-card" aria-label="Device not answering">
+      <h2>{unreachable ? `${name} does not answer${host ? ` at ${host}` : ""}.` : `Couldn't read ${name}.`}</h2>
+      <p>
+        {unreachable ? "Check that it is powered and on the network, then try again."
+          : error}
+      </p>
+      <p className="muted small">
+        Nothing was sent to it. The library on the right needs no device: you can still organise, rename and
+        delete looks; showing, editing and writing wait until {name} answers.
+      </p>
+      <div className="row">
+        <button className="primary" disabled={trying} onClick={onRetry}>{trying ? "Trying…" : "Try again"}</button>
+      </div>
+    </section>
+  );
 }
 
 const SEND_DELAY_MS = 120;
 
-export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
+export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -45,6 +72,10 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
   const [room, setRoom] = useState<Room | null>(null);
   // bumped whenever the library is read again after a change: the write bar checks the device again
   const [version, setVersion] = useState(0);
+  // the device didn't answer when the panel opened: why, and whether "Try again" is running
+  const [offline, setOffline] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [trying, setTrying] = useState(false);
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,14 +93,24 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
   const startEditing = useCallback((name: string) => { setSaved(null); setEditing(name); }, []);
 
   useEffect(() => {
-    setProfile(null);
-    setState(null);
-    api.profile(deviceId).then((p) => { setProfile(p); onVirtual?.(p.info.arch === "virtual"); })
-      .catch((e) => notify(e.message, true));
-    reloadState();
+    let live = true;
+    setTrying(true);
+    // the profile and the state together: either both, or the panel says the device doesn't answer
+    Promise.all([api.profile(deviceId), api.state(deviceId)]).then(([p, st]) => {
+      if (!live) return;
+      setProfile(p);
+      setState(st);
+      setOffline(null);
+      onVirtual?.(p.info.arch === "virtual");
+    }).catch((e) => {
+      if (!live) return;
+      if (e instanceof ApiError && e.status === 401) notify(e.message, true);
+      setOffline((e as Error).message);
+    }).finally(() => { if (live) setTrying(false); });
     reloadLooks();
+    return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId, notify, reloadState, reloadLooks]);
+  }, [deviceId, notify, reloadLooks, attempt]);
 
   const segment = state?.seg.find((s) => s.id === segId) ?? state?.seg[0];
 
@@ -165,7 +206,26 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
     api.setState(deviceId, patch).catch((e) => notify(e.message, true));
   }
 
-  if (!profile || !state || !segment) return <p className="muted">Loading…</p>;
+  const library = (offlineName?: string) => (
+    <aside>
+      <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
+        beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName} />
+      <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks} />
+      <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
+    </aside>
+  );
+  if (offline !== null && !(profile && state)) {
+    const name = deviceName ?? deviceId;
+    return (
+      <div className="device-panel offline">
+        <main>
+          <DeviceOffline name={name} host={host} error={offline} trying={trying} onRetry={() => setAttempt((n) => n + 1)} />
+        </main>
+        {library(name)}
+      </div>
+    );
+  }
+  if (!profile || !state || !segment) return <p className="muted pad">Reading {deviceName ?? "the device"}…</p>;
   const effect = profile.effects.find((e) => e.id === segment.fx) ?? profile.effects[0];
   const hasMatrix = Boolean(profile.leds.matrix && profile.leds.matrix.h > 1);
   const virtual = profile.info.arch === "virtual";
@@ -281,12 +341,7 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
         <RoomEditor deviceId={deviceId} ledCount={profile.leds.count} onSaved={setRoom} notify={notify} />
         </>)}
       </main>
-      <aside>
-        <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
-          beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} />
-        <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks} />
-        <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
-      </aside>
+      {library()}
     </div>
     <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan} />
   </>);

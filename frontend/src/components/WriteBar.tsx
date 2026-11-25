@@ -65,7 +65,8 @@ export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 
   let action: string | null = null;
   if (error && !checking) {
     state = "error";
-    text = `Couldn't check ${deviceName}: ${error}`;
+    text = /does not answer/.test(error) ? `${deviceName} does not answer, so it can't be compared with the library. Check that it is powered and on the network.`
+      : `Couldn't check ${deviceName}: ${error}`;
   } else if (!plan) {
     state = "pending";
     text = `Checking ${deviceName} against the library…`;
