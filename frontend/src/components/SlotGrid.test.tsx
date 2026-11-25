@@ -98,10 +98,11 @@ test("shows what sits where, and fills and empties slots", async () => {
   expect(await screen.findByLabelText("Slot 1·1, preset 40: G1-1 Calm")).toHaveTextContent("Calm");
   fireEvent.click(screen.getByLabelText("Slot 1·2, preset 41: empty"));
   const panel = screen.getByLabelText("The picked slot");
-  expect(panel).toHaveTextContent("Filling copies: this slot gets a copy named like “G1-2 Fire” with preset 41");
+  expect(panel).toHaveTextContent("Slots reference the saved item; no renamed duplicate is created");
   fireEvent.click(within(screen.getByLabelText("Library")).getByRole("button", { name: "Fire" }));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("Copied “Fire” into slot 1·2 as “G1-2 Fire” (in the library; write presets to put it on the device)"));
-  expect(calls.find((c) => c.startsWith("PUT /api/slots/41"))).toContain('{"look":"Fire"}');
+  fireEvent.click(screen.getByRole("button", { name: "Move it here" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("Moved “Fire” to preset 41 (in the library; write presets to put it on the device)"));
+  expect(calls.find((c) => c.startsWith("PUT /api/slots/41"))).toContain('{"look":"Fire","mode":"move"}');
   fireEvent.click(screen.getByLabelText("Slot 1·1, preset 40: G1-1 Calm"));
   fireEvent.click(screen.getByText("Empty the slot"));
   await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringContaining("G1-1 Calm left the slot")));
@@ -121,6 +122,7 @@ test("the grid uses the Presets view's device plan and reports a change after fi
   const dataTransfer = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? "", effectAllowed: "" };
   fireEvent.dragStart(fire, { dataTransfer });
   fireEvent.drop(screen.getByLabelText("Slot 1·2, preset 41: empty").closest("td")!, { dataTransfer });
+  fireEvent.click(screen.getByRole("button", { name: "Move it here" }));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   expect(calls.some((c) => c.startsWith("PUT /api/slots/41"))).toBe(true);
   expect(screen.queryByLabelText("Write to device")).toBeNull();

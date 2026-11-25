@@ -156,7 +156,8 @@ export const slots = {
   get: () => request<Slots>("GET", "/api/slots"),
   setGrid: (g: SlotGridShape) => request<Slots>("PUT", "/api/slots/grid", g),
   removeGrid: () => request<Slots>("DELETE", "/api/slots/grid"),
-  fill: (pid: number, item: { look: string } | { playlist: string }) => request<Slots>("PUT", `/api/slots/${pid}`, item),
+  fill: (pid: number, item: { look: string; mode?: "move" | "also" } | { playlist: string; mode?: "move" | "also" }) =>
+    request<Slots>("PUT", `/api/slots/${pid}`, item),
   clear: (pid: number) => request<Slots>("DELETE", `/api/slots/${pid}`),
 };
 
