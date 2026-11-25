@@ -15,8 +15,15 @@ test("one Presets view owns the device set, grid and a fresh write plan per data
       all: false, looks: ["Calm"], playlists: [], brought: [],
       on_device: { looks: ["Calm"], playlists: [] },
     });
-    if (key === "GET /api/slots") return reply({ grid: { rows: 1, cols: 1, first: 3, row_step: 1, col_step: 1,
-      name: "R{row}·{col} {name}" }, cells: [] });
+    if (key === "GET /api/slots/grids") return reply({ current: "grid-1", grids: [{
+      id: "grid-1", name: "Remote A", grid: { rows: 1, cols: 1, first: 3, row_step: 1, col_step: 1,
+        name: "R{row}·{col} {name}" }, cells: [],
+    }] });
+    if (key === "GET /api/devices") return reply([{ id: "desk", name: "Desk" }]);
+    if (key === "GET /api/devices/desk/check") return reply([]);
+    if (key === "GET /api/devices/desk/presets-on-device") return reply({ name: "Desk", sha256: "a".repeat(64), presets: [] });
+    if (key === "GET /api/devices/desk/backups") return reply([]);
+    if (key === "GET /api/devices/desk/bank-trial") return reply({ active: false, current_sha256: null });
     if (key === "POST /api/devices/desk/push") {
       const body = JSON.parse(String(init?.body));
       pushes.push(body);
