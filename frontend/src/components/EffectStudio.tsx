@@ -319,46 +319,53 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
         </div>
       )}
       <div className="row">
-        <select aria-label="Preview effect" value={effect?.id ?? ""} onChange={(e) => {
-          const next = effects.find((x) => x.id === Number(e.target.value));
-          if (preview && next) choose(preview, next);
-        }}>
-          {effects.map((e) => <option key={e.id} value={e.id}>{e.name} (id {e.id})</option>)}
-        </select>
+        <label className="field">
+          <span>Effect</span>
+          <select aria-label="Preview effect" value={effect?.id ?? ""} onChange={(e) => {
+            const next = effects.find((x) => x.id === Number(e.target.value));
+            if (preview && next) choose(preview, next);
+          }}>
+            {effects.map((e) => <option key={e.id} value={e.id}>{e.name} (id {e.id})</option>)}
+          </select>
+        </label>
       </div>
       {effect && seg && (
         <EffectControls effect={effect} segment={seg} palettes={preview?.palettes() ?? STAND_IN_PALETTES} rgbw
           onChange={(patch) => { preview?.set(patch); setSeg({ ...seg, ...patch }); }} />
       )}
       {effect && seg && effect.audio.length > 0 && preview?.hasSound() && (
-        <div className="row sound">
-          <label title="WLED's sound simulation, as when the mic is off">
-            <input type="checkbox" checked={level === null} aria-label="Simulated beat" onChange={(e) => {
-              const next = e.target.checked ? null : 128;
-              setLevel(next);
-              preview.sound(next);
-            }} /> Simulated beat
+        <fieldset className="sound">
+          <legend>Sound input</legend>
+          <label className="row">
+            <input type="radio" name="studio-sound" checked={level === null} onChange={() => {
+              setLevel(null); preview.sound(null);
+            }} />
+            Simulated beat
           </label>
-          {level === null ? (
+          {level === null && (
             <select aria-label="Sound simulation" value={Number(seg.si ?? 0)} onChange={(e) => {
-              const si = Number(e.target.value);
-              preview.set({ si });
-              setSeg({ ...seg, si });
+              const si = Number(e.target.value); preview.set({ si }); setSeg({ ...seg, si });
             }}>
               {SOUND_SIMULATIONS.map((n, i) => <option key={i} value={i}>{n}</option>)}
             </select>
-          ) : (
+          )}
+          <label className="row">
+            <input type="radio" name="studio-sound" checked={level !== null} onChange={() => {
+              setLevel(128); preview.sound(128);
+            }} />
+            Fixed level
+          </label>
+          {level !== null && (
             <label className="slider grow">
               <span>Sound level</span>
               <input type="range" min={0} max={255} value={level} aria-label="Sound level" onChange={(e) => {
-                const v = Number(e.target.value);
-                setLevel(v);
-                preview.sound(v);
+                const v = Number(e.target.value); setLevel(v); preview.sound(v);
               }} />
               <output>{level}</output>
             </label>
           )}
-        </div>
+          <p className="muted small">Browser microphone input is not available in this build.</p>
+        </fieldset>
       )}
       {shown && onBuild && (
         <p className="next-step small">

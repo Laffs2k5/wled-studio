@@ -45,6 +45,7 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   const [file, setFile] = useState<{ folder: string; name: string } | null>(null);
   const [text, setText] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [buffers, setBuffers] = useState<Record<string, { text: string; dirty: boolean }>>({});
   const [newFolder, setNewFolder] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newId, setNewId] = useState("");
@@ -70,12 +71,22 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   useEffect(() => { reload(); }, [reload]);
 
   async function open(folder: string, name: string): Promise<boolean> {
-    if (dirty && !confirm("Discard unsaved changes?")) return false;
+    if (file) setBuffers((all) => ({ ...all, [`${file.folder}/${file.name}`]: { text, dirty } }));
+    const key = `${folder}/${name}`;
+    if (buffers[key]) {
+      setFile({ folder, name });
+      setText(buffers[key].text);
+      setDirty(buffers[key].dirty);
+      onOpen?.(folder);
+      onFileOpen?.(folder, name);
+      return true;
+    }
     try {
       const r = await effects.read(folder, name);
       setFile({ folder, name });
       setText(r.content);
       setDirty(false);
+      setBuffers((all) => ({ ...all, [key]: { text: r.content, dirty: false } }));
       onOpen?.(folder);
       onFileOpen?.(folder, name);
       return true;
@@ -119,16 +130,41 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
   return (
     <div className="code-editor">
       <h2>Your effects' code</h2>
+      {Object.keys(buffers).length > 0 && (
+        <div className="file-tabs" aria-label="Open files">
+          {Object.entries(buffers).map(([key, buffer]) => (
+            <button key={key} className={file && key === `${file.folder}/${file.name}` ? "primary" : ""}
+              onClick={() => {
+                const split = key.lastIndexOf("/");
+                open(key.slice(0, split), key.slice(split + 1));
+              }}>
+              {buffer.dirty ? "● " : ""}{key}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="row">
-        <select aria-label="Effect file" value={file ? `${file.folder}/${file.name}` : ""}
-          onChange={(e) => { const [f, n] = e.target.value.split("/"); if (f && n) open(f, n); }}>
-          <option value="">Open a file…</option>
-          {folders.flatMap((f) => f.files.map((n) => <option key={`${f.folder}/${n}`} value={`${f.folder}/${n}`}>{f.folder}/{n}</option>))}
-        </select>
+        <div className="effect-file-tree" aria-label="Effect files">
+          {folders.map((folder) => (
+            <details key={folder.folder} open={file?.folder === folder.folder || folders.length === 1}>
+              <summary>{folder.folder}</summary>
+              <div className="file-list">
+                {folder.files.map((name) => {
+                  const key = `${folder.folder}/${name}`;
+                  return <button key={name} className={file?.folder === folder.folder && file.name === name ? "primary" : ""}
+                    onClick={() => open(folder.folder, name)}>
+                    {buffers[key]?.dirty ? "● " : ""}{name}
+                  </button>;
+                })}
+              </div>
+            </details>
+          ))}
+        </div>
         <button className="primary" disabled={!file || !dirty} onClick={async () => {
           try {
             await effects.save(file!.folder, file!.name, text);
             setDirty(false);
+            setBuffers((all) => ({ ...all, [`${file!.folder}/${file!.name}`]: { text, dirty: false } }));
             setSaves((n) => n + 1);
             notify(`Saved ${file!.folder}/${file!.name}`);
             onSaved?.(file!.folder);
@@ -230,7 +266,10 @@ export function CodeEditor({ notify, onSaved, onOpen, jump = null, device = null
       )}
       {file && (
         <Suspense fallback={<p className="muted small">Loading the editor…</p>}>
-          <Code value={text} fileName={file.name} line={line} onChange={(next) => { setText(next); setDirty(true); }} />
+          <Code value={text} fileName={file.name} line={line} onChange={(next) => {
+            setText(next); setDirty(true);
+            setBuffers((all) => ({ ...all, [`${file.folder}/${file.name}`]: { text: next, dirty: true } }));
+          }} />
         </Suspense>
       )}
     </div>

@@ -41,8 +41,8 @@ test("opens, edits and saves a file", async () => {
   const calls = stub({ "my_fx.cpp": "void x() {}\n" });
   const onSaved = vi.fn();
   render(<CodeEditor notify={() => {}} onSaved={onSaved} />);
-  const pick = await screen.findByLabelText("Effect file");
-  fireEvent.change(pick, { target: { value: "my_fx/my_fx.cpp" } });
+  await screen.findByLabelText("Effect files");
+  fireEvent.click(screen.getByRole("button", { name: "my_fx.cpp" }));
   const code = await screen.findByLabelText("Code");
   await waitFor(() => expect(textOf(code)).toBe("void x() {}\n"));
   expect(screen.getByText("Save")).toBeDisabled();   // loading a file isn't an edit
@@ -57,11 +57,11 @@ test("opens, edits and saves a file", async () => {
 test("switching files swaps the text and isn't an edit", async () => {
   stub({ "my_fx.cpp": "void x() {}\n", "library.json": '{"name": "fx"}\n' });
   render(<CodeEditor notify={() => {}} />);
-  const pick = await screen.findByLabelText("Effect file");
-  fireEvent.change(pick, { target: { value: "my_fx/my_fx.cpp" } });
+  await screen.findByLabelText("Effect files");
+  fireEvent.click(screen.getByRole("button", { name: "my_fx.cpp" }));
   const code = await screen.findByLabelText("Code");
   await waitFor(() => expect(textOf(code)).toBe("void x() {}\n"));
-  fireEvent.change(pick, { target: { value: "my_fx/library.json" } });
+  fireEvent.click(screen.getByRole("button", { name: "library.json" }));
   await waitFor(() => expect(textOf(code)).toBe('{"name": "fx"}\n'));
   expect(screen.getByText("Save")).toBeDisabled();
 });
@@ -72,7 +72,7 @@ test("a file from the URL opens without the user finding it in the select", asyn
   render(<CodeEditor notify={() => {}} openFile={{ folder: "my_fx", name: "my_fx.cpp" }} onFileOpen={onFileOpen} />);
   const code = await screen.findByLabelText("Code");
   await waitFor(() => expect(textOf(code)).toBe("void x() {}\n"));
-  expect(screen.getByLabelText("Effect file")).toHaveValue("my_fx/my_fx.cpp");
+  expect(screen.getByLabelText("Open files")).toHaveTextContent("my_fx/my_fx.cpp");
   expect(onFileOpen).toHaveBeenCalledWith("my_fx", "my_fx.cpp");
 });
 
@@ -124,7 +124,7 @@ test("hidden when no effects directory is configured", async () => {
 test("room-aware effects: says where room_map.h came from and that it's out of date; generating it refreshes the lists", async () => {
   const calls = stub({ "my_fx.cpp": "x" });
   render(<CodeEditor notify={() => {}} />);
-  fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/my_fx.cpp" } });
+  fireEvent.click(await screen.findByRole("button", { name: "my_fx.cpp" }));
   const box = await screen.findByRole("region", { name: "Room-aware effects" });
   expect(within(box).getByText(/Effects that include/)).toHaveTextContent("Effects that include room_map.h need each LED's position.");
   const line = await within(box).findByLabelText("room_map.h");
@@ -144,7 +144,7 @@ test("room-aware effects: says where room_map.h came from and that it's out of d
 test("the room map comes from the header's device unless another is picked", async () => {
   stub({ "my_fx.cpp": "x" });
   const { rerender } = render(<CodeEditor notify={() => {}} device="desk" />);
-  fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/my_fx.cpp" } });
+  fireEvent.click(await screen.findByRole("button", { name: "my_fx.cpp" }));
   expect(await screen.findByLabelText("From the room shape of")).toHaveValue("desk");
   rerender(<CodeEditor notify={() => {}} device={null} />);
   expect(screen.getByLabelText("From the room shape of")).toHaveValue("");

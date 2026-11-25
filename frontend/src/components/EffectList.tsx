@@ -12,15 +12,18 @@ interface Props {
 export function EffectList({ effects, selected, hasMatrix, onSelect }: Props) {
   const [query, setQuery] = useState("");
   const [audioOnly, setAudioOnly] = useState(false);
+  const [mineOnly, setMineOnly] = useState(false);
+  const [showMatrix, setShowMatrix] = useState(false);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return effects.filter(
       (e) =>
-        (hasMatrix || !(e.dimensions.length === 1 && e.dimensions[0] === 2)) &&
+        ((hasMatrix || showMatrix) || !(e.dimensions.length === 1 && e.dimensions[0] === 2)) &&
         (!audioOnly || e.audio.length > 0) &&
+        (!mineOnly || e.id >= 200) &&
         (!q || e.name.toLowerCase().includes(q)),
     );
-  }, [effects, query, audioOnly, hasMatrix]);
+  }, [effects, query, audioOnly, mineOnly, hasMatrix, showMatrix]);
   return (
     <div className="effect-list">
       <input type="search" placeholder="Search effects" value={query} aria-label="Search effects"
@@ -28,16 +31,25 @@ export function EffectList({ effects, selected, hasMatrix, onSelect }: Props) {
       <label className="small">
         <input type="checkbox" checked={audioOnly} onChange={(e) => setAudioOnly(e.target.checked)} /> Sound-reactive only
       </label>
+      <label className="small">
+        <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} /> Mine
+      </label>
       <ul role="listbox" aria-label="Effects">
         {shown.map((e) => (
           <li key={e.id} role="option" aria-selected={e.id === selected}
             className={e.id === selected ? "selected" : ""} onClick={() => onSelect(e.id)}>
             {e.name}
+            {e.id >= 200 && <span className="badge" title="Your own effect">yours</span>}
             {e.audio.length > 0 && <span className="badge" title="Sound-reactive">♪</span>}
           </li>
         ))}
       </ul>
-      <p className="muted small">{shown.length} of {effects.length}{hasMatrix ? "" : " (2D-only effects hidden)"}</p>
+      {!hasMatrix && effects.some((e) => e.dimensions.length === 1 && e.dimensions[0] === 2) && (
+        <p className="muted small">{shown.length} effects shown
+          {" · "}{effects.filter((e) => e.dimensions.length === 1 && e.dimensions[0] === 2).length} need a 2D matrix{" "}
+          <button className="link" onClick={() => setShowMatrix(!showMatrix)}>{showMatrix ? "hide" : "show"}</button>
+        </p>
+      )}
     </div>
   );
 }

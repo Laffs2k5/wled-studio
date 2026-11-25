@@ -78,8 +78,8 @@ test("shows the code editor before there is a preview", async () => {
     : new Response(JSON.stringify({ enabled: false }), { status: 200 })));
   render(<EffectStudio notify={() => {}} load={async () => { throw new Error("404"); }} />);
   expect(await screen.findByText(/has no effect preview/)).toBeInTheDocument();
-  const files = await screen.findByLabelText("Effect file");
-  expect([...files.querySelectorAll("option")].map((o) => o.textContent)).toContain("my-fx/fx.cpp");
+  const files = await screen.findByLabelText("Effect files");
+  expect(files).toHaveTextContent("fx.cpp");
 });
 
 test("compiles your effects with the builder and previews them", async () => {
@@ -182,7 +182,7 @@ test("saving a file that's in the preview marks the preview out of date", async 
   }));
   render(<EffectStudio notify={() => {}} load={async () => new Preview(fakeModule() as never)} />);
   // opening a file ticks its folder for compiling
-  fireEvent.change(await screen.findByLabelText("Effect file"), { target: { value: "my_fx/fx.cpp" } });
+  fireEvent.click(await screen.findByRole("button", { name: "fx.cpp" }));
   await waitFor(() => expect(screen.getByLabelText("my_fx")).toBeChecked());
   fireEvent.click(screen.getByText("Compile and preview"));
   await waitFor(() => expect(screen.getByLabelText("What the preview shows")).toHaveTextContent(/Showing: my_fx/));
@@ -286,7 +286,7 @@ test("a sound effect gets the simulated beat or a fixed sound level", async () =
   expect(beat).toBeChecked();
   fireEvent.change(screen.getByLabelText("Sound simulation"), { target: { value: "1" } });
   expect(sets).toContainEqual([12, 1]);                      // WLED's sound simulation setting
-  fireEvent.click(beat);                                      // off: a fixed level
+  fireEvent.click(screen.getByLabelText("Fixed level"));       // a fixed level
   expect(audio.at(-1)).toBe(128);
   fireEvent.change(screen.getByLabelText("Sound level"), { target: { value: "200" } });
   expect(audio.at(-1)).toBe(200);

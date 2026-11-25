@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { profile } from "../test/fixtures";
 import { EffectList } from "./EffectList";
 
-const names = () => screen.getAllByRole("option").map((o) => o.textContent?.replace("♪", ""));
+const names = () => screen.getAllByRole("option").map((o) => o.textContent?.replace("♪", "").replace("yours", ""));
 
 test("hides 2D-only effects on a strip, shows them on a matrix", () => {
   const { rerender } = render(<EffectList effects={profile.effects} selected={8} hasMatrix={false} onSelect={() => {}} />);

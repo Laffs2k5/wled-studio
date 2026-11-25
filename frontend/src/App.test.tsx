@@ -299,7 +299,8 @@ test("a device that doesn't answer: the address, what to check, Try again, and t
   expect(within(looks).getByText("Evening")).toBeInTheDocument();
   expect(within(looks).getByText(/Not checked against Desk: it does not answer/)).toBeInTheDocument();
   expect(within(looks).getByRole("button", { name: "Show on strip" })).toBeDisabled();
-  expect(within(looks).getByRole("button", { name: "Import from device" })).toBeDisabled();
+  fireEvent.click(within(looks).getByRole("button", { name: "More library actions" }));
+  expect(screen.getByRole("menuitem", { name: "Import presets from Desk" })).toBeDisabled();
   up = true;
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByRole("heading", { name: "Comet" })).toBeInTheDocument();

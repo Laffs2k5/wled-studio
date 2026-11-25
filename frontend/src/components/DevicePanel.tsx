@@ -89,6 +89,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const [offline, setOffline] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [trying, setTrying] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"effects" | "strip" | "library">("strip");
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -253,7 +254,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   }
 
   const library = (offlineName?: string) => (
-    <aside>
+    <aside className="library-column">
       <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
         beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName} />
       <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
@@ -285,8 +286,14 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const place = ids.indexOf(segment.id);
 
   return (<>
-    <div className="device-panel">
-      <aside className={editing ? "editing" : undefined}>
+    <nav className="mobile-column-tabs" aria-label="Looks view columns">
+      {(["effects", "strip", "library"] as const).map((tab) => (
+        <button key={tab} className={mobileTab === tab ? "primary" : ""} aria-pressed={mobileTab === tab}
+          onClick={() => setMobileTab(tab)}>{tab === "effects" ? "Effects" : tab === "strip" ? "Strip" : "Library"}</button>
+      ))}
+    </nav>
+    <div className="device-panel" data-mobile-tab={mobileTab}>
+      <aside className={`effects-column${editing ? " editing" : ""}`}>
         {editing ? (<>
           <p className="small edit-note">Picks the effect of the segment you're editing in “{editing}”. The strip does not change.</p>
           <EffectList effects={profile.effects} selected={editorFx} hasMatrix={hasMatrix}
@@ -296,7 +303,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
             onSelect={(fx) => change({ fx })} />
         )}
       </aside>
-      <main className={editing ? "editing" : undefined}>
+      <main className={`strip-column${editing ? " editing" : ""}`}>
         {editing ? (
           <LookEditor key={editing} deviceId={deviceId} name={editing} profile={profile} room={room} notify={notify}
             onClose={closeEditor} looks={looks} playlists={playlists} deviceName={profile.device.name}
