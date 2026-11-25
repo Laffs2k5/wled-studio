@@ -46,32 +46,29 @@ def test_cells_show_what_sits_where(client):
     assert cell(s, 2, 2)["name"] == "Party" and cell(s, 1, 2)["name"] is None
 
 
-def test_filling_copies_into_the_slot_and_frees_the_old_one(client):
+def test_filling_references_and_moves_without_copying(client):
     setup(client, [look("G1-1 Calm", 40, fx=3), look("Fire", fx=7)])
     r = client.put("/api/slots/40", json={"look": "Fire"}, headers=CSRF).json()
-    assert r["filled"] == "G1-1 Fire" and r["freed"] == ["G1-1 Calm"]
+    assert r["filled"] == "Fire" and r["freed"] == ["G1-1 Calm"]
     looks = client.app.state.library.looks()
-    assert looks["G1-1 Fire"]["preset_id"] == 40 and looks["G1-1 Fire"]["segments"][0]["fx"] == 7
-    assert looks["Fire"]["preset_id"] is None                 # the source stays as it was
+    assert "G1-1 Fire" not in looks
+    assert looks["Fire"]["preset_id"] == 40 and looks["Fire"]["segments"][0]["fx"] == 7
     assert looks["G1-1 Calm"]["preset_id"] is None            # the old occupant keeps its name, not the slot
-    # a slot look copied to another slot takes that slot's name
-    r = client.put("/api/slots/51", json={"look": "G1-1 Fire"}, headers=CSRF).json()
-    assert r["filled"] == "G3-2 Fire" and cell(r, 3, 2)["base"] == "Fire"
 
 
 def test_names_fit_wleds_limit(client):
     name = "A rather long look name, 30 b!"            # fits alone, not with the slot's prefix
     setup(client, [look(name)])
     r = client.put("/api/slots/45", json={"look": name}, headers=CSRF).json()
-    assert len(r["filled"].encode()) <= 32 and r["filled"].startswith("G2-1 A rather long")
+    assert r["filled"] == name and len(r["filled"].encode()) <= 32
 
 
-def test_playlists_fill_slots_too(client):
+def test_playlists_fill_slots_too_without_copies(client):
     setup(client, [look("Calm")])
     client.put("/api/playlists/Evening", json={"name": "Evening", "entries": [{"look": "Calm"}]}, headers=CSRF)
     r = client.put("/api/slots/41", json={"playlist": "Evening"}, headers=CSRF).json()
-    assert (cell(r, 1, 2)["kind"], cell(r, 1, 2)["name"]) == ("playlist", "G1-2 Evening")
-    assert client.app.state.library.playlists()["G1-2 Evening"]["preset_id"] == 41
+    assert (cell(r, 1, 2)["kind"], cell(r, 1, 2)["name"]) == ("playlist", "Evening")
+    assert client.app.state.library.playlists()["Evening"]["preset_id"] == 41
 
 
 def test_clear_and_errors(client):
@@ -94,7 +91,20 @@ def test_a_looks_new_preset_id_moves_it_in_the_grid(client):
     slots = client.get("/api/slots").json()
     assert cell(slots, 1, 1)["name"] is None
     assert cell(slots, 2, 2)["name"] == "Calm" and cell(slots, 2, 2)["base"] == "Calm"
-    # a slot look given another slot's id is flagged, not renamed
-    client.put("/api/slots/40", json={"look": "Calm"}, headers=CSRF)        # G1-1 Calm, a copy
-    client.put("/api/looks/G1-1%20Calm/preset-id", json={"preset_id": 41}, headers=CSRF)
-    assert cell(client.get("/api/slots").json(), 1, 2)["notes"] == ["its name is another slot's"]
+    # "also" leaves the primary id and stores a grid-only reference
+    client.put("/api/slots/40", json={"look": "Calm", "mode": "also"}, headers=CSRF)
+    assert client.app.state.library.looks()["Calm"]["preset_id"] == 46
+    assert cell(client.get("/api/slots").json(), 1, 1)["name"] == "Calm"
+
+
+def test_also_assignment_materializes_only_during_push(client):
+    setup(client, [look("Calm", 46)])
+    r = client.put("/api/slots/40", json={"look": "Calm", "mode": "also"}, headers=CSRF)
+    assert r.status_code == 200
+    from wledstudio.slots import expand_for_push
+    from starlette.requests import Request
+    scope = {"type": "http", "app": client.app}
+    req = Request(scope)
+    looks, playlists = expand_for_push(req, list(client.app.state.library.looks().values()), [])
+    assert [(x["name"], x["preset_id"]) for x in looks] == [("Calm", 46), ("G1-1 Calm", 40)]
+    assert client.app.state.library.looks()["Calm"]["preset_id"] == 46

@@ -48,8 +48,10 @@ flowchart LR
 - **A look's preset id** can be changed after saving (`PUT /api/looks/<name>/preset-id`, or the
   look editor's save); it's a library change, written on the next write. The old preset stays on
   the device, since writing never deletes. An id another item has is accepted and named
-  (`shared_with`), and the write refuses until one of them moves. The slot grid shows whatever
-  has its ids, so a look moved onto a slot's id appears there under its own name.
+  (`shared_with`), and the write refuses until one of them moves. The slot grid references saved
+  looks/playlists: filling normally moves the item to that id; "also use here" stores the extra
+  assignment in `slots.json`. That reference is expanded only in the push plan, with the grid's
+  optional name pattern, so the library keeps one source item.
 - **A look saved without the layout** (`layout=false` on capture) keeps no bounds and doesn't own
   the layout: shown, it changes only the segments it names, by position.
 - **Writing** replaces `presets.json` as a whole (`push.py`):

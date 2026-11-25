@@ -938,6 +938,8 @@ async def accept_look(device_id: str, name: str, request: Request):
 async def push_looks(device_id: str, body: PushIn, request: Request):
     dev = device_or_404(device_id, request)
     looks, playlists, set_notes = request.app.state.library.for_device(dev.id)
+    from .slots import expand_for_push
+    looks, playlists = expand_for_push(request, looks, playlists)
     palettes = list(request.app.state.library.palettes().values())
     async with make_client(request, dev) as c:
         try:

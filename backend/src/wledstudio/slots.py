@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: EUPL-1.2
-"""The slot grid: a fixed block of preset ids shown as rows and columns, filled from the library.
+"""The slot grid: a fixed block of preset ids shown as rows and columns, referencing the library.
 
 Some setups give preset ids a meaning: a remote's "banks" of four looks each, say, where bank b's
 look k is preset `first + (b-1)*row_step + (k-1)*col_step`, named after its place ("B2·3 Fire").
-The grid shows which look or playlist sits in each of those ids, and fills a slot by copying a
-library look or playlist into it, with the slot's preset id and a name from the pattern. Whatever
-held the slot before keeps its name and loses the slot: nothing is deleted.
+The grid shows which look or playlist sits in each id. A normal fill moves that item to the slot's
+preset id. "Also" keeps its primary id and stores a grid-only reference; it is expanded as a
+short-lived look or playlist copy only for a plan/write. Nothing in the library is duplicated.
 
 The grid is a view on the library and its preset ids, nothing more: writing to a device is the
 usual write, and what the ids mean (banks, remotes) stays outside this app. Its shape is the
@@ -79,6 +79,7 @@ class FillIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     look: str | None = Field(default=None, max_length=64)
     playlist: str | None = Field(default=None, max_length=64)
+    mode: str = Field(default="move", pattern="^(move|also)$")
 
     @model_validator(mode="after")
     def _one(self):
@@ -91,9 +92,31 @@ def _path(request: Request):
     return request.app.state.settings.data_dir / "slots.json"
 
 
-def load_grid(request: Request) -> Grid | None:
+def _load(request: Request) -> dict:
     p = _path(request)
-    return Grid(**json.loads(p.read_text(encoding="utf-8"))) if p.exists() else None
+    if not p.exists():
+        return {"grid": None, "assignments": {}}
+    raw = json.loads(p.read_text(encoding="utf-8"))
+    if "grid" in raw:
+        return {"grid": raw.get("grid"), "assignments": raw.get("assignments", {})}
+    return {"grid": raw, "assignments": {}}
+
+
+def load_grid(request: Request) -> Grid | None:
+    raw = _load(request)["grid"]
+    return Grid(**raw) if raw else None
+
+
+def _assignments(request: Request) -> dict[str, dict]:
+    return _load(request)["assignments"]
+
+
+def _save(request: Request, grid: Grid, assignments: dict | None = None) -> None:
+    p = _path(request)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    current = _assignments(request) if assignments is None else assignments
+    valid = {str(pid): value for pid, value in current.items() if grid.place(int(pid)) is not None}
+    p.write_text(json.dumps({"grid": grid.model_dump(), "assignments": valid}, indent=1), encoding="utf-8")
 
 
 def _grid_or_404(request: Request) -> Grid:
@@ -120,15 +143,27 @@ def get_slots(request: Request):
     g = load_grid(request)
     if g is None:
         return {"grid": None, "cells": []}
-    occ = _occupants(request.app.state.library.load())
+    lib = request.app.state.library.load()
+    occ = _occupants(lib)
+    assignments = _assignments(request)
     cells = []
     for r in range(1, g.rows + 1):
         for c in range(1, g.cols + 1):
             pid = g.id(r, c)
-            here = occ.get(pid, [])
-            kind, name = here[0] if here else (None, None)
-            notes = []
-            if len(here) > 1:
+            assignment = assignments.get(str(pid))
+            if assignment:
+                kind, name = assignment["kind"], assignment["name"]
+                exists = name in lib["looks" if kind == "look" else "playlists"]
+                if not exists:
+                    notes = [f'{name} is no longer in the library']
+                    kind = name = None
+                else:
+                    notes = ["references the saved library item; no copy is made"]
+            else:
+                here = occ.get(pid, [])
+                kind, name = here[0] if here else (None, None)
+                notes = []
+            if not assignment and len(here) > 1:
                 notes.append("more than one item has this preset id: " + ", ".join(n for _, n in here))
             if name and g.prefix_re().match(name) and g.name_for(r, c, g.base(name)) != name:
                 notes.append("its name is another slot's")
@@ -139,9 +174,7 @@ def get_slots(request: Request):
 
 @router.put("/grid")
 def put_grid(body: Grid, request: Request):
-    p = _path(request)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(body.model_dump(), indent=1), encoding="utf-8")
+    _save(request, body)
     return get_slots(request)
 
 
@@ -153,7 +186,7 @@ def delete_grid(request: Request):
 
 @router.put("/{pid}")
 def fill(pid: int, body: FillIn, request: Request):
-    """Copy a library look or playlist into the slot with this preset id."""
+    """Reference a library item in a slot; optionally also write it at the source's existing id."""
     g = _grid_or_404(request)
     where = g.place(pid)
     if where is None:
@@ -164,41 +197,66 @@ def fill(pid: int, body: FillIn, request: Request):
     source = coll.get(body.look or body.playlist)
     if source is None:
         raise HTTPException(404, f"no {kind} named {body.look or body.playlist!r}")
-    name = g.name_for(*where, g.base(source["name"]))
-    if not name or g.base(name) == "":
-        raise HTTPException(422, "the name would be empty")
-    other = lib["looks"] if kind == "playlist" else lib["playlists"]
-    if name in other or (name in coll and coll[name] is not source and coll[name].get("preset_id") != pid):
-        raise HTTPException(409, f"{name!r} is taken by another item")
     freed = []
     for k, n in _occupants(lib).get(pid, []):
         target = lib["looks" if k == "look" else "playlists"][n]
-        if n != name:
+        if target is not source:
             target["preset_id"] = None
             freed.append(n)
-    item = copy.deepcopy(source)
-    item["name"] = name
-    item["preset_id"] = pid
-    coll[name] = item
+    assignments = _assignments(request)
+    if body.mode == "also" and source.get("preset_id") is not None and source.get("preset_id") != pid:
+        assignments[str(pid)] = {"kind": kind, "name": source["name"]}
+    else:
+        source["preset_id"] = pid
+        assignments.pop(str(pid), None)
     try:
         store.save(lib)
+        _save(request, g, assignments)
     except LookError as e:
         raise HTTPException(422, str(e)) from None
-    return {**get_slots(request), "filled": name, "freed": freed}
+    return {**get_slots(request), "filled": source["name"], "freed": freed}
 
 
 @router.delete("/{pid}")
 def clear(pid: int, request: Request):
-    """Empty a slot: what sits there keeps its name and loses the preset id."""
+    """Empty a reference; a moved item's primary preset id is cleared too."""
     g = _grid_or_404(request)
     if g.place(pid) is None:
         raise HTTPException(404, "that preset id isn't a slot in the grid")
     store = request.app.state.library
     lib = store.load()
     freed = []
+    assignments = _assignments(request)
+    assignment = assignments.pop(str(pid), None)
+    if assignment:
+        freed.append(assignment["name"])
     for k, n in _occupants(lib).get(pid, []):
         lib["looks" if k == "look" else "playlists"][n]["preset_id"] = None
         freed.append(n)
     if freed:
         store.save(lib)
+        _save(request, g, assignments)
     return {**get_slots(request), "freed": freed}
+
+
+def expand_for_push(request: Request, looks: list[dict], playlists: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Materialize slot 'also use here' references for one plan/write without storing copies in the library."""
+    g = load_grid(request)
+    if g is None:
+        return looks, playlists
+    by_look = {look["name"]: look for look in looks}
+    by_playlist = {playlist["name"]: playlist for playlist in playlists}
+    extra_looks = list(looks)
+    extra_playlists = list(playlists)
+    for pid, assignment in _assignments(request).items():
+        where = g.place(int(pid))
+        if where is None:
+            continue
+        source = (by_look if assignment["kind"] == "look" else by_playlist).get(assignment["name"])
+        if source is None:
+            continue
+        item = copy.deepcopy(source)
+        item["name"] = g.name_for(*where, g.base(source["name"]))
+        item["preset_id"] = int(pid)
+        (extra_looks if assignment["kind"] == "look" else extra_playlists).append(item)
+    return extra_looks, extra_playlists
