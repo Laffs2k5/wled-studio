@@ -11,6 +11,13 @@ def test_health(client):
     assert client.get("/api/health").json() == {"status": "ok"}
 
 
+def test_app_starts_with_environment_settings(monkeypatch, tmp_path):
+    monkeypatch.setenv("WLEDSTUDIO_DATA", str(tmp_path / "data"))
+    monkeypatch.setenv("WLEDSTUDIO_ALLOWED_HOSTS", "testserver")
+    with TestClient(create_app()) as c:
+        assert c.get("/api/health").json() == {"status": "ok"}
+
+
 def test_destructive_preset_delete_and_restore_are_authenticated_and_verified(
         settings, device_transport):
     protected = replace(settings, token="secret")

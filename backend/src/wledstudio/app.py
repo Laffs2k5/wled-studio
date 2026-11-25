@@ -54,7 +54,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.state.live_url_for = live_url_for
     app.state.live_hubs = {}
     app.state.sessions = Sessions()
-    app.state.trials = TrialStore(settings.data_dir)
+    app.state.trials = TrialStore(s.data_dir)
     app.add_middleware(SecurityMiddleware, settings=s)
     app.include_router(router)
     app.include_router(firmware_router)
