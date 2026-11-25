@@ -91,7 +91,7 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
   await expect.poll(async () => (await segs()).map((s: { id: number }) => s.id)).toEqual([0]);
   await page.reload();
   await page.getByLabel("Device", { exact: true }).selectOption(id);
-  await expect(page.getByRole("button", { name: /^Segment 0 / })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Unnamed segment · seg 0/ })).toBeVisible();
 
   // an editing session remembers this state, to put it back at the end
   const atStart = (await segs()).map((s: { start: number; stop: number; fx: number; bm: number }) => [s.start, s.stop, s.fx, s.bm]);
@@ -100,12 +100,13 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
 
   // a new segment on top, placed and blended
   await page.getByRole("button", { name: "+ Segment" }).click();
-  await expect(page.getByRole("button", { name: /^Segment 1 / })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /^Unnamed segment · seg 1/ })).toHaveAttribute("aria-pressed", "true");
   await page.getByText("Layout and layer").click();
-  await page.getByLabel("Start", { exact: true }).fill("10");
-  await page.getByLabel("Start", { exact: true }).press("Enter");
-  await page.getByLabel("Stop", { exact: true }).fill("30");
-  await page.getByLabel("Stop", { exact: true }).press("Enter");
+  await page.getByLabel("First LED", { exact: true }).fill("10");
+  await page.getByLabel("First LED", { exact: true }).press("Enter");
+  await page.getByLabel("Last LED", { exact: true }).fill("29");
+  await page.getByLabel("Last LED", { exact: true }).press("Enter");
+  await page.getByText("Advanced", { exact: true }).click();
   await page.getByLabel("Blend mode").selectOption({ label: "Add" });
   await expect.poll(async () => {
     const s = (await segs()).find((x: { id: number }) => x.id === 1);
@@ -131,7 +132,7 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
   await looks.getByRole("listitem").filter({ hasText: "E2E layers" }).getByRole("button", { name: "Show on strip" }).click();
   await expect.poll(async () => (await segs()).map((s: { start: number; stop: number; bm: number }) => [s.start, s.stop, s.bm]))
     .toEqual([[0, 60, 0], [10, 30, 2]]);
-  await expect(page.getByRole("button", { name: /^Segment 1 / })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Unnamed segment · seg 1/ })).toBeVisible();
   await looks.getByRole("listitem").filter({ hasText: "E2E single" }).getByRole("button", { name: "Show on strip" }).click();
   await expect.poll(async () => (await segs()).length).toBe(1);
 
@@ -166,20 +167,20 @@ test("segments: duplicate, restack, name, and drag on the map", async ({ page, r
   await request.post(`/api/devices/${id}/state`, { data: { seg: reset }, headers: { "X-WLED-Studio": "1" } });
   await page.reload();
   await page.getByLabel("Device", { exact: true }).selectOption(id);
-  await page.getByRole("button", { name: /^Segment 1 / }).click();
+  await page.getByRole("button", { name: /^Unnamed segment · seg 1/ }).click();
 
   // a copy on top, then lowered under segment 1
   await page.getByRole("button", { name: "Duplicate" }).click();
-  await expect(page.getByRole("button", { name: /^Segment 2 / })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Lower" }).click();
-  await expect(page.getByRole("button", { name: /^Segment 1 / })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /^Unnamed segment · seg 2/ })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Draw earlier (below)" }).click();
+  await expect(page.getByRole("button", { name: /^Unnamed segment · seg 1/ })).toHaveAttribute("aria-pressed", "true");
   await expect.poll(async () => (await segs()).map((s) => [s.start, s.stop, s.fx])).toEqual([[0, 60, 0], [10, 20, 4], [10, 20, 4]]);
 
   // a name, then new LEDs by dragging on the map (a straight strip: 16 px per LED)
   await page.getByText("Layout and layer").click();
   await page.getByLabel("Name", { exact: true }).fill("Copy");
   await page.getByLabel("Name", { exact: true }).press("Enter");
-  const map = page.getByLabel(/Segment map/);
+  const map = page.getByLabel(/Segments: click/);
   const box = (await map.boundingBox())!;
   const x = (led: number) => box.x + (led + 0.5) * box.width / 60;
   await page.mouse.move(x(40), box.y + box.height / 2);
@@ -188,7 +189,7 @@ test("segments: duplicate, restack, name, and drag on the map", async ({ page, r
   await page.mouse.move(x(49), box.y + box.height / 2, { steps: 5 });
   await page.mouse.up();
   await expect.poll(async () => { const s = (await segs())[1]; return [s.start, s.stop, s.n]; }).toEqual([40, 50, "Copy"]);
-  await expect(page.getByRole("button", { name: /^Segment 1 · Copy/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Copy · seg 1/ })).toBeVisible();
 
   expect(problems).toEqual([]);
 });
