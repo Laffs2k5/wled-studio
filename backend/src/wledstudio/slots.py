@@ -355,7 +355,8 @@ def fill(pid: int, body: FillIn, request: Request, grid: str | None = None):
         _save_state(request, ctx["state"])
     except LookError as e:
         raise HTTPException(422, str(e)) from None
-    return {**_slots(request, entry["id"]), "filled": source["name"], "freed": freed}
+    protected_by = request.app.state.protected_presets.labels().get(pid, [])
+    return {**_slots(request, entry["id"]), "filled": source["name"], "freed": freed, "protected_by": protected_by}
 
 
 @router.delete("/{pid}")
