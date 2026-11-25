@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { request } from "../api";
 import { gapText, totalPixels, type Direction, type Room, type RoomEdge, type RoomZone } from "../room";
+import { drawMap, ledPositions } from "../room";
 
 /** The strip's shape: edges in LED index order. Used to draw the live view and previews. Lives in
  * the device settings; `onSaved` is called after a save (not when the shape is first read). */
@@ -15,13 +16,29 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
 }) {
   const [edges, setEdges] = useState<RoomEdge[]>([]);
   const [zones, setZones] = useState<RoomZone[]>([]);
+  const [baseline, setBaseline] = useState("");
+  const [discarding, setDiscarding] = useState(false);
+  const preview = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     request<Room | null>("GET", `/api/devices/${encodeURIComponent(deviceId)}/room`)
-      .then((r) => { setEdges(r?.edges ?? []); setZones(r?.zones ?? []); })
+      .then((r) => {
+        const nextEdges = r?.edges ?? [], nextZones = r?.zones ?? [];
+        setEdges(nextEdges); setZones(nextZones);
+        setBaseline(JSON.stringify({ edges: nextEdges, zones: nextZones }));
+      })
       .catch(() => { setEdges([]); setZones([]); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId]);
   const total = totalPixels({ edges });
+  const dirty = baseline !== JSON.stringify({ edges, zones });
+  useEffect(() => {
+    const canvas = preview.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx || !edges.length) return;
+    const count = Math.max(1, total);
+    drawMap(ctx, canvas.width, canvas.height, ledPositions(count, canvas.width, canvas.height, { edges, zones }),
+      [], null, null, false);
+  }, [edges, zones, total]);
   const set = (i: number, e: Partial<RoomEdge>) => setEdges(edges.map((x, j) => (j === i ? { ...x, ...e } : x)));
   const setZone = (i: number, z: Partial<RoomZone>) => setZones(zones.map((x, j) => (j === i ? { ...x, ...z } : x)));
 
@@ -30,7 +47,11 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
       <summary>Room shape {edges.length ? `(${edges.length} walls)` : "(not set)"}</summary>
       <p className="muted small">Which LEDs are on which wall. The live view and the segment map draw it, looks can follow
         its walls, and room-aware effects take each LED's position from it.</p>
-      <p className="muted small">Walls in LED order, from the first LED: a direction and how many LEDs.</p>
+      <p className="muted small">Follow the strip from its first LED. Add one row per straight run.</p>
+      {edges.length > 0 && (
+        <canvas ref={preview} width={960} height={300} className="room room-preview" aria-label="Room shape preview" />
+      )}
+      <div className="row small muted room-columns"><span>Wall name</span><span>Strip runs</span><span>LEDs</span></div>
       {edges.map((e, i) => (
         <div className="row" key={i}>
           <input value={e.label ?? ""} placeholder={`Wall ${i + 1}`} maxLength={32} aria-label={`Wall ${i + 1} name`}
@@ -44,16 +65,17 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
           <button aria-label={`Remove wall ${i + 1}`} onClick={() => setEdges(edges.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
-      <p className="muted small">Zones: named LED ranges such as a door or a desk (stop is the LED after the zone).
+      <p className="muted small">Zones: named LED ranges such as a door or a desk.
         Segments on a zone follow it when you correct it here.</p>
+      <div className="row small muted room-columns"><span>Zone name</span><span>First LED</span><span>Last LED</span></div>
       {zones.map((z, i) => (
         <div className="row" key={`z${i}`}>
           <input value={z.label} placeholder={`Zone ${i + 1}`} maxLength={32} aria-label={`Zone ${i + 1} name`}
             onChange={(ev) => setZone(i, { label: ev.target.value })} />
           <input value={z.start} inputMode="numeric" className="slot" aria-label={`Zone ${i + 1} start`}
             onChange={(ev) => setZone(i, { start: Math.max(0, Number(ev.target.value) || 0) })} />
-          <input value={z.stop} inputMode="numeric" className="slot" aria-label={`Zone ${i + 1} stop`}
-            onChange={(ev) => setZone(i, { stop: Math.max(1, Number(ev.target.value) || 1) })} />
+          <input value={z.stop - 1} inputMode="numeric" className="slot" aria-label={`Zone ${i + 1} last LED`}
+            onChange={(ev) => setZone(i, { stop: Math.max(z.start + 1, Number(ev.target.value) + 1 || z.start + 1) })} />
           <button aria-label={`Remove zone ${i + 1}`} onClick={() => setZones(zones.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
@@ -73,11 +95,26 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
             {gapText({ edges })}: round a whole room, opposite walls need the same count.
           </span>
         )}
-        <button className="primary" disabled={!edges.length} onClick={() =>
+        <button className="primary" disabled={!edges.length || !dirty} onClick={() =>
           request<Room>("PUT", `/api/devices/${encodeURIComponent(deviceId)}/room`, zones.length ? { edges, zones } : { edges })
-            .then((r) => { onSaved(r); notify("Room shape saved in the app"); }).catch((e) => notify(e.message, true))}>
-          Save shape
+            .then((r) => {
+              setBaseline(JSON.stringify({ edges: r.edges, zones: r.zones ?? [] }));
+              onSaved(r); notify("Room shape saved in the app");
+            }).catch((e) => notify(e.message, true))}>
+          Save room shape (kept in the app)
         </button>
+        {dirty && <span className="warn small">Unsaved room shape changes</span>}
+        {dirty && !discarding && <button onClick={() => setDiscarding(true)}>Discard changes</button>}
+        {discarding && (
+          <span className="inline-confirm" role="group" aria-label="Discard room shape changes?">
+            The saved room shape stays as it was.
+            <button className="danger" onClick={() => {
+              const old = JSON.parse(baseline || '{"edges":[],"zones":[]}');
+              setEdges(old.edges); setZones(old.zones); setDiscarding(false);
+            }}>Discard changes</button>
+            <button onClick={() => setDiscarding(false)}>Keep editing</button>
+          </span>
+        )}
       </div>
     </details>
   );

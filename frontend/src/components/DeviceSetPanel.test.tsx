@@ -27,7 +27,7 @@ test("the Presets view owns choosing what goes on the device", async () => {
   render(<DeviceSetPanel deviceId="desk" deviceName="Desk"
     looks={[{ name: "Calm", segments: [] }, { name: "Fire", segments: [] }, { name: "Rain", segments: [] }]}
     playlists={[{ name: "Storm", entries: [], repeat: 0, shuffle: false }]} notify={() => {}} onChanged={changed} />);
-  expect(await screen.findByText("Desk has its own set: 1 looks and 0 playlists.")).toBeInTheDocument();
+  expect(await screen.findByText("Desk has its own set: 1 look and 0 playlists.")).toBeInTheDocument();
   expect(screen.getByText("Storm brings Rain")).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Put Fire on Desk"));
   await waitFor(() => expect(changed).toHaveBeenCalled());

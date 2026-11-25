@@ -44,7 +44,7 @@ export function DeviceSetPanel({ deviceId, deviceName, looks, playlists, notify,
         </>
       ) : (
         <>
-          <p>{deviceName} has its own set: {set.looks.length} looks and {set.playlists.length} playlists.</p>
+          <p>{deviceName} has its own set: {set.looks.length} {set.looks.length === 1 ? "look" : "looks"} and {set.playlists.length} {set.playlists.length === 1 ? "playlist" : "playlists"}.</p>
           {set.brought.length > 0 && <p className="muted small">{set.brought.join("; ")}</p>}
           <button disabled={busy} onClick={() => put(() => api.putSet(deviceId, null), `Everything goes on ${deviceName} again`)}>
             Everything again

@@ -35,7 +35,8 @@ test("builds a playlist from looks with preset ids; the others are offered greye
   fireEvent.click(screen.getByText("Add"));
   fireEvent.change(pick, { target: { value: "Party" } });
   fireEvent.click(screen.getByText("Add"));
-  expect(screen.getByLabelText("Total duration")).toHaveTextContent("Total: 1 min 30 s per round.");
+  expect(screen.getByLabelText("Total duration")).toHaveTextContent("Total: 1 min 15 s per round.");
+  expect(screen.getByLabelText("Seconds")).toHaveValue("30");
   // reorder, and change one entry's time
   fireEvent.click(screen.getByLabelText("Move Party up"));
   fireEvent.change(screen.getByLabelText("Seconds for Party"), { target: { value: "15" } });

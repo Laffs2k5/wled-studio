@@ -26,6 +26,7 @@ export function Palettes({ palettes, onChanged, notify, deviceName, pending = nu
   const [stops, setStops] = useState<PaletteStop[]>(START);
   // the palette just saved: its row is marked, with how to use it, until the next action here
   const [saved, setSaved] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const set = (i: number, stop: PaletteStop) => setStops(stops.map((s, j) => (j === i ? stop : s)));
   const sorted = [...stops].sort((a, b) => a[0] - b[0]);
@@ -53,8 +54,15 @@ export function Palettes({ palettes, onChanged, notify, deviceName, pending = nu
               {w && <span className={`small ${w.on ? "muted" : "warn"}`}>{w.text}</span>}
               <button aria-label={`Edit palette ${p.name}`} onClick={() => edit(p)}>Edit</button>
               <button className="danger" aria-label={`Delete palette ${p.name}`}
-                onClick={() => confirm(`Delete palette “${p.name}”?`) &&
-                  api.deletePalette(p.name).then(onChanged).catch((e) => notify(e.message, true))}>×</button>
+                onClick={() => setDeleting(p.name)}>×</button>
+              {deleting === p.name && (
+                <span className="inline-confirm" role="group" aria-label={`Delete palette ${p.name}?`}>
+                  Delete “{p.name}” from the library? Looks that use it keep their saved palette name.
+                  <button className="danger" onClick={() => api.deletePalette(p.name)
+                    .then(() => { setDeleting(null); onChanged(); }).catch((e) => notify(e.message, true))}>Delete palette</button>
+                  <button onClick={() => setDeleting(null)}>Cancel</button>
+                </span>
+              )}
               {saved === p.name && (
                 <div className="row action-result done small" aria-label="Palette saved">
                   <span className="grow">

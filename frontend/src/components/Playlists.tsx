@@ -240,7 +240,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
           </label>
           <button className="add-entry" disabled={!pick} onClick={() => {
             setEntries([...entries, { look: pick, duration: tenths(seconds), transition: tenths(transition) }]);
-            setPick("");
+            setPick(""); setSeconds("30");
           }}>Add</button>
         </div>
         {noId.length > 0 && <p className="muted small">Looks without a preset id are greyed out: give one a preset id (click

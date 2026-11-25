@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RoomEditor } from "./RoomEditor";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -21,7 +21,8 @@ test("builds a room shape, shows the LED total, saves it", async () => {
   expect(screen.getByText("22 of 20 LEDs")).toHaveClass("warn");
   fireEvent.change(screen.getByLabelText("Wall 2 LEDs"), { target: { value: "8" } });
   expect(screen.getByText("20 of 20 LEDs")).not.toHaveClass("warn");
-  fireEvent.click(screen.getByText("Save shape"));
+  expect(screen.getByLabelText("Room shape preview")).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Save room shape (kept in the app)"));
   await waitFor(() => expect(onSaved).toHaveBeenLastCalledWith({ edges: expect.any(Array) }));
   const put = calls.find((c) => c.key === "PUT /api/devices/desk/room")!;
   expect(JSON.parse(put.body!)).toEqual({ edges: [{ direction: "right", pixels: 12, label: "A" }, { direction: "down", pixels: 8 }] });
@@ -57,12 +58,26 @@ test("zones are edited and saved with the shape", async () => {
   render(<RoomEditor deviceId="desk" ledCount={20} onSaved={() => {}} notify={() => {}} />);
   fireEvent.click(screen.getByText(/Room shape/));
   expect(await screen.findByDisplayValue("Door")).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Zone 1 stop"), { target: { value: "7" } });
+  fireEvent.change(screen.getByLabelText("Zone 1 last LED"), { target: { value: "6" } });
   fireEvent.click(screen.getByText("Add zone"));
   fireEvent.change(screen.getByLabelText("Zone 2 name"), { target: { value: "Desk" } });
   fireEvent.click(screen.getByLabelText("Remove zone 2"));
-  fireEvent.click(screen.getByText("Save shape"));
+  fireEvent.click(screen.getByText("Save room shape (kept in the app)"));
   await waitFor(() => expect(calls.some((c) => c.key === "PUT /api/devices/desk/room")).toBe(true));
   const put = calls.find((c) => c.key === "PUT /api/devices/desk/room")!;
   expect(JSON.parse(put.body!).zones).toEqual([{ label: "Door", start: 2, stop: 7 }]);
+});
+
+test("unsaved room edits ask before discard", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+    edges: [{ direction: "right", pixels: 5 }],
+  }), { status: 200 })));
+  render(<RoomEditor deviceId="desk" defaultOpen onSaved={() => {}} notify={() => {}} />);
+  await screen.findByDisplayValue("5");
+  fireEvent.change(screen.getByLabelText("Wall 1 LEDs"), { target: { value: "8" } });
+  expect(screen.getByText("Unsaved room shape changes")).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Discard changes"));
+  expect(screen.getByLabelText("Discard room shape changes?")).toBeInTheDocument();
+  fireEvent.click(within(screen.getByLabelText("Discard room shape changes?")).getByRole("button", { name: "Discard changes" }));
+  expect(screen.getByLabelText("Wall 1 LEDs")).toHaveValue("5");
 });

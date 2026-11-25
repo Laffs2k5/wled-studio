@@ -31,7 +31,6 @@ test("creates a palette with an extra stop, sorted by position", async () => {
 });
 
 test("edit loads an existing palette; delete asks first", async () => {
-  vi.stubGlobal("confirm", vi.fn(() => true));
   const f = vi.fn(async () => new Response("", { status: 200 }));
   vi.stubGlobal("fetch", f);
   const onChanged = vi.fn();
@@ -41,6 +40,8 @@ test("edit loads an existing palette; delete asks first", async () => {
   expect(screen.getByLabelText("Palette name (a new name saves a copy)")).toHaveValue("Ice");
   expect(screen.getByLabelText("Stop 2 colour")).toHaveValue("#0044ff");
   fireEvent.click(screen.getByLabelText("Delete palette Ice"));
+  expect(screen.getByLabelText("Delete palette Ice?")).toHaveTextContent("Looks that use it keep their saved palette name");
+  fireEvent.click(screen.getByRole("button", { name: "Delete palette" }));
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
 });
 
