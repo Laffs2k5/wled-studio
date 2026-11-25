@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Preview } from "../preview";
 import { EffectStudio } from "./EffectStudio";
 
@@ -224,16 +224,49 @@ test("streams to the header's device: sizes the preview to its LEDs and opens th
   m._preview_setup = (n: number) => { setups.push(n); };
   // the header's device is the preview's device, without picking it here
   render(<EffectStudio notify={() => {}} device="desk" load={async () => new Preview(m as never)} />);
-  expect(await screen.findByLabelText("Stream device")).toHaveValue("desk");
-  fireEvent.click(screen.getByText("Stream to the strip"));
-  expect(await screen.findByText("Stop streaming")).toBeInTheDocument();
+  expect(await screen.findByLabelText("Device (the preview takes its room shape and LED count)")).toHaveValue("desk");
+  fireEvent.click(screen.getByText("Show on the real strip"));
+  // while streaming: a banner that says so, with Stop; the device can't change meanwhile
+  const banner = await screen.findByLabelText("Streaming");
+  expect(banner).toHaveTextContent("Streaming to Desk. The strip shows this preview instead of its own effect");
+  expect(screen.getByLabelText("Device (the preview takes its room shape and LED count)")).toBeDisabled();
   expect(setups).toContain(250);   // the room's LEDs, then the device's
   expect(screen.getByLabelText("Preview strip")).toHaveClass("room");
   expect(sockets[0].url).toMatch(/\/api\/devices\/desk\/stream$/);
   expect(sockets[0].protocols).toEqual(["wledstudio", "bearer.tok"]);
-  fireEvent.click(screen.getByText("Stop streaming"));
-  expect(await screen.findByText("Stream to the strip")).toBeInTheDocument();
+  fireEvent.click(within(banner).getByRole("button", { name: "Stop" }));
+  expect(await screen.findByText("Show on the real strip")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Streaming")).toBeNull();
   sessionStorage.clear();
+});
+
+test("streaming stops when the view is left or the tab is closed", async () => {
+  const closed: number[] = [];
+  class FakeSocket {
+    readyState = 0; bufferedAmount = 0; binaryType = ""; onopen: (() => void) | null = null; onclose: (() => void) | null = null;
+    constructor() { setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 0); }
+    send() {}
+    close() { closed.push(1); this.onclose?.(); }
+  }
+  vi.stubGlobal("WebSocket", FakeSocket);
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+    if (url === "/api/devices") return reply([{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }]);
+    if (url === "/api/devices/desk/profile") return reply({ device: { id: "desk", name: "Desk" }, leds: { count: 60 } });
+    if (url === "/api/devices/desk/room") return reply(null);
+    if (url === "/api/effects") return reply({ detail: "off" }, 503);
+    return reply({ enabled: false });
+  }));
+  const view = render(<EffectStudio notify={() => {}} device="desk" load={async () => new Preview(fakeModule() as never)} />);
+  fireEvent.click(await screen.findByText("Show on the real strip"));
+  await screen.findByLabelText("Streaming");
+  window.dispatchEvent(new Event("pagehide"));                // the tab is closed or reloaded
+  expect(closed).toHaveLength(1);
+  await waitFor(() => expect(screen.queryByLabelText("Streaming")).toBeNull());
+  fireEvent.click(screen.getByText("Show on the real strip"));
+  await screen.findByLabelText("Streaming");
+  view.unmount();                                              // another view
+  expect(closed).toHaveLength(2);
 });
 
 test("a sound effect gets the simulated beat or a fixed sound level", async () => {

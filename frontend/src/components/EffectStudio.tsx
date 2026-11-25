@@ -86,13 +86,22 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   }, [target, preview]);
 
   useEffect(() => { api.devices().then(setDevices).catch(() => setDevices([])); }, []);
-  useEffect(() => () => socket.current?.close(), []);
+  // streaming stops when the view is left (unmounted) or the tab is closed or reloaded
+  useEffect(() => {
+    const stop = () => { socket.current?.close(); socket.current = null; };
+    window.addEventListener("pagehide", stop);
+    return () => { window.removeEventListener("pagehide", stop); stop(); };
+  }, []);
+
+  function stopStream() {
+    socket.current?.close();
+    socket.current = null;
+    setStreaming(false);
+  }
 
   async function toggleStream() {
     if (socket.current) {
-      socket.current.close();
-      socket.current = null;
-      setStreaming(false);
+      stopStream();
       return;
     }
     if (!preview || !target) return;
@@ -107,7 +116,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
         t ? ["wledstudio", `bearer.${t}`] : ["wledstudio"]);
       ws.binaryType = "arraybuffer";
       ws.onclose = () => { socket.current = null; setStreaming(false); };
-      ws.onopen = () => { setStreaming(true); notify(`Streaming to ${prof.device.name}`); };
+      ws.onopen = () => { setStreaming(true); };
       socket.current = ws;
     } catch (e) {
       notify((e as Error).message, true);
@@ -158,6 +167,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
     }
   }
 
+  const streamName = devices.find((d) => d.id === target)?.name ?? target;
   const messages = failure ? compileMessages(failure.log, mine ?? []) : null;
   const compileBox = mine && mine.length > 0 && (
     <div className="compile">
@@ -260,6 +270,15 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
           ? "Colours, palettes and fades are WLED's own; the strip adds its gamma and white handling."
           : "Colours and fades are approximate."}
       </p>
+      {streaming && (
+        <div className="row stream-banner" role="status" aria-label="Streaming">
+          <span className="grow">
+            <strong>Streaming to {streamName}.</strong> The strip shows this preview instead of its own effect; its own
+            effect returns a few seconds after you stop. Leaving this view stops it too.
+          </span>
+          <button onClick={stopStream}>Stop</button>
+        </div>
+      )}
       {compileBox}
       <p className="small preview-caption" aria-label="What the preview shows">
         {shown
@@ -274,15 +293,17 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
       <canvas ref={canvas} width={960} height={room ? 360 : 32} className={room ? "room" : "strip"} aria-label="Preview strip" />
       {devices.length > 0 && (
         <div className="row">
-          <span className="small muted">Preview on</span>
-          <select aria-label="Stream device" value={target} disabled={streaming} onChange={(e) => setTarget(e.target.value)}>
+          <label className="small" htmlFor="studio-device">Device <span className="muted">(the preview takes its room shape and LED count)</span></label>
+          <select id="studio-device" value={target} disabled={streaming} onChange={(e) => setTarget(e.target.value)}>
             <option value="">No device: a plain strip</option>
             {devices.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
           </select>
-          <button className={streaming ? "primary" : ""} disabled={!target} onClick={toggleStream}>
-            {streaming ? "Stop streaming" : "Stream to the strip"}
-          </button>
-          <span className="muted small">The strip shows the preview live (DDP); its own effect is back a few seconds after you stop.</span>
+          {!streaming && (
+            <button disabled={!target} onClick={toggleStream}
+              title="The device's LEDs show this preview live (DDP) instead of their own effect, until you stop">
+              Show on the real strip
+            </button>
+          )}
         </div>
       )}
       <div className="row">

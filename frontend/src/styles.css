@@ -277,3 +277,6 @@ button.code-place { font: inherit; text-align: left; }
 .playlist-entries li { margin: .15rem 0; }
 .playlist-entries button { padding: .1rem .45rem; }
 .look-list li > .action-result { flex-basis: 100%; }
+/* streaming the studio's preview to a device: amber, at the top while it lasts */
+.stream-banner { position: sticky; top: 0; z-index: 4; margin: .4rem 0; padding: .4rem .7rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 8px; background: var(--panel); }
+.stream-banner strong { color: var(--warn); }

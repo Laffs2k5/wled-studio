@@ -144,9 +144,11 @@ watch them run, and build them in.
    file in them marks the preview out of date, with a **Compile** button. If compiling fails, the
    compiler's messages appear under the button (the full log behind **Full log**); click a
    `folder/file:line` to open the file at that line.
-3. **On the strip:** **Stream to the strip** sends the preview to the header's device (or another
-   one picked under **Preview on**) live (DDP); its own effect comes back a few seconds after you
-   stop.
+3. **On the strip:** the **Device** select under the preview gives it that device's room shape and
+   LED count (the header's device, unless you pick another). **Show on the real strip** sends the
+   preview to it live (DDP). While it streams, an amber banner says so, with **Stop**; leaving the
+   Effect studio or closing the tab stops it too. The device's own effect comes back a few seconds
+   after the stream stops.
 4. **Into firmware:** once the preview shows your effects, **Build firmware with …** under it opens
    **Firmware** with those folders ticked and the board that matches the header's device picked
    (see 6).
