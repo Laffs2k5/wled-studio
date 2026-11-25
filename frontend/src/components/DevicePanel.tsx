@@ -17,6 +17,7 @@ import { Playlists } from "./Playlists";
 import { WriteBar } from "./WriteBar";
 import { SaveLook } from "./SaveLook";
 import { LibraryTransfer } from "./LibraryTransfer";
+import { CrossDevice } from "./CrossDevice";
 
 interface Props {
   deviceId: string;
@@ -276,6 +277,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
       <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} deviceName={profile?.device.name ?? deviceName}
         pending={offlineName ? null : pendingPalettes} onCheckAndWrite={offlineName ? undefined : () => setOpenPlan((n) => n + 1)} />
       <LibraryTransfer onChanged={reloadLooks} notify={notify} />
+      <CrossDevice current={deviceId} looks={looks} notify={notify} onChanged={reloadLooks} />
     </aside>
   );
   if (viewMode === "library") {
