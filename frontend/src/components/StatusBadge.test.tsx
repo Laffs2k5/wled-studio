@@ -17,7 +17,7 @@ test("the reasons a look can't be shown, in plain words", () => {
 
 test("with a built image, the badge speaks of the image", () => {
   render(<StatusBadge item={{ look: "x", status: "unavailable", notes: ["effect 'Glow' isn't on this device"] }} image />);
-  expect(screen.getByText("not in this image")).toHaveAttribute("title", "Uses effect “Glow”, which this image does not have.");
+  expect(screen.getByText("not in this firmware")).toHaveAttribute("title", "Uses effect “Glow”, which this firmware does not have.");
 });
 
 test("nothing for an ok look; other statuses as they are", () => {

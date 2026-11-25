@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Firmware } from "./Firmware";
+import { PreflightReport } from "./Preflight";
 
 const JID = "a".repeat(32);
 
@@ -62,9 +63,11 @@ test("warns about unverified targets", async () => {
 test("checks the library against a passed image before flashing", async () => {
   const job = { id: JID, state: "passed", pins: "q.json", target: "board", usermods: ["my_fx"], created: 1700000000,
     report: { passed: true, checks: { fits_app_slot: true } } };
-  const preflight = { job: JID, device: "desk", effects: 220, counts: { ok: 2, review: 1 }, rows: [
+  const preflight = { job: JID, device: "desk", effects: 220, counts: { ok: 3, review: 1, unavailable: 1 }, rows: [
     { look: "Calm", status: "ok", notes: [], today: "ok", changes: false },
     { look: "Tail", status: "review", notes: ["'Comet' changed: Tail (ix) is gone"], today: "ok", changes: true },
+    { look: "Glow", status: "unavailable", notes: ["effect 'Glow' isn't on this device"], today: "ok", changes: true },
+    { look: "Back", status: "ok", notes: [], today: "unavailable", changes: true },
     { playlist: "Mix", status: "ok", notes: [], today: "ok", changes: false },
   ] };
   const calls = stub({
@@ -78,13 +81,21 @@ test("checks the library against a passed image before flashing", async () => {
   });
   render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
   fireEvent.click(await screen.findByRole("cell", { name: "board · q" }));
+  expect(screen.getByRole("heading", { name: /What this firmware changes for your looks on Desk/ })).toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Check the library" }));
-  expect(await screen.findByText("220 effects in the image. 2 ok, 1 review")).toBeInTheDocument();
-  expect(screen.getByText("Tail")).toBeInTheDocument();
-  expect(screen.queryByText("Calm")).toBeNull();                   // only what flashing would change
-  fireEvent.click(screen.getByLabelText(/Only what/));
-  expect(screen.getByText("Calm")).toBeInTheDocument();
-  expect(screen.getByText("▶ Mix")).toBeInTheDocument();
+  // the conclusion first, then the looks by what happens to them
+  expect(await screen.findByText("After flashing, of your 5 looks and playlists: 1 stop working, 1 need checking, 1 start working, 2 stay as they are."))
+    .toHaveClass("warn");
+  expect(screen.getByText("The firmware has 220 effects.")).toBeInTheDocument();
+  const row = (table: string, name: string) => [...screen.getByRole("table", { name: table }).querySelectorAll("tr")]
+    .find((r) => r.textContent?.startsWith(name))!;
+  expect(row("Stop working", "Glow")).toHaveTextContent("Glowworksdoesn't workUses effect “Glow”, which this firmware does not have.");
+  expect(row("Need checking", "Tail")).toHaveTextContent("needs checking");
+  expect(row("Start working", "Back")).toHaveTextContent("Backdoesn't workworks");
+  expect(screen.getByRole("table", { name: "Start working" })).not.toHaveTextContent("Why");   // no empty column
+  const same = screen.getByText("Unchanged (2)").closest("details")!;
+  expect(same).not.toHaveAttribute("open");                        // folded away
+  expect(same).toHaveTextContent("▶ Mix");
   expect(calls.map((c) => c.key)).toContain(`GET /api/firmware/jobs/${JID}/preflight?device=desk`);
 });
 
@@ -102,8 +113,9 @@ test("says so when flashing changes nothing", async () => {
   render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
   fireEvent.click(await screen.findByRole("cell", { name: "board · q" }));
   fireEvent.click(await screen.findByRole("button", { name: "Check the library" }));
-  expect(await screen.findByText(/changes nothing for the library/)).toBeInTheDocument();
-  expect(screen.getByText("3 effects in the image. Nothing in the library.")).toBeInTheDocument();
+  expect(await screen.findByText("The library has nothing for this device yet.")).toBeInTheDocument();
+  expect(screen.getByText("The firmware has 3 effects.")).toBeInTheDocument();
+  expect(screen.queryByRole("table", { name: "Unchanged" })).toBeNull();       // no empty table (known bug 18)
 });
 
 test("a virtual device gets one line instead of the flash step", async () => {
@@ -129,7 +141,7 @@ test("a virtual device gets one line instead of the flash step", async () => {
   rerender(<Firmware notify={() => {}} device="desk" devices={devices} />);
   expect(await screen.findByText("Plan the flash")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /Flash it to Desk/ })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: /Before flashing: your looks on Desk with this image/ })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /What this firmware changes for your looks on Desk/ })).toBeInTheDocument();
   expect(screen.getByText(/Go back to the previous firmware/)).toBeInTheDocument();
 });
 
@@ -252,4 +264,12 @@ test("the plan's \"See which looks\" checks the library and shows it", async () 
   fireEvent.click(await screen.findByText("See which looks"));
   expect(await screen.findByText("Calm")).toBeInTheDocument();
   expect(calls.map((c) => c.key)).toContain(`GET /api/firmware/jobs/${JID}/preflight?device=desk`);
+});
+
+test("nothing changes: one green line, the unchanged looks folded away", () => {
+  render(<PreflightReport preflight={{ job: JID, device: "desk", effects: 3, counts: { ok: 1 },
+    rows: [{ look: "Calm", status: "ok", notes: [], today: "ok", changes: false }] }} />);
+  expect(screen.getByText("Flashing this firmware changes nothing for your 1 look or playlist.")).toHaveClass("ok");
+  expect(screen.getByText("Unchanged (1)").closest("details")).not.toHaveAttribute("open");
+  expect(screen.queryByRole("heading", { name: /Stop working/ })).toBeNull();
 });

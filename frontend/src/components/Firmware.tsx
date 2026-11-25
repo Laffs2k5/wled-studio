@@ -6,7 +6,7 @@ import { api, firmware, type FirmwareJob, type FirmwareTarget, type Preflight } 
 import { buildResult, buildTitle, gateLines, releaseOf } from "../gate";
 import { when } from "../time";
 import type { Device } from "../types";
-import { StatusBadge } from "./StatusBadge";
+import { PreflightReport } from "./Preflight";
 import { ChangeDevice } from "./ChangeDevice";
 import { remembered } from "../remember";
 import { boardName, matchingTarget, targetFit, targetKey, targetName, type Fit } from "../targets";
@@ -44,7 +44,6 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   const [open, setOpen] = useState<FirmwareJob | null>(null);
   const [log, setLog] = useState("");
   const [preflight, setPreflight] = useState<Preflight | null>(null);
-  const [onlyChanges, setOnlyChanges] = useState(true);
 
   const preflightBox = useRef<HTMLDivElement>(null);
   const checkLibrary = (job: string, dev: string) => firmware.preflight(job, dev).then(setPreflight)
@@ -213,38 +212,11 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
           )}
           {open.state === "passed" && open.kind !== "preview" && dev && (
             <div className="preflight" ref={preflightBox}>
-              <h2>Before flashing: your looks on {dev.name} with this image <ChangeDevice /></h2>
+              <h2>What this firmware changes for your looks on {dev.name} <ChangeDevice /></h2>
               <div className="row">
                 <button onClick={() => checkLibrary(open.id, dev.id)}>Check the library</button>
               </div>
-              {preflight && preflight.job === open.id && preflight.device === dev.id && (
-                <>
-                  <p className="small">
-                    {preflight.effects} effects in the image.{" "}
-                    {Object.entries(preflight.counts).map(([s, n]) => `${n} ${s}`).join(", ") || "Nothing in the library."}
-                  </p>
-                  <label className="small">
-                    <input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> Only what
-                    flashing would change
-                  </label>
-                  <table className="jobs">
-                    <thead><tr><th>Look or playlist</th><th>Today</th><th>With this image</th><th>Why</th></tr></thead>
-                    <tbody>
-                      {preflight.rows.filter((r) => !onlyChanges || r.changes).map((r) => (
-                        <tr key={r.look ?? `pl:${r.playlist}`}>
-                          <td>{r.look ?? `▶ ${r.playlist}`}</td>
-                          <td>{r.today}</td>
-                          <td>{r.status === "ok" ? "ok" : <StatusBadge item={r} image />}</td>
-                          <td className="small">{r.notes.join("; ")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {onlyChanges && !preflight.rows.some((r) => r.changes) && (
-                    <p className="ok small">Flashing this image changes nothing for the library.</p>
-                  )}
-                </>
-              )}
+              {preflight && preflight.job === open.id && preflight.device === dev.id && <PreflightReport preflight={preflight} />}
             </div>
           )}
           {open.state === "passed" && open.kind !== "preview" && dev && (dev.virtual ? (
@@ -254,7 +226,6 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
             </p>
           ) : (
             <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} onOpenLooks={onOpenLooks} onShowLooks={async () => {
-              setOnlyChanges(true);
               await checkLibrary(open.id, dev.id);
               preflightBox.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
             }} />

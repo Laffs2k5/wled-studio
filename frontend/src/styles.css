@@ -200,3 +200,6 @@ button.code-place { font: inherit; text-align: left; }
 .flash .revert summary { cursor: pointer; }
 .flash .revert.prominent { border: 1px solid var(--warn); border-radius: 8px; padding: .4rem .8rem; }
 .flash .revert.prominent summary { font-weight: 600; }
+.preflight-summary { font-weight: 600; margin: .5rem 0 .2rem; }
+.preflight-summary.ok { color: var(--ok); }
+.preflight .plan-group table { margin-top: .2rem; }

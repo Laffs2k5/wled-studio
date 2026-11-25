@@ -161,7 +161,10 @@ Supported boards are those with a pins file in wled-studio-builder (today: QuinL
 **Flashing** a passed build to the header's device is off unless the app runs with
 `WLEDSTUDIO_FLASHING=on`, behind a client-certificate proxy ([security.md](security.md)). Try a
 self-built image on a spare board first. Open a build that's *ready to flash*:
-1. **Check the library** shows what the image does to your looks on that device.
+1. **Check the library** shows what the firmware changes for your looks on that device, conclusion
+   first (*After flashing, of your 17 looks and playlists: 11 stop working, 4 start working, 2 stay
+   as they are*), then the looks grouped by what happens to them, with why (*Uses effect "Glow",
+   which this firmware does not have*); the unchanged ones are folded away.
 2. **Plan the flash** checks the device (reads only) and leads with a verdict: *Ready to flash*,
    *Ready to flash, with N things to look at*, or *Cannot flash: N problems*. Problems come first,
    then the things to look at, each with what to do (**Store the PIN**, **See which looks**); the
