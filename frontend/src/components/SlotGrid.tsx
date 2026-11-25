@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, slots as slotsApi, type SlotCell, type SlotGridShape, type Slots } from "../api";
 import type { PushResult } from "../types";
-import { WriteBar } from "./WriteBar";
 
 const DEFAULT: SlotGridShape = { rows: 3, cols: 4, first: 101, row_step: 10, col_step: 1, name: "R{row}·{col} {name}" };
 
@@ -89,20 +88,20 @@ const itemKey = (i: Item) => `${i.kind === "look" ? "l" : "p"}:${i.name}`;
 /** Preset ids as a grid (a remote's banks, say): which look sits in each slot, and filling slots
  * from the library beside it (click a slot, then a look; or drag a look onto a slot). Each slot says
  * whether the header's device has it; writing is the usual write bar. */
-export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
+export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan = null, onChanged }: {
   notify: (msg: string, error?: boolean) => void;
   /** The header's device: the write bar compares its presets with the library. */
   deviceId?: string | null;
   deviceName?: string;
   onOpenLook?: (name: string) => void;
+  plan?: PushResult | null;
+  onChanged?: () => void;
 }) {
   const [data, setData] = useState<Slots | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [editing, setEditing] = useState<SlotGridShape | null>(null);
   const [picked, setPicked] = useState<SlotCell | null>(null);
-  const [plan, setPlan] = useState<PushResult | null>(null);
   const [over, setOver] = useState<number | null>(null);   // the slot a look is dragged over
-  const [version, setVersion] = useState(0);   // bumped after every change: the write bar checks again
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const loadItems = useCallback(() => Promise.all([api.looks(), api.playlists()]).then(([l, p]) => setItems([
@@ -114,11 +113,9 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
     if (!s.grid) setEditing((e) => e ?? DEFAULT);
   }).catch((e) => notify((e as Error).message, true)), [notify, loadItems]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => setPlan(null), [deviceId]);
-
   const done = (s: Slots, msg: string) => {
     setData(s);
-    setVersion((v) => v + 1);
+    onChanged?.();
     setPicked((p) => (p ? s.cells.find((c) => c.preset_id === p.preset_id) ?? null : null));
     notify(msg + (s.freed?.length ? ` (${s.freed.join(", ")} left the slot, kept in the library)` : ""));
     loadItems().catch(() => {});
@@ -136,8 +133,6 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
   };
 
   if (!data) return null;
-  const bar = deviceId && <WriteBar key={deviceId} deviceId={deviceId} deviceName={deviceName ?? deviceId} notify={notify}
-    version={version} onPlan={setPlan} />;
   if (editing) {
     const g = editing;
     const set = (k: keyof SlotGridShape) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -274,7 +269,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
                         <button className="small" onClick={() => api.setPresetId(name, null).then(() => {
                           loadItems().catch(() => {});
                           load();
-                          setVersion((v) => v + 1);
+                          onChanged?.();
                           notify(`Removed preset id ${duplicate.preset_id} from “${name}”; it remains in the library`);
                         }).catch(fail)}>Remove the id from “{name}”</button>
                         {onOpenLook && <button className="small" onClick={() => onOpenLook(name)}>Open “{name}”</button>}
@@ -347,6 +342,5 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
         ) : <button className="danger" onClick={() => setConfirmRemove(true)}>Remove the grid</button>}
       </details>
     </section>
-    {bar}
   </>);
 }

@@ -78,6 +78,12 @@ export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 
   }, [deviceId]);
 
   useEffect(() => {
+    // Any device or library version change makes the previous answer unusable immediately.
+    seq.current++;
+    setPlan(null);
+    setError(null);
+    setOpen(false);
+    onPlanRef.current?.(null);
     const t = setTimeout(check, CHECK_DELAY_MS);
     return () => clearTimeout(t);
   }, [check, version]);

@@ -5,7 +5,7 @@ import { DeviceBar } from "./components/DeviceBar";
 import { AddDevice } from "./components/AddDevice";
 import { DevicePanel } from "./components/DevicePanel";
 import { EffectStudio } from "./components/EffectStudio";
-import { SlotGrid } from "./components/SlotGrid";
+import { PresetsView } from "./components/PresetsView";
 import { Firmware } from "./components/Firmware";
 import { TokenPrompt } from "./components/TokenPrompt";
 import { DeviceSettings } from "./components/DeviceSettings";
@@ -44,6 +44,8 @@ export function App() {
   // bumped when a room shape is saved: the views that draw it read it again
   const [roomVersion, setRoomVersion] = useState(0);
   const [lookToOpen, setLookToOpen] = useState<string | null>(null);
+  const [libraryVersion, setLibraryVersion] = useState(0);
+  const libraryChanged = useCallback(() => setLibraryVersion((version) => version + 1), []);
 
   const notify = useCallback((msg: string, error = false) => {
     const id = Date.now() + Math.random();
@@ -121,7 +123,8 @@ export function App() {
         <DeviceSettings key={cur.id} device={cur} focus={settings.focus} notify={notify} onClose={() => setSettings(null)}
           onChanged={reload} onRemoved={() => { setSettings(null); reload(); }} onRoomSaved={() => setRoomVersion((n) => n + 1)} />
       )}
-      {view === "presets" ? <SlotGrid notify={notify} deviceId={current} deviceName={cur?.name}
+      {view === "presets" && current ? <PresetsView deviceId={current} deviceName={cur?.name ?? current} notify={notify}
+        libraryVersion={libraryVersion} onLibraryChanged={libraryChanged}
         onOpenLook={(name) => { setView("library"); setLookToOpen(name); }} /> : view === "firmware" ? <Firmware
         notify={notify} devices={devices ?? []} device={current} request={buildRequest} openJob={route.job}
         onOpenJob={(job) => setView("firmware", { job })}
@@ -135,6 +138,7 @@ export function App() {
         current ? <DevicePanel key={`${current}@${cur?.host ?? ""}`} deviceId={current} notify={notify}
           deviceName={cur?.name} host={cur?.host} roomVersion={roomVersion}
           viewMode={view === "library" ? "library" : view === "legacy" ? "legacy" : "design"}
+          onLibraryChanged={libraryChanged}
           openLook={lookToOpen} onLookOpened={() => setLookToOpen(null)}
           onRoomShape={() => setSettings({ focus: "room" })} onEditAddress={() => setSettings({ focus: "address" })} onVirtual={(v) => {
           // the list says what the device was when last read; a different answer now: list again

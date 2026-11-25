@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { PushResult } from "../types";
 import { cellState, gridProblem, SlotGrid } from "./SlotGrid";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -106,21 +107,23 @@ test("shows what sits where, and fills and empties slots", async () => {
   await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringContaining("G1-1 Calm left the slot")));
 });
 
-test("the write bar: the header's device checked on open and again after a slot is filled", async () => {
+test("the grid uses the Presets view's device plan and reports a change after filling", async () => {
   const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) });
-  render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" />);
-  expect(await screen.findByText("Desk is up to date", undefined, { timeout: 2000 })).toBeInTheDocument();
-  expect(screen.getByLabelText("Slot 1·1, preset 40: G1-1 Calm (on device)")).toBeInTheDocument();
+  const onChanged = vi.fn();
+  const plan: PushResult = { done: false, drift: false, changed_ids: [], backup: null, reason: "dry run",
+    report: [{ look: "G1-1 Calm", preset_id: 40, status: "ok", notes: [], written: true, changed: false,
+      on_device: "G1-1 Calm" }] };
+  render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" plan={plan} onChanged={onChanged} />);
+  expect(await screen.findByLabelText("Slot 1·1, preset 40: G1-1 Calm (on device)")).toBeInTheDocument();
   // dragged from the library onto a slot
   const fire = within(screen.getByLabelText("Library")).getByRole("button", { name: "Fire" }).closest("li")!;
   const data = new Map<string, string>();
   const dataTransfer = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? "", effectAllowed: "" };
   fireEvent.dragStart(fire, { dataTransfer });
   fireEvent.drop(screen.getByLabelText("Slot 1·2, preset 41: empty").closest("td")!, { dataTransfer });
-  expect(await screen.findByText("Desk: 1 preset differs from the library", undefined, { timeout: 2000 })).toBeInTheDocument();
-  expect(await screen.findByLabelText("Slot 1·2, preset 41: G1-2 Fire (not written)")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Review and write" })).toBeInTheDocument();
-  expect(calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).every((c) => c.includes('"dry_run":true'))).toBe(true);
+  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+  expect(calls.some((c) => c.startsWith("PUT /api/slots/41"))).toBe(true);
+  expect(screen.queryByLabelText("Write to device")).toBeNull();
 });
 
 test("a picked slot can be shown on the strip; without a picked slot the library says to pick one", async () => {
@@ -153,7 +156,10 @@ test("cellState: each slot against the device's dry run", () => {
 test("shared ids are visible on the cell and library, with direct fixes", async () => {
   const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) }, true);
   const open = vi.fn();
-  render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" onOpenLook={open} />);
+  const plan: PushResult = { done: false, drift: false, changed_ids: ["40"], backup: null, reason: "dry run",
+    report: [{ look: "G1-1 Calm", preset_id: 40, status: "ok", notes: [], written: true, changed: true, on_device: null }],
+    duplicates: [{ preset_id: 40, looks: ["G1-1 Calm", "Extra"], playlists: [] }] };
+  const view = render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" onOpenLook={open} plan={plan} />);
   const cell = await screen.findByLabelText(/Slot 1·1, preset 40: G1-1 Calm \(shared id\)/, undefined, { timeout: 2000 });
   expect(cell).toHaveClass("shared-id");
   fireEvent.click(cell);
@@ -164,7 +170,8 @@ test("shared ids are visible on the cell and library, with direct fixes", async 
   fireEvent.click(within(warning).getByRole("button", { name: "Remove the id from “Extra”" }));
   await waitFor(() => expect(calls.some((c) => c.startsWith("PUT /api/looks/Extra/preset-id"))).toBe(true));
   expect(calls.find((c) => c.startsWith("PUT /api/looks/Extra/preset-id"))).toContain('{"preset_id":null}');
-  await waitFor(() => expect(screen.queryByLabelText("Shared preset id")).toBeNull(), { timeout: 2000 });
+  view.rerender(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" onOpenLook={open} plan={null} />);
+  expect(screen.queryByLabelText("Shared preset id")).toBeNull();
 });
 
 test("removing the grid is explained and confirmed in grid settings", async () => {

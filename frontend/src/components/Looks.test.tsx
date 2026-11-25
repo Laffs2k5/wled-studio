@@ -254,60 +254,6 @@ describe("folders and order", () => {
   });
 });
 
-describe("what goes on this device", () => {
-  const lib = [{ name: "Calm", segments: [] }, { name: "Fire", segments: [] }, { name: "Rain", segments: [] }];
-  const chosenSet = { all: false, looks: ["Calm"], playlists: ["Storm"], brought: ["Storm brings Rain"],
-    on_device: { looks: ["Calm", "Rain"], playlists: ["Storm"] } };
-  function stubSets(set: object) {
-    const calls: { key: string; body: unknown }[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-      const key = `${init?.method ?? "GET"} ${url}`;
-      calls.push({ key, body: init?.body ? JSON.parse(String(init.body)) : null });
-      const reply = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
-      if (key === "GET /api/devices") return reply([{ id: "desk", name: "Desk" }, { id: "test", name: "Test board" }]);
-      if (url.startsWith("/api/devices/test/set")) return reply({ ...chosenSet, looks: ["Calm", "Fire"] });
-      if (url.startsWith("/api/devices/desk/set")) return reply(set);
-      return reply({});
-    }));
-    return calls;
-  }
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("everything by default, and choosing a set", async () => {
-    const calls = stubSets({ all: true, looks: [], playlists: [], brought: [], on_device: { looks: ["Calm", "Fire", "Rain"], playlists: [] } });
-    render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
-    expect(await screen.findByText(/Everything in the library goes on Desk/)).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Choose what goes on it"));
-    await waitFor(() => expect(calls.find((c) => c.key === "PUT /api/devices/desk/set")?.body).toEqual(
-      { looks: ["Calm", "Fire", "Rain"], playlists: [] }));
-  });
-
-  test("with a set: off-device looks are marked, and can be added or taken off", async () => {
-    const calls = stubSets(chosenSet);
-    render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
-    expect(await screen.findByText(/Desk has its own set: 1 looks, 1 playlists \(Storm brings Rain\)/)).toBeInTheDocument();
-    expect(screen.getByText("Fire").closest("li")).toHaveClass("off-device");
-    expect(screen.getByText("via playlist")).toBeInTheDocument();            // Rain, brought by Storm
-    expect(screen.getByText("left off Desk")).toBeInTheDocument();
-    expect(menu("Rain", "On this device through a playlist")).toBeDisabled();
-    fireEvent.click(menu("Fire", "Put on this device"));
-    await waitFor(() => expect(calls.find((c) => c.key === "POST /api/devices/desk/set/add")?.body).toEqual({ looks: ["Fire"], playlists: [] }));
-    fireEvent.click(menu("Calm", "Remove from this device"));
-    await waitFor(() => expect(calls.find((c) => c.key === "POST /api/devices/desk/set/remove")?.body).toEqual({ looks: ["Calm"], playlists: [] }));
-  });
-
-  test("copies the selected looks to another device", async () => {
-    const calls = stubSets(chosenSet);
-    const notify = vi.fn();
-    render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={notify} />);
-    await screen.findByText(/Desk has its own set/);
-    fireEvent.click(screen.getByLabelText("Select Fire"));
-    fireEvent.change(screen.getByLabelText("Copy the selected looks to device"), { target: { value: "test" } });
-    await waitFor(() => expect(notify).toHaveBeenCalledWith("Copied 1 to Test board's set"));
-    expect(calls.find((c) => c.key === "POST /api/devices/test/set/add")?.body).toEqual({ looks: ["Fire"], playlists: [] });
-  });
-});
-
 test("a calm row: the facts in words, Show on strip and Edit, and the rest in a ⋯ menu that closes", async () => {
   const lib = [{ name: "Loud", mic: true, segments: [], folder: "Party" }, { name: "Quiet", mic: false, segments: [] }];
   const calls = stubFetch({ "POST /api/library/looks/folder": { moved: ["Quiet"] } });

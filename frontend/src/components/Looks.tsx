@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { deviceLabel } from "../devices";
-import { useCallback, useEffect, useState } from "react";
-import { api, type DeviceSet } from "../api";
+import { useEffect, useState } from "react";
+import { api } from "../api";
 import { folders, groupByFolder, moveWithin, sortWithin } from "../organise";
-import type { CheckItem, Device, Look, Playlist } from "../types";
+import type { CheckItem, Look, Playlist } from "../types";
 import { ACCEPTABLE, changedEffects, explain, StatusBadge } from "./StatusBadge";
 import { PresetIdEdit } from "./PresetIdEdit";
 
@@ -23,6 +22,7 @@ interface Props {
   playlists?: Playlist[];
   /** The device's name while it doesn't answer: the library stays usable; showing and editing wait. */
   offline?: string;
+  deviceName?: string;
   /** Playlist rows rendered in each folder beside its looks. */
   renderPlaylists?: (folder: string | null) => React.ReactNode;
 }
@@ -49,7 +49,7 @@ export function importText(r: { imported: string[]; kept_existing: string[]; imp
 }
 
 export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [], offline,
-  renderPlaylists }: Props) {
+  deviceName: listedDeviceName, renderPlaylists }: Props) {
   const usedIn = (name: string) => playlists.filter((p) => p.entries.some((e) => e.look === name) || p.end === name).map((p) => p.name);
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
   // a look whose effect (or palette, or wall) this device lacks can't be shown or edited here
@@ -73,7 +73,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [moveTo, setMoveTo] = useState("");
-  const [copyTo, setCopyTo] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [libraryMenu, setLibraryMenu] = useState(false);
   const [renamingLook, setRenamingLook] = useState<string | null>(null);
@@ -83,19 +82,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [dissolving, setDissolving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [newRowFolder, setNewRowFolder] = useState("");
-  const [set, setSet] = useState<DeviceSet | null>(null);
-  const [devices, setDevices] = useState<Device[]>([]);
   const [imported, setImported] = useState<{ ok: boolean; text: string } | null>(null);
-  const loadSet = useCallback(() => api.getSet(deviceId)
-    .then((s) => setSet(s && Array.isArray(s.looks) && s.on_device ? s : null)).catch(() => setSet(null)), [deviceId]);
-  useEffect(() => {
-    loadSet();
-    api.devices().then((d) => setDevices(Array.isArray(d) ? d : [])).catch(() => setDevices([]));
-  }, [loadSet, looks]);
-  const onDevice = (n: string) => !set || set.all || set.on_device.looks.includes(n);
-  const chosen = (n: string) => !!set && !set.all && set.looks.includes(n);
-  const deviceName = devices.find((d) => d.id === deviceId)?.name ?? deviceId;
-  const others = devices.filter((d) => d.id !== deviceId);
+  const deviceName = listedDeviceName ?? deviceId;
   const order = looks.map((l) => l.name);
   const known = folders([...looks, ...playlists]);
   const toggle = (set: Set<string>, key: string) => { const n = new Set(set); if (n.has(key)) n.delete(key); else n.add(key); return n; };
@@ -113,24 +101,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
       setBusy(false);
     }
   }
-  function changeSet(f: () => Promise<DeviceSet>, ok: string) {
-    setBusy(true);
-    // what goes on the device changed: the lists (and the write bar) are read again
-    return f().then((s) => { setSet(s); notify(ok); onChanged(); })
-      .catch((e) => notify((e as Error).message, true)).finally(() => setBusy(false));
-  }
-  function copySelected(value = copyTo) {
-    const target = others.find((d) => d.id === value);
-    if (!target) return;
-    const names = order.filter((n) => selected.has(n));
-    setBusy(true);
-    api.addToSet(target.id, names).then((s) => {
-      notify(s.all ? `${target.name} takes everything in the library already` : `Copied ${names.length} to ${target.name}'s set`);
-      setCopyTo("");
-      setSelected(new Set());
-    }).catch((e) => notify((e as Error).message, true)).finally(() => setBusy(false));
-  }
-
   function moveSelected(value = moveTo, newName = newFolderName) {
     const folder: string | null = value === "\u0000none" ? null : value === "\u0000new" ? newName.trim() : value;
     if (value === "\u0000new" && !folder) return;
@@ -194,24 +164,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
           <button className="small" onClick={() => setImported(null)}>OK</button>
         </div>
       )}
-      {set && (
-        <div className="row device-set small" aria-label="What goes on this device">
-          {set.all ? (
-            <>
-              <span>Everything in the library goes on {deviceName}.</span>
-              <button className="small" disabled={busy} onClick={() => changeSet(() => api.putSet(deviceId, order, []),
-                `${deviceName} now has its own set`)}>Choose what goes on it</button>
-            </>
-          ) : (
-            <>
-              <span>{deviceName} has its own set: {set.looks.length} looks, {set.playlists.length} playlists{set.brought.length ? ` (${set.brought.join("; ")})` : ""}.</span>
-              <button className="small" disabled={busy} onClick={() => changeSet(() => api.putSet(deviceId, null),
-                `Everything goes on ${deviceName} again`)}>Everything again</button>
-              <span className="muted">Taking a look out doesn't remove it from the device: writing never deletes presets.</span>
-            </>
-          )}
-        </div>
-      )}
       {selected.size > 0 && (
         <div className="row bulk" aria-label="Selected looks">
           <span className="small">{selected.size} selected:</span>
@@ -232,19 +184,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               <button disabled={busy || !newFolderName.trim()} onClick={() => moveSelected()}>Create and move</button>
             </label>
           )}
-          {others.length > 0 && (
-            <>
-              <select aria-label="Copy the selected looks to device" value={copyTo} onChange={(e) => {
-                setCopyTo(e.target.value);
-                if (e.target.value) copySelected(e.target.value);
-              }}>
-                <option value="">Copy to device…</option>
-                {others.map((d) => <option key={d.id} value={d.id}>{deviceLabel(d)}</option>)}
-              </select>
-            </>
-          )}
-          <button disabled={busy} onClick={() => changeSet(() => api.removeFromSet(deviceId, order.filter((n) => selected.has(n))),
-            `Took ${selected.size} off ${deviceName}'s set`).then(() => setSelected(new Set()))}>Take off this device</button>
           <button onClick={() => setSelected(new Set())}>Clear selection</button>
         </div>
       )}
@@ -308,7 +247,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               <>
                 <ul className="look-list">
                 {items.map((l, i) => (
-              <li key={l.name} className={`look-row${onDevice(l.name) ? "" : " off-device"}`}>
+              <li key={l.name} className="look-row">
                 <input type="checkbox" aria-label={`Select ${l.name}`} checked={selected.has(l.name)}
                   onChange={() => setSelected(toggle(selected, l.name))} />
                 <div className="look-main">
@@ -345,10 +284,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                         onClick={() => setKeeping(keeping === l.name ? null : l.name)}>
                         Looks right: keep
                       </button>
-                    )}
-                    {set && !set.all && !onDevice(l.name) && <span className="muted" title={`Not in ${deviceName}'s set`}>left off {deviceName}</span>}
-                    {set && !set.all && onDevice(l.name) && !chosen(l.name) && (
-                      <span className="badge" title="On this device because a playlist in its set plays it">via playlist</span>
                     )}
                     {l.segments.some((s) => s.wall) && (
                       <span className="muted" title="Follows these walls of the room model">
@@ -416,15 +351,6 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                         ) : (
                           <button role="menuitem" onClick={() => setFolderFor(l.name)}>Move to folder…</button>
                         )}
-                        {set && (onDevice(l.name)
-                          ? (set.all || chosen(l.name)
-                            ? <button role="menuitem" title={`Take it out of ${deviceName}'s set; its preset stays on the device until you remove it there`}
-                                onClick={() => { setMenu(null); changeSet(() => api.removeFromSet(deviceId, [l.name]), `Took “${l.name}” off ${deviceName}'s set`); }}>
-                                Remove from this device</button>
-                            : <button role="menuitem" disabled title="A playlist in this device's set plays it">On this device through a playlist</button>)
-                          : <button role="menuitem" title={`Add it to ${deviceName}'s set`}
-                              onClick={() => { setMenu(null); changeSet(() => api.addToSet(deviceId, [l.name]), `Added “${l.name}” to ${deviceName}'s set`); }}>
-                              Put on this device</button>)}
                         <button role="menuitem" className="danger" onClick={() => { setMenu(null); setDeleting(l.name); }}>Delete…</button>
                       </div>
                     )}

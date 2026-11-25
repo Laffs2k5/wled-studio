@@ -75,6 +75,12 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .library-view { max-width: 70rem; margin: 1rem auto; padding: 0 1.25rem; }
 .library-view > aside { max-width: none; }
 .library-view.editing-look { display: grid; gap: 1rem; }
+.presets-view { max-width: 75rem; margin: 1rem auto; padding: 0 1.25rem 4rem; }
+.device-set-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; }
+.device-set-items { display: grid; grid-template-columns: repeat(2, minmax(15rem, 1fr)); gap: 1rem; }
+.set-list { list-style: none; padding: 0; margin: 0; }
+.set-list li { display: flex; gap: .5rem; align-items: center; padding: .25rem 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 700px) { .device-set-items { grid-template-columns: 1fr; } }
 @media (max-width: 1000px) { .device-panel { grid-template-columns: 1fr; } }
 .mobile-column-tabs { display: none; }
 .file-tabs { display: flex; gap: .35rem; overflow-x: auto; margin: .4rem 0; }

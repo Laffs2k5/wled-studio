@@ -34,6 +34,8 @@ interface Props {
   onLookOpened?: () => void;
   /** Stable legacy view, or one of the separated Design/Library task views. */
   viewMode?: "design" | "library" | "legacy";
+  /** A shared token: Library mutations notify the Presets view to invalidate its plan. */
+  onLibraryChanged?: () => void;
 }
 
 /** What the panel shows instead of the live controls while the device doesn't answer: what's wrong,
@@ -64,7 +66,7 @@ export function DeviceOffline({ name, host, error, trying, onRetry, onEditAddres
 const SEND_DELAY_MS = 120;
 
 export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roomVersion = 0, onRoomShape, onEditAddress,
-  openLook, onLookOpened, viewMode = "legacy" }: Props) {
+  openLook, onLookOpened, viewMode = "legacy", onLibraryChanged }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -99,8 +101,10 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const reloadLooks = useCallback(() => Promise.all([
     api.looks(), api.playlists(), api.palettes(),
     api.check(deviceId).catch(() => [] as CheckItem[]), // the device may be unreachable; the lists still load
-  ]).then(([l, p, c, k]) => { setLooks(l); setPlaylists(p); setPalettes(c); setChecks(k); setVersion((v) => v + 1); })
-    .catch((e) => notify(e.message, true)), [deviceId, notify]);
+  ]).then(([l, p, c, k]) => {
+    setLooks(l); setPlaylists(p); setPalettes(c); setChecks(k); setVersion((v) => v + 1);
+    onLibraryChanged?.();
+  }).catch((e) => notify(e.message, true)), [deviceId, notify, onLibraryChanged]);
   const closeEditor = useCallback((didSave: boolean) => {
     setEditing(null);
     setPick(null);
@@ -259,6 +263,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
     <aside className="library-column">
       <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
         beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName}
+        deviceName={profile?.device.name ?? deviceName}
         renderPlaylists={(folder) => (
           <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
             deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
