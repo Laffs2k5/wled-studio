@@ -44,6 +44,9 @@ export function Firmware({ notify, devices = [], device = null, request = null }
   const [preflight, setPreflight] = useState<Preflight | null>(null);
   const [onlyChanges, setOnlyChanges] = useState(true);
 
+  const preflightBox = useRef<HTMLDivElement>(null);
+  const checkLibrary = (job: string, dev: string) => firmware.preflight(job, dev).then(setPreflight)
+    .catch((e) => notify((e as Error).message, true));
   const reloadJobs = useCallback(() => firmware.jobs().then(setJobs).catch((e) => notify(e.message, true)), [notify]);
 
   useEffect(() => {
@@ -207,13 +210,10 @@ export function Firmware({ notify, devices = [], device = null, request = null }
             <p className="muted small">Add a device in the header to check your looks against this image and flash it.</p>
           )}
           {open.state === "passed" && open.kind !== "preview" && dev && (
-            <div className="preflight">
+            <div className="preflight" ref={preflightBox}>
               <h2>Before flashing: your looks on {dev.name} with this image <ChangeDevice /></h2>
               <div className="row">
-                <button onClick={() => firmware.preflight(open.id, dev.id).then(setPreflight)
-                  .catch((e) => notify((e as Error).message, true))}>
-                  Check the library
-                </button>
+                <button onClick={() => checkLibrary(open.id, dev.id)}>Check the library</button>
               </div>
               {preflight && preflight.job === open.id && preflight.device === dev.id && (
                 <>
@@ -251,7 +251,11 @@ export function Firmware({ notify, devices = [], device = null, request = null }
               LEDs. It runs the firmware it was built from, and can't be flashed or reverted. <ChangeDevice />
             </p>
           ) : (
-            <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} />
+            <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} onShowLooks={async () => {
+              setOnlyChanges(true);
+              await checkLibrary(open.id, dev.id);
+              preflightBox.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+            }} />
           ))}
         </div>
       )}

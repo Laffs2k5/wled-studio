@@ -36,7 +36,9 @@ building blocks everything here sits on.
   - effects are resolved by name, and each look gets a change-check status.
 - **Firmware with your effects:** gate builds through
   [wled-studio-builder](https://github.com/Laffs2k5/wled-studio-builder). The vendor's stock image is
-  rebuilt and checked first, then only your code may differ. Flashing isn't built yet.
+  rebuilt and checked first, then only your code may differ. A passed build can be flashed to a
+  device over the air, behind a plan of checks that leads with its verdict, a typed confirmation
+  and the flashing notice; off unless turned on behind a client-certificate proxy.
 - **Effect studio:**
   - write or edit effect usermods in the browser (new ones start from a template with a fixed
     effect id);

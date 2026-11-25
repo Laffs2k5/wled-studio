@@ -229,3 +229,27 @@ test("lists firmware builds only, in plain words, and heads the open one with wh
   expect(table.querySelectorAll("tbody tr")[1]).toHaveClass("open");
   expect(table.querySelectorAll("tbody tr")[1]).toHaveAttribute("aria-selected", "true");
 });
+
+test("the plan's \"See which looks\" checks the library and shows it", async () => {
+  const job = { id: JID, kind: "gate", state: "passed", pins: "q.json", target: "board", usermods: ["my_fx"], created: 1700000000,
+    report: { passed: true } };
+  const calls = stub({
+    "GET /api/firmware/status": json({ enabled: true }),
+    "GET /api/firmware/targets": json([]),
+    "GET /api/firmware/usermods": json([]),
+    "GET /api/firmware/jobs": json([job]),
+    [`GET /api/firmware/jobs/${JID}`]: json(job),
+    [`GET /api/firmware/jobs/${JID}/log`]: () => new Response("", { status: 200 }),
+    "GET /api/notices/flash": json({ version: "v1", title: "t", text: "x", remembered: false, accepted: null }),
+    [`GET /api/firmware/jobs/${JID}/flash-plan?device=desk`]: json({ job: JID, device: "desk", name: "Desk", image: {}, running: {},
+      busy: false, can_flash: true, checks: [{ id: "library", level: "warn", text: "1 of your looks works differently." }] }),
+    [`GET /api/firmware/jobs/${JID}/preflight?device=desk`]: json({ job: JID, device: "desk", effects: 3, counts: { unavailable: 1 },
+      rows: [{ look: "Calm", status: "unavailable", notes: [], today: "ok", changes: true }] }),
+  });
+  render(<Firmware notify={() => {}} devices={[{ id: "desk", name: "Desk", host: "h", has_pin: false }]} device="desk" />);
+  fireEvent.click(await screen.findByRole("cell", { name: "board · q" }));
+  fireEvent.click(await screen.findByText("Plan the flash"));
+  fireEvent.click(await screen.findByText("See which looks"));
+  expect(await screen.findByText("Calm")).toBeInTheDocument();
+  expect(calls.map((c) => c.key)).toContain(`GET /api/firmware/jobs/${JID}/preflight?device=desk`);
+});

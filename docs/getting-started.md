@@ -156,12 +156,23 @@ when, board and release, effects, and the result: *ready to flash*, *failed chec
 which) or *running*. Click one to open it.
 
 Supported boards are those with a pins file in wled-studio-builder (today: QuinLED's 16.0.0 and
-16.0.1 releases). **Flashing from the app isn't built yet**, by design: a self-built image goes to
-a spare board first.
+16.0.1 releases).
+
+**Flashing** a passed build to the header's device is off unless the app runs with
+`WLEDSTUDIO_FLASHING=on`, behind a client-certificate proxy ([security.md](security.md)). Try a
+self-built image on a spare board first. Open a build that's *ready to flash*:
+1. **Check the library** shows what the image does to your looks on that device.
+2. **Plan the flash** checks the device (reads only) and leads with a verdict: *Ready to flash*,
+   *Ready to flash, with N things to look at*, or *Cannot flash: N problems*. Problems come first,
+   then the things to look at, each with what to do (**Store the PIN**, **See which looks**); the
+   checks that passed are folded away. A line says what the device runs now and what it will run,
+   with the effects the image adds, and what flashing does: a backup of presets and settings
+   first, then the upload and a restart (the strip goes dark for a moment), about a minute.
+3. Type the device's name and **Flash** it, after accepting the flashing notice
+   ([DISCLAIMER.md](../DISCLAIMER.md)).
 
 ## What's not here yet
 
-- flashing (see above);
 - exact colours in the preview;
 - WLED's built-in effects in the preview: the device's live view is their preview;
 - user accounts: it's built for one household on a home network.

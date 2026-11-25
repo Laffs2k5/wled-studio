@@ -162,14 +162,21 @@ def plan_checks(request: Request, g: dict) -> tuple[list[dict], dict]:
     gate_ok = (job.get("kind", "gate") != "preview" and job.get("state") == "passed" and report.get("passed") is True
                and all(report.get("checks", {}).values()))
     checks.append({"id": "gate", "level": "ok" if gate_ok else "block",
-                   "text": "The builder's gate passed this image: stock checked, only your usermods' objects new, "
-                           "fits the app slot." if gate_ok else "This job didn't pass the gate."})
+                   "text": "The build passed its four safety checks (the gate)." if gate_ok
+                   else "This build didn't pass its safety checks (the gate), so it can't be flashed."})
     custom = report.get("custom") or {}
+    new_ids = new_effect_ids(g["device_effects"], g["names"])
+    known = set(g["device_effects"])
     image = {"size": custom.get("firmware_size"), "sha256": custom.get("firmware_sha256"),
-             "slot": report.get("app_slot_bytes"), "target": report.get("target"), "usermods": report.get("usermods")}
+             "slot": report.get("app_slot_bytes"), "target": report.get("target"), "usermods": report.get("usermods"),
+             "release": report.get("pins"),
+             "new_effects": [n for n in g["names"] if "RSVD" not in n and n not in known]}
     if image["size"] and image["slot"]:
-        checks.append({"id": "size", "level": "ok" if image["size"] <= image["slot"] else "block",
-                       "text": f"The image is {image['size']:,} bytes; the app slot holds {image['slot']:,}."})
+        fits = image["size"] <= image["slot"]
+        checks.append({"id": "size", "level": "ok" if fits else "block",
+                       "text": (f"It fits the device's firmware slot ({round(100 * image['size'] / image['slot'])} % used)."
+                                if fits else f"It's too big for the device's firmware slot ({image['size']:,} bytes; "
+                                f"the slot holds {image['slot']:,}).")})
     info = g["info"]
     if info.get("arch") == "virtual":
         what = (info.get("virtual") or {}).get("firmware") or "a WLED firmware"
@@ -184,7 +191,7 @@ def plan_checks(request: Request, g: dict) -> tuple[list[dict], dict]:
                    else "WLED's OTA lock is off."})
     boot = int((g["cfg"].get("def") or {}).get("ps") or 0)
     if boot > 0:
-        risky = boot_effects(g["presets"], boot) & new_effect_ids(g["device_effects"], g["names"])
+        risky = boot_effects(g["presets"], boot) & new_ids
         checks.append({"id": "boot-preset", "level": "block" if risky else "ok",
                        "text": (f"The boot preset ({boot}) uses an effect that's new in this image (id "
                                 f"{', '.join(map(str, sorted(risky)))}). A crash at boot would trip WLED's boot-loop "
@@ -193,18 +200,19 @@ def plan_checks(request: Request, g: dict) -> tuple[list[dict], dict]:
     else:
         checks.append({"id": "boot-preset", "level": "ok", "text": "No boot preset."})
     rows, counts = compare_library(request, g["dev"].id, g["today"], g["names"], g["metas"])
-    worse = [r for r in rows if r["changes"]]
-    if worse:
-        what = ", ".join(f"{r.get('look') or r.get('playlist')} ({r['status']})" for r in worse[:8])
+    changed = [r for r in rows if r["changes"]]
+    if changed:
+        n = len(changed)
         checks.append({"id": "library", "level": "warn",
-                       "text": f"{len(worse)} of your looks and playlists change status with this image: {what}"
-                               + ("…" if len(worse) > 8 else "")})
+                       "text": f"{n} of your looks and playlists {'works' if n == 1 else 'work'} differently with this "
+                               "firmware: some may stop working, others start."})
     else:
-        checks.append({"id": "library", "level": "ok", "text": "None of your looks or playlists changes status."})
+        checks.append({"id": "library", "level": "ok", "text": "None of your looks or playlists changes with this firmware."})
     has_pin = request.app.state.devices.pin(g["dev"].id) is not None
     checks.append({"id": "pin", "level": "ok" if has_pin else "warn",
                    "text": "The app has the device's settings PIN." if has_pin else
-                   "No settings PIN stored for this device: fine only if the device has none."})
+                   "No settings PIN is stored for this device. If it has one, store it, or the device refuses the "
+                   "upload; if it has none, carry on."})
     return checks, image
 
 

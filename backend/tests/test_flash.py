@@ -101,6 +101,8 @@ def test_flash_backs_up_uploads_waits_and_checks(make, device, tmp_path):
     plan = c.get(f"/api/firmware/jobs/{JID}/flash-plan", params={"device": dev}).json()
     assert plan["can_flash"], plan["checks"]
     assert plan["image"]["size"] == len(IMAGE) and plan["running"]["ver"] == "16.0.1"
+    assert plan["image"]["new_effects"] == ["Sky Test"]          # what the image adds, for the plan's before/after
+    assert next(x["text"] for x in plan["checks"] if x["id"] == "size").startswith("It fits the device's firmware slot (0 % used)")
     assert c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "desk", "notice": NOTICE}, headers=CSRF).status_code == 400
     r = c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE}, headers=CSRF)
     assert r.status_code == 202, r.text

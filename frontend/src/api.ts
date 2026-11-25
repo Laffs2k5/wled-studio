@@ -106,7 +106,9 @@ export interface FlashPlan {
   job: string;
   device: string;
   name: string;
-  image: { size?: number; sha256?: string; slot?: number; target?: string; usermods?: string[] };
+  image: { size?: number; sha256?: string; slot?: number; target?: string; usermods?: string[];
+    /** The pins' release ("quinled-16.0.1"), and the effects the image adds to what the device has now. */
+    release?: string | null; new_effects?: string[] };
   running: { ver?: string; release?: string; arch?: string; freeheap?: number };
   checks: { id: string; level: "ok" | "warn" | "block"; text: string }[];
   can_flash: boolean;

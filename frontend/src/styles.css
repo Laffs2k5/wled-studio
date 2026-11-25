@@ -183,3 +183,13 @@ button.code-place { font: inherit; text-align: left; }
 .gate-checks .step-pending, .gate-checks .step-skipped { color: var(--muted); }
 .build-time { margin: .3rem 0; }
 .build-log summary { cursor: pointer; margin: .4rem 0; }
+.flash-plan .verdict { font-weight: 600; font-size: 1.05rem; margin: .6rem 0 .3rem; }
+.flash-plan .verdict.ok { color: var(--ok); }
+.flash-plan .verdict.warn { color: var(--warn); }
+.flash-plan .verdict.bad { color: var(--bad); }
+.flash-plan .passed summary { cursor: pointer; color: var(--ok); }
+.flash .ok { color: var(--ok); }
+.flash .warn { color: var(--warn); }
+.flash .bad { color: var(--bad); }
+.flash-checks .row { margin-left: 1.2rem; }
+.before-after { margin: .5rem 0; }

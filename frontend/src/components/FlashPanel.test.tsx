@@ -15,6 +15,7 @@ function stub(plan: object, runs: object[], remembered = false) {
     if (url === "/api/notices/flash" && (init?.method ?? "GET") === "GET") return reply({ ...NOTICE, remembered });
     if (url === "/api/notices/flash") return reply({ version: "v1", remembered: JSON.parse(String(init?.body ?? "{}")).remember ?? false });
     if (url.includes("/flash-plan")) return reply(plan);
+    if (url.endsWith("/pin")) return reply(null);
     if (url.endsWith("/flash") || url.endsWith("/revert")) return reply(runs[0], 202);
     if (url.startsWith("/api/flashes/")) return reply(runs.length > 1 ? runs.splice(0, 1)[0] && runs[0] : runs[0]);
     return reply({ detail: "no" }, 404);
@@ -61,7 +62,38 @@ test("a blocking check means no flash button", async () => {
   fireEvent.click(screen.getByText("Plan the flash"));
   expect(await screen.findByText(/Flashing is off/)).toBeInTheDocument();
   expect(screen.queryByText("Flash Desk")).not.toBeInTheDocument();
-  expect(screen.getByText(/Not flashable/)).toBeInTheDocument();
+  expect(screen.getByText("Cannot flash: 1 problem")).toHaveClass("bad");
+  expect(screen.getByText(/Fix the problems above, then check again/)).toBeInTheDocument();
+});
+
+test("the plan leads with its verdict, then problems, things to look at with what to do, and passed checks folded", async () => {
+  const calls = stub({ ...okPlan, name: "Desk", running: { ver: "16.0.1", release: "" },
+    image: { ...okPlan.image, target: "board", release: "acme-16.0.1", usermods: ["my_fx"], new_effects: ["Sky", "Wave", "A", "B", "C", "D", "E"] },
+    checks: [
+      { id: "enabled", level: "ok", text: "Flashing is enabled here." },
+      { id: "gate", level: "ok", text: "The build passed its four safety checks (the gate)." },
+      { id: "library", level: "warn", text: "3 of your looks and playlists work differently with this firmware." },
+      { id: "pin", level: "warn", text: "No settings PIN is stored for this device." },
+    ] }, []);
+  const onShowLooks = vi.fn();
+  render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} onShowLooks={onShowLooks} />);
+  fireEvent.click(screen.getByText("Plan the flash"));
+  expect(await screen.findByText("Ready to flash, with 2 things to look at")).toHaveClass("warn");
+  expect(screen.getByLabelText("To look at")).toHaveTextContent("3 of your looks");
+  expect(screen.getByText("2 checks passed").closest("details")).not.toHaveAttribute("open");
+  // the before/after line: no empty brackets for a device without a release name (known bug 17)
+  expect(screen.getByText(/^Now on Desk:/).closest("p")).toHaveTextContent(
+    "Now on Desk: WLED 16.0.1. After: board · acme-16.0.1 with my_fx, which adds Sky, Wave, A, B, C and 2 more.");
+  expect(screen.getByText(/What happens: the device's presets and settings are backed up first/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText("See which looks"));
+  expect(onShowLooks).toHaveBeenCalled();
+  // the PIN: stored from here, then the plan is checked again
+  fireEvent.click(screen.getByText("Store the PIN"));
+  fireEvent.change(screen.getByLabelText("Desk's settings PIN"), { target: { value: "1234" } });
+  fireEvent.click(screen.getByText("Save PIN"));
+  await waitFor(() => expect(calls.some((c) => c.startsWith("PUT /api/devices/d/pin") && c.includes('"pin":"1234"'))).toBe(true));
+  await waitFor(() => expect(calls.filter((c) => c.includes("/flash-plan")).length).toBe(2));
+  expect(screen.getByText("Check again")).toBeInTheDocument();
 });
 
 test("with the notice accepted for good, flashing doesn't ask again", async () => {
