@@ -170,6 +170,10 @@ self-built image on a spare board first. Open a build that's *ready to flash*:
    first, then the upload and a restart (the strip goes dark for a moment), about a minute.
 3. Type the device's name and **Flash** it, after accepting the flashing notice
    ([DISCLAIMER.md](../DISCLAIMER.md)).
+4. The run lists all its steps from the start (backup, the image checked, upload, restart, checks
+   against the backup) with *Do not power off* while it runs, then says plainly how it went:
+   *Flashed and running: … runs WLED 16.0.1 with 218 effects*, or what went wrong and what that
+   means for the device, and what to do next.
 
 ## What's not here yet
 

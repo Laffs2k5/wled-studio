@@ -18,13 +18,15 @@ export const firmwareFolders = remembered<string[]>("wledstudio.firmware.folders
 const FIT_NOTE: Record<Fit, string> = { match: "matches", "other-release": "same board, other release", "other-board": "different board" };
 
 /** Build firmware with your own effects, through the gate (wled-studio-builder). */
-export function Firmware({ notify, devices = [], device = null, request = null }: {
+export function Firmware({ notify, devices = [], device = null, request = null, onOpenLooks }: {
   notify: (msg: string, error?: boolean) => void;
   /** The devices, and the one picked in the header: the library is checked, and images flashed, for it. */
   devices?: Device[];
   device?: string | null;
   /** From the Effect studio: build with these folders, for the target that matches the device. */
   request?: { folders: string[]; seq: number } | null;
+  /** After a flash: go to Looks & effects. */
+  onOpenLooks?: () => void;
 }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [targets, setTargets] = useState<FirmwareTarget[]>([]);
@@ -251,7 +253,7 @@ export function Firmware({ notify, devices = [], device = null, request = null }
               LEDs. It runs the firmware it was built from, and can't be flashed or reverted. <ChangeDevice />
             </p>
           ) : (
-            <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} onShowLooks={async () => {
+            <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} onOpenLooks={onOpenLooks} onShowLooks={async () => {
               setOnlyChanges(true);
               await checkLibrary(open.id, dev.id);
               preflightBox.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });

@@ -193,3 +193,7 @@ button.code-place { font: inherit; text-align: left; }
 .flash .bad { color: var(--bad); }
 .flash-checks .row { margin-left: 1.2rem; }
 .before-after { margin: .5rem 0; }
+.flash .run .verdict { font-weight: 600; margin: .5rem 0; }
+.flash .run .pending { color: var(--muted); }
+.flash .run .running { color: var(--accent); }
+.flash .do-not { font-weight: 600; }

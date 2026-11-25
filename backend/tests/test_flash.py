@@ -111,6 +111,7 @@ def test_flash_backs_up_uploads_waits_and_checks(make, device, tmp_path):
     assert [x["name"] for x in run["steps"]] == ["backup", "image", "upload", "restart", "checks"]
     assert "Update successful" in run["steps"][2]["detail"]
     assert "the effect list is the image's" in run["steps"][4]["detail"]
+    assert run["result"] == {"ver": "16.0.1", "effects": len([n for n, _ in image_effects() if "RSVD" not in n]), "image_running": True}
     assert device.flashes == 1 and device.effects[-1] == NEW
     assert not device.locked(0) or device.unlocked_until == 0.0       # locked again (the reboot locks it too)
     backups = list((s.data_dir / "backups" / dev).glob("*-before-flash"))
@@ -127,6 +128,7 @@ def test_revert_boots_the_previous_image(make, device):
     run = wait(c, r.json()["id"])
     assert run["state"] == "done", run
     assert "Reverted" in run["steps"][1]["detail"]
+    assert run["result"]["effects"] == len([n for n, _ in EFFECTS if "RSVD" not in n])
     assert device.effects == list(EFFECTS) and device.image == "stock"
 
 
@@ -251,3 +253,11 @@ def test_the_repository_carries_the_same_notice():
     md = (Path(__file__).resolve().parents[2] / "DISCLAIMER.md").read_text(encoding="utf-8")
     assert TITLE in md and f"Version {NOTICE}" in md
     assert " ".join(TEXT.split()) in " ".join(md.split())
+
+
+def test_a_flash_whose_effects_dont_show_ends_with_warnings(make, device):
+    c, dev, _ = make()
+    device.flash_effects = list(EFFECTS)          # the device comes back without the image's effect list
+    run = wait(c, c.post(f"/api/firmware/jobs/{JID}/flash", json={"device": dev, "confirm": "Desk", "notice": NOTICE},
+                         headers=CSRF).json()["id"])
+    assert run["state"] == "warnings" and run["result"]["image_running"] is False

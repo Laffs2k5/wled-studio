@@ -5,14 +5,53 @@ import { NoticeDialog } from "./NoticeDialog";
 import { ChangeDevice } from "./ChangeDevice";
 
 const STEP_LABELS: Record<string, string> = {
-  backup: "Backup (presets, config, info, effects)",
-  image: "The image, checked against the gate",
-  upload: "Upload to the device",
-  revert: "Revert to the previous image",
-  restart: "Device restarts",
-  checks: "Checks against the backup",
+  backup: "Back up the device's presets and settings",
+  image: "Check the image against the gate's",
+  upload: "Upload it to the device",
+  revert: "Boot the previous firmware",
+  restart: "The device restarts",
+  checks: "Check the device against the backup",
 };
-const MARK = { ok: "✓", warn: "⚠", block: "✗", failed: "✗", running: "…" } as const;
+/** Every step of a flash and a revert, in order: listed from the start, pending until they run. */
+const STEPS: Record<FlashRun["kind"], string[]> = {
+  flash: ["backup", "image", "upload", "restart", "checks"],
+  revert: ["backup", "revert", "restart"],
+};
+const MARK = { ok: "✓", warn: "⚠", block: "✗", failed: "✗", running: "…", pending: "○" } as const;
+
+/** A finished flash or revert in plain words: the verdict, and what to do about it. */
+export function runVerdict(run: FlashRun, deviceName: string): { level: "ok" | "warn" | "bad"; text: string } {
+  const r = run.result ?? {};
+  const runs = `WLED ${r.ver ?? "?"}${typeof r.effects === "number" ? ` with ${r.effects} effects` : ""}`;
+  const failed = run.steps.find((s) => s.state === "failed");
+  if (run.kind === "revert") {
+    return run.state === "failed"
+      ? { level: "bad", text: `Couldn't go back${failed?.detail ? `: ${failed.detail}` : ""}. Look at ${deviceName}.` }
+      : { level: "ok", text: `Back on the previous firmware: ${deviceName} runs ${runs}.` };
+  }
+  if (run.state === "done") return { level: "ok", text: `Flashed and running: ${deviceName} runs ${runs}.` };
+  if (run.state === "warnings") {
+    if (r.image_running === false) {
+      return { level: "warn", text: `Flashed, but ${deviceName} doesn't report the new effects. It may still be running the old `
+        + "firmware. Look at the strip; go back to the previous firmware if it isn't right." };
+    }
+    const what = [r.presets_changed && "its presets changed", r.cfg_changed && "its settings changed",
+      r.heap_low && `free memory is lower than before (${r.heap_low.now.toLocaleString()} bytes, was ${r.heap_low.before.toLocaleString()})`]
+      .filter(Boolean).join("; ");
+    return { level: "warn", text: `Flashed and running ${runs}, but ${what || "a check after the restart warned"}. `
+      + "Look at the strip; go back to the previous firmware if it isn't right." };
+  }
+  // failed: what it means depends on how far it got
+  const why = failed?.detail ? ` (${failed.detail})` : "";
+  if (!failed || failed.name === "backup" || failed.name === "image") {
+    return { level: "bad", text: `Not flashed${why}. ${deviceName} wasn't touched and runs its old firmware.` };
+  }
+  if (failed.name === "upload") {
+    return { level: "bad", text: `Not flashed: the upload didn't go through${why}. ${deviceName} still runs its old firmware.` };
+  }
+  return { level: "bad", text: `Uploaded, but ${deviceName} didn't come back as expected${why}. Give it a minute and look `
+    + "at it; if it doesn't start, go back to the previous firmware, or recover it over USB." };
+}
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const few = (xs: string[], n = 5) => xs.slice(0, n).join(", ") + (xs.length > n ? ` and ${xs.length - n} more` : "");
@@ -26,10 +65,12 @@ export function verdict(plan: FlashPlan): string {
 }
 
 /** Flash a gate-passed image to a device: the plan, a typed confirmation, the run; and the way back. */
-export function FlashPanel({ job, device, deviceName, notify, onShowLooks }: {
+export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpenLooks }: {
   job: string; device: string; deviceName: string; notify: (msg: string, error?: boolean) => void;
   /** Show which looks change with this image (the library check above). */
   onShowLooks?: () => void;
+  /** After a flash: go to Looks & effects, where the new effects are. */
+  onOpenLooks?: () => void;
 }) {
   const [plan, setPlan] = useState<FlashPlan | null>(null);
   const [pinForm, setPinForm] = useState(false);
@@ -156,20 +197,39 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks }: {
           ) : <p className="bad small">Fix the problems above, then check again.</p>}
         </div>
       )}
-      {run && (
-        <div className="run" aria-label="Flash progress">
-          <h3>{run.kind === "flash" ? "Flash" : "Revert"}: {run.state}</h3>
-          <ol>
-            {run.steps.map((s, i) => (
-              <li key={i} className={s.state === "failed" ? "bad" : s.state}>
-                {MARK[s.state]} {STEP_LABELS[s.name] ?? s.name}{s.detail ? `: ${s.detail}` : ""}
-              </li>
-            ))}
-          </ol>
-          {run.state === "warnings" && <p className="warn small">Flashed, with warnings: look at the strip, and revert below if it isn't right.</p>}
-          {run.state === "failed" && <p className="bad small">It didn't finish. The device keeps the image it had unless the upload completed; revert below if needed.</p>}
-        </div>
-      )}
+      {run && (() => {
+        const done = run.steps.length;
+        const failedAt = run.steps.findIndex((s) => s.state === "failed");
+        const names = STEPS[run.kind] ?? run.steps.map((s) => s.name);
+        const v = running ? null : runVerdict(run, deviceName);
+        return (
+          <div className="run" aria-label="Flash progress">
+            <h3>{run.kind === "flash" ? `Flashing ${deviceName}` : `Going back to the previous firmware on ${deviceName}`}
+              {running ? "…" : ""}</h3>
+            {running && <p className="warn do-not">Do not power off or unplug {deviceName} until this has finished.</p>}
+            <ol>
+              {names.map((name, i) => {
+                const s = run.steps[i];
+                const state = s?.state ?? (running && i === done && failedAt < 0 ? "running" : "pending");
+                return (
+                  <li key={name} className={state === "failed" ? "bad" : state}>
+                    {MARK[state]} {STEP_LABELS[name] ?? name}{s?.detail ? `: ${s.detail}` : ""}
+                    {!s && !running ? <span className="muted small">: not run</span> : null}
+                  </li>
+                );
+              })}
+            </ol>
+            {v && <p className={`verdict ${v.level}`}>{v.text}</p>}
+            {v && run.kind === "flash" && run.state !== "failed" && run.result?.image_running !== false && (
+              <p className="small next-step">
+                Next: your new effects are in {deviceName}'s effect list now.{" "}
+                {onOpenLooks && <><button className="link" onClick={onOpenLooks}>Open Looks &amp; effects</button> to use them, and </>}
+                check what would change there before writing presets.
+              </p>
+            )}
+          </div>
+        );
+      })()}
       {plan?.running.arch !== "virtual" && <details className="revert">
         <summary>The way back: revert {deviceName} to its previous image</summary>
         <p className="small muted">WLED keeps the previous image in its other slot; this boots it again (WLED's /update?revert).</p>

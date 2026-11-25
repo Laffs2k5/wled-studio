@@ -69,6 +69,9 @@ class Run:
     steps: list[dict] = field(default_factory=list)
     started: float = field(default_factory=time.time)
     finished: float | None = None
+    # what the device runs afterwards, for the verdict: ver, effects (a count), and for a flash
+    # image_running (the effect list is the image's), presets_changed, cfg_changed, heap_low
+    result: dict = field(default_factory=dict)
 
     def step(self, name: str) -> dict:
         s = {"name": name, "state": "running", "detail": ""}
@@ -77,7 +80,7 @@ class Run:
 
     def public(self) -> dict:
         return {"id": self.id, "kind": self.kind, "device": self.device, "job": self.job, "notice": self.notice, "state": self.state,
-                "steps": self.steps, "started": self.started, "finished": self.finished}
+                "steps": self.steps, "started": self.started, "finished": self.finished, "result": self.result}
 
 
 def _runs(request: Request) -> dict[str, Run]:
@@ -289,21 +292,26 @@ async def _flash(request: Request, run: Run, g: dict, image: dict) -> None:
             s = run.step("checks")
             notes, warn = [], False
             effects = await c.effects()
-            if effects == g["names"][:len(effects)] and len(effects) == len(g["names"]):
-                notes.append(f"the effect list is the image's ({sum(1 for n in effects if 'RSVD' not in n)} effects)")
+            count = sum(1 for n in effects if "RSVD" not in n)
+            running_image = effects == g["names"][:len(effects)] and len(effects) == len(g["names"])
+            run.result = {"ver": after.get("ver"), "effects": count, "image_running": running_image}
+            if running_image:
+                notes.append(f"the effect list is the image's ({count} effects)")
             else:
                 warn = True
                 notes.append("the effect list isn't the image's: is the new image running?")
             if json.loads(await c.presets_text() or "{}") != g["presets"]:
-                warn = True
+                warn = run.result["presets_changed"] = True
                 notes.append("presets.json changed")
             if await c.cfg_file() != g["cfg"]:
-                warn = True
+                warn = run.result["cfg_changed"] = True
                 notes.append("cfg.json changed")
             before, now = g["info"].get("freeheap"), after.get("freeheap")
             if isinstance(before, int) and isinstance(now, int):
                 low = now < before * HEAP_DROP_WARN
                 warn |= low
+                if low:
+                    run.result["heap_low"] = {"now": now, "before": before}
                 notes.append(f"free heap {now:,} bytes (was {before:,})" + (": lower than expected" if low else ""))
             s["detail"], s["state"] = "; ".join(notes), "warn" if warn else "ok"
             run.state = "warnings" if warn else "done"
@@ -334,8 +342,9 @@ async def _revert(request: Request, run: Run, dev) -> None:
             s = run.step("restart")
             after = await _wait_back(c, sent, _timing(request))
             effects = await c.effects()
-            s["detail"] = (f"back after {int(time.monotonic() - sent)} s, {after.get('ver')}, "
-                           f"{sum(1 for n in effects if 'RSVD' not in n)} effects")
+            count = sum(1 for n in effects if "RSVD" not in n)
+            run.result = {"ver": after.get("ver"), "effects": count}
+            s["detail"] = f"back after {int(time.monotonic() - sent)} s, {after.get('ver')}, {count} effects"
             s["state"] = "ok"
             run.state = "done"
         except WLEDError as e:

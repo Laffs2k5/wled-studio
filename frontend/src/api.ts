@@ -147,6 +147,9 @@ export interface FlashRun {
   device: string;
   state: "running" | "done" | "warnings" | "failed";
   steps: { name: string; state: "running" | "ok" | "warn" | "failed"; detail: string }[];
+  /** What the device runs afterwards (flash.py's Run.result); empty until the device is back. */
+  result?: { ver?: string; effects?: number; image_running?: boolean; presets_changed?: boolean; cfg_changed?: boolean;
+    heap_low?: { now: number; before: number } };
 }
 
 /** The library checked against a built image, for one device (before it is flashed). */

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { FlashPanel } from "./FlashPanel";
+import { FlashPanel, runVerdict } from "./FlashPanel";
 
 const JOB = "j".repeat(32);
 afterEach(() => vi.unstubAllGlobals());
@@ -30,10 +30,12 @@ const okPlan = {
 
 test("plans, asks for the device's name, flashes and follows the run", async () => {
   const calls = stub(okPlan, [
-    { id: "r", kind: "flash", device: "d", state: "running", steps: [{ name: "backup", state: "running", detail: "" }] },
-    { id: "r", kind: "flash", device: "d", state: "done", steps: [{ name: "upload", state: "ok", detail: "Update successful!" }] },
+    { id: "r", kind: "flash", device: "d", state: "running", steps: [] },
+    { id: "r", kind: "flash", device: "d", state: "done", result: { ver: "16.0.1", effects: 190, image_running: true },
+      steps: ["backup", "image", "upload", "restart", "checks"].map((name) => ({ name, state: "ok", detail: "" })) },
   ]);
-  render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} />);
+  const onOpenLooks = vi.fn();
+  render(<FlashPanel job={JOB} device="d" deviceName="Desk" notify={() => {}} onOpenLooks={onOpenLooks} />);
   fireEvent.click(screen.getByText("Plan the flash"));
   expect(await screen.findByText(/The gate passed/)).toBeInTheDocument();
   const go = screen.getByText("Flash Desk");
@@ -48,8 +50,15 @@ test("plans, asks for the device's name, flashes and follows the run", async () 
   expect(acceptButton).toBeDisabled();
   fireEvent.click(screen.getByLabelText(/I have read this notice and accept it/));
   fireEvent.click(acceptButton);
-  expect(await screen.findByLabelText("Flash progress")).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByText(/Flash: done/)).toBeInTheDocument(), { timeout: 3000 });
+  // every step from the start, the first running, and a warning not to cut the power (known bug 16)
+  const progress = await screen.findByLabelText("Flash progress");
+  expect([...progress.querySelectorAll("li")].map((li) => li.className)).toEqual(["running", "pending", "pending", "pending", "pending"]);
+  expect(screen.getByText("Do not power off or unplug Desk until this has finished.")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText("Flashed and running: Desk runs WLED 16.0.1 with 190 effects.")).toBeInTheDocument(),
+    { timeout: 3000 });
+  expect(screen.queryByText(/Do not power off/)).toBeNull();
+  fireEvent.click(screen.getByText("Open Looks & effects"));
+  expect(onOpenLooks).toHaveBeenCalled();
   const post = calls.find((c) => c.startsWith("POST") && c.includes("/jobs/") && c.includes("/flash"))!;
   expect(post).toContain('"confirm":"Desk"');
   expect(post).toContain('"notice":"v1"');
@@ -132,4 +141,24 @@ test("a plan that finds a virtual device hides the way back", async () => {
   fireEvent.click(screen.getByText("Plan the flash"));
   expect(await screen.findByText(/This is a virtual device/)).toBeInTheDocument();
   expect(screen.queryByText(/The way back/)).toBeNull();
+});
+
+test("a finished run in plain words", () => {
+  const steps = (names: string[], last: "ok" | "failed" = "ok", detail = "") =>
+    names.map((name, i) => ({ name, state: i === names.length - 1 ? last : "ok" as const, detail: i === names.length - 1 ? detail : "" }));
+  const run = (o: object) => ({ id: "r", kind: "flash" as const, device: "d", state: "done" as const, steps: [], ...o });
+  expect(runVerdict(run({ state: "warnings", result: { ver: "16.0.1", effects: 3, image_running: false } }), "Desk"))
+    .toEqual({ level: "warn", text: expect.stringMatching(/^Flashed, but Desk doesn't report the new effects. It may still be running the old firmware/) });
+  expect(runVerdict(run({ state: "warnings", result: { ver: "16.0.1", effects: 3, image_running: true, heap_low: { now: 1000, before: 2000 } } }), "Desk").text)
+    .toMatch(/^Flashed and running WLED 16.0.1 with 3 effects, but free memory is lower than before \(1,000 bytes, was 2,000\)/);
+  expect(runVerdict(run({ state: "failed", steps: steps(["backup", "image"], "failed", "not the gate's") }), "Desk").text)
+    .toBe("Not flashed (not the gate's). Desk wasn't touched and runs its old firmware.");
+  expect(runVerdict(run({ state: "failed", steps: steps(["backup", "image", "upload"], "failed", "refused") }), "Desk").text)
+    .toMatch(/^Not flashed: the upload didn't go through \(refused\)/);
+  expect(runVerdict(run({ state: "failed", steps: steps(["backup", "image", "upload", "restart"], "failed", "no answer") }), "Desk").text)
+    .toMatch(/^Uploaded, but Desk didn't come back as expected \(no answer\)/);
+  expect(runVerdict(run({ kind: "revert", result: { ver: "16.0.0", effects: 2 } }), "Desk").text)
+    .toBe("Back on the previous firmware: Desk runs WLED 16.0.0 with 2 effects.");
+  expect(runVerdict(run({ kind: "revert", state: "failed", steps: steps(["backup", "revert"], "failed", "Rollback failed") }), "Desk"))
+    .toEqual({ level: "bad", text: "Couldn't go back: Rollback failed. Look at Desk." });
 });
