@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { importText, Looks } from "./Looks";
+import { colourOnly, importText, Looks } from "./Looks";
 
 function stubFetch(routes: Record<string, unknown>) {
   const calls: { key: string; body?: string }[] = [];
@@ -319,4 +319,13 @@ test("a calm row: the facts in words, Show on strip and Edit, and the rest in a 
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   expect(JSON.parse(calls.find((c) => c.key === "POST /api/library/looks/folder")!.body!)).toEqual({ names: ["Quiet"], folder: "Party" });
   expect(screen.queryByRole("menu")).toBeNull();
+});
+
+test("a look saved as effects and colours only says so on its row", () => {
+  render(<Looks deviceId="desk" onChanged={() => {}} onApplied={() => {}} notify={() => {}}
+    looks={[{ name: "Tint", segments: [{ effect: "Solid" } as never] }, { name: "Whole", segments: [{ start: 0, stop: 60, effect: "Solid" }] }]} />);
+  const badge = screen.getByText("colours only");
+  expect(badge).toHaveAttribute("title", expect.stringContaining("leaves the segments alone"));
+  expect(screen.getAllByText("colours only")).toHaveLength(1);
+  expect(colourOnly({ name: "x", segments: [] })).toBe(false);
 });

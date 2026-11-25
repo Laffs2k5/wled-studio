@@ -25,6 +25,9 @@ interface Props {
   offline?: string;
 }
 
+/** A look saved as "effects and colours only": its segments have no bounds, so it leaves the strip's layout alone. */
+export const colourOnly = (l: Look) => l.segments.length > 0 && l.segments.some((s) => !("start" in s) || !("stop" in s));
+
 const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
 
 /** What an import did, in words: new looks and playlists, what was left alone, what wasn't taken. */
@@ -268,6 +271,11 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                     {l.segments.some((s) => s.wall) && (
                       <span className="muted" title="Follows these walls of the room model">
                         {[...new Set(l.segments.map((s) => s.wall).filter(Boolean))].join(" · ")}
+                      </span>
+                    )}
+                    {colourOnly(l) && (
+                      <span className="badge colours-only" title="Saved as effects and colours only: showing it sets them on whatever segments the strip has, and leaves the segments alone">
+                        colours only
                       </span>
                     )}
                     {l.mic && <span className="badge" title="Turns the device's microphone on: a sound-reactive look">♪ mic</span>}

@@ -74,7 +74,8 @@ read from WLED's effect metadata. Changes go to the strip at once.
   segments the strip has). The mic follows the look: on for a sound-reactive effect, off for any
   other.
 - **A look's row** shows its name with a line of facts under it (its preset id, a status such as
-  "effect changed", "♪ mic" for a sound-reactive look, "in 1 playlist", the walls it follows),
+  "effect changed", "colours only" for a look saved as effects and colours only, "♪ mic" for a
+  sound-reactive look, "in 1 playlist", the walls it follows),
   then **Show on strip**, **Edit**, and a **⋯** menu with Rename, Move up and down, Move to
   folder, Remove from this device (or Put on this device) and Delete.
 - **Show on strip** plays a look on the strip without saving anything on the device.
