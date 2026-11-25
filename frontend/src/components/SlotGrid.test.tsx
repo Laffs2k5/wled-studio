@@ -10,24 +10,31 @@ const cells = (names: Record<number, string>) => [40, 41, 45, 46].map((pid, i) =
   name: names[pid] ?? null, base: names[pid]?.replace(/^G\d-\d /, "") ?? null, notes: [] as string[],
 }));
 
-function stub(initial: object) {
+function stub(initial: object, sharedId = false) {
   const calls: string[] = [];
   let state = initial;
+  let shared = sharedId;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const key = `${init?.method ?? "GET"} ${url}`;
     calls.push(`${key} ${init?.body ?? ""}`);
     const reply = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
     if (key === "GET /api/slots") return reply(state);
-    if (key === "GET /api/looks") return reply([{ name: "Fire", preset_id: 3 }, { name: "G1-1 Calm", preset_id: 40 }]);
+    if (key === "GET /api/looks") return reply([
+      { name: "Fire", preset_id: 3 }, { name: "G1-1 Calm", preset_id: 40 },
+      ...(shared ? [{ name: "Extra", preset_id: 40 }] : []),
+    ]);
     if (key === "GET /api/playlists") return reply([{ name: "Evening" }]);
     if (key === "PUT /api/slots/grid") { state = { grid: JSON.parse(String(init!.body)), cells: cells({}) }; return reply(state); }
     if (key === "PUT /api/slots/41") return reply({ grid: GRID, cells: cells({ 40: "G1-1 Calm", 41: "G1-2 Fire" }), filled: "G1-2 Fire", freed: [] });
     if (key === "DELETE /api/slots/40") return reply({ grid: GRID, cells: cells({}), freed: ["G1-1 Calm"] });
+    if (key === "DELETE /api/slots/grid") { state = { grid: null, cells: [] }; return reply(state); }
+    if (key === "PUT /api/looks/Extra/preset-id") { shared = false; return reply({ look: { name: "Extra" }, shared_with: [] }); }
     if (key === "POST /api/devices/desk/push") {
       const n = calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).length;
       const report: object[] = [{ look: "G1-1 Calm", preset_id: 40, status: "ok", notes: [], written: true, changed: false, on_device: "G1-1 Calm" }];
       if (n > 1) report.push({ look: "G1-2 Fire", preset_id: 41, status: "ok", notes: [], written: true, changed: true, on_device: null });
-      return reply({ done: false, drift: false, changed_ids: n > 1 ? ["41"] : [], backup: null, reason: "dry run", report });
+      return reply({ done: false, drift: false, changed_ids: n > 1 ? ["41"] : [], backup: null, reason: "dry run", report,
+        duplicates: shared ? [{ preset_id: 40, looks: ["G1-1 Calm", "Extra"], playlists: [] }] : [] });
     }
     return new Response(JSON.stringify({ detail: "no" }), { status: 404 });
   }));
@@ -141,4 +148,36 @@ test("cellState: each slot against the device's dry run", () => {
   expect(cellState(cell, plan({ status: "unavailable", written: false }))!.text).toBe("can't show here");
   expect(cellState(cell, plan({ status: "review", written: false }))!.text).toBe("effect changed");
   expect(cellState(cell, plan({ written: true }, { duplicates: [{ preset_id: 40, looks: ["A", "B"], playlists: [] }] }))!.text).toBe("shared id");
+});
+
+test("shared ids are visible on the cell and library, with direct fixes", async () => {
+  const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) }, true);
+  const open = vi.fn();
+  render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" onOpenLook={open} />);
+  const cell = await screen.findByLabelText(/Slot 1·1, preset 40: G1-1 Calm \(shared id\)/, undefined, { timeout: 2000 });
+  expect(cell).toHaveClass("shared-id");
+  fireEvent.click(cell);
+  const warning = screen.getByLabelText("Shared preset id");
+  expect(warning).toHaveTextContent("Only one can be on the device");
+  fireEvent.click(within(warning).getByRole("button", { name: "Open “Extra”" }));
+  expect(open).toHaveBeenCalledWith("Extra");
+  fireEvent.click(within(warning).getByRole("button", { name: "Remove the id from “Extra”" }));
+  await waitFor(() => expect(calls.some((c) => c.startsWith("PUT /api/looks/Extra/preset-id"))).toBe(true));
+  expect(calls.find((c) => c.startsWith("PUT /api/looks/Extra/preset-id"))).toContain('{"preset_id":null}');
+  await waitFor(() => expect(screen.queryByLabelText("Shared preset id")).toBeNull(), { timeout: 2000 });
+});
+
+test("removing the grid is explained and confirmed in grid settings", async () => {
+  const calls = stub({ grid: GRID, cells: cells({}) });
+  render(<SlotGrid notify={() => {}} />);
+  await screen.findByLabelText("Slot grid");
+  fireEvent.click(screen.getByText("Grid settings"));
+  expect(screen.getByText("One grid for now.")).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Remove the grid"));
+  expect(screen.getByLabelText("Confirm removing the grid")).toHaveTextContent(
+    "The looks keep their preset ids; only this layout is forgotten.");
+  expect(calls.some((c) => c.startsWith("DELETE /api/slots/grid"))).toBe(false);
+  fireEvent.click(screen.getByText("Yes, remove the grid"));
+  await waitFor(() => expect(calls.some((c) => c.startsWith("DELETE /api/slots/grid"))).toBe(true));
+  expect(await screen.findByLabelText("Banks (rows)")).toBeInTheDocument();
 });

@@ -89,11 +89,12 @@ const itemKey = (i: Item) => `${i.kind === "look" ? "l" : "p"}:${i.name}`;
 /** Preset ids as a grid (a remote's banks, say): which look sits in each slot, and filling slots
  * from the library beside it (click a slot, then a look; or drag a look onto a slot). Each slot says
  * whether the header's device has it; writing is the usual write bar. */
-export function SlotGrid({ notify, deviceId = null, deviceName }: {
+export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook }: {
   notify: (msg: string, error?: boolean) => void;
   /** The header's device: the write bar compares its presets with the library. */
   deviceId?: string | null;
   deviceName?: string;
+  onOpenLook?: (name: string) => void;
 }) {
   const [data, setData] = useState<Slots | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -102,6 +103,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
   const [plan, setPlan] = useState<PushResult | null>(null);
   const [over, setOver] = useState<number | null>(null);   // the slot a look is dragged over
   const [version, setVersion] = useState(0);   // bumped after every change: the write bar checks again
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const loadItems = useCallback(() => Promise.all([api.looks(), api.playlists()]).then(([l, p]) => setItems([
     ...l.map((x): Item => ({ kind: "look", name: x.name, preset_id: x.preset_id })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -205,6 +207,9 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
     if (item) { setPicked(cell); fill(cell, item); }
   };
   const pickedState = picked && cellState(picked, plan);
+  const duplicate = picked
+    ? (plan?.duplicates ?? []).find((d) => d.preset_id === picked.preset_id)
+    : undefined;
   return (<>
     <section className="slots">
       <h2>Slot grid</h2>
@@ -233,7 +238,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
                     return (
                       <td key={c} onDragOver={(e) => { e.preventDefault(); setOver(cell.preset_id); }}
                         onDragLeave={() => setOver((o) => (o === cell.preset_id ? null : o))} onDrop={dropped(cell)}>
-                        <button className={`slot ${cell.name ? "filled" : "empty"} ${picked?.preset_id === cell.preset_id ? "picked" : ""} ${over === cell.preset_id ? "drop" : ""}`}
+                        <button className={`slot ${cell.name ? "filled" : "empty"} ${picked?.preset_id === cell.preset_id ? "picked" : ""} ${over === cell.preset_id ? "drop" : ""} ${st?.text === "shared id" ? "shared-id" : ""}`}
                           aria-label={`Slot ${r}·${c}, preset ${cell.preset_id}: ${cell.name ?? "empty"}${st ? ` (${st.text})` : ""}`}
                           aria-pressed={picked?.preset_id === cell.preset_id} onClick={() => setPicked(cell)}>
                           <span className="slot-name">{cell.kind === "playlist" ? "▶ " : ""}{cell.base ?? "—"}</span>
@@ -252,6 +257,26 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
               <h3>Slot {picked.row}·{picked.col}, preset {picked.preset_id}: {picked.name ?? "empty"}</h3>
               {pickedState && <p className="small">On {where}: <span className={`slot-state ${pickedState.key}`}>{pickedState.text}</span>. {pickedState.title}.</p>}
               {picked.notes.map((n) => <p key={n} className="warn small">⚠ {n}</p>)}
+              {duplicate && (
+                <section className="slot-duplicate warn" aria-label="Shared preset id">
+                  <strong>Two looks have preset id {duplicate.preset_id}:</strong>{" "}
+                  {[...duplicate.looks, ...duplicate.playlists].map((n) => `“${n}”`).join(" and ")}.
+                  Only one can be on the device.
+                  <div className="row">
+                    {duplicate.looks.map((name) => (
+                      <span className="row small" key={name}>
+                        <button className="small" onClick={() => api.setPresetId(name, null).then(() => {
+                          loadItems().catch(() => {});
+                          load();
+                          setVersion((v) => v + 1);
+                          notify(`Removed preset id ${duplicate.preset_id} from “${name}”; it remains in the library`);
+                        }).catch(fail)}>Remove the id from “{name}”</button>
+                        {onOpenLook && <button className="small" onClick={() => onOpenLook(name)}>Open “{name}”</button>}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
               <p className="small">
                 Now click a look or playlist in the library to put it here. <strong>Filling copies:</strong> this slot gets a
                 copy named like “{nameIn(g, picked, "Fire")}” with preset {picked.preset_id}; later changes to the original
@@ -283,12 +308,14 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
                 <h4>{kind === "look" ? "Looks" : "Playlists"}</h4>
                 <ul className="slot-items">
                   {list.map((i) => (
-                    <li key={itemKey(i)} draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", itemKey(i)); e.dataTransfer.effectAllowed = "copy"; }}>
+                    <li key={itemKey(i)} className={(plan?.duplicates ?? []).some((d) => d.preset_id === i.preset_id) ? "shared-id" : undefined}
+                      draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", itemKey(i)); e.dataTransfer.effectAllowed = "copy"; }}>
                       <button aria-label={`${kind === "playlist" ? "Playlist " : ""}${i.name}`}
                         title={picked ? `Copy into slot ${picked.row}·${picked.col}` : "Click a slot first"}
                         onClick={() => (picked ? fill(picked, i) : notify("Click a slot first, then the look to put in it."))}>
                         <span className="grow">{kind === "playlist" ? "▶ " : ""}{i.name}</span>
                         <span className="muted small">{i.preset_id ? `preset ${i.preset_id}` : ""}</span>
+                        {(plan?.duplicates ?? []).some((d) => d.preset_id === i.preset_id) && <span className="warn small">shared id</span>}
                       </button>
                     </li>
                   ))}
@@ -299,12 +326,20 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
           {items.length === 0 && <p className="muted small">Nothing saved yet: save looks in Looks &amp; effects first.</p>}
         </aside>
       </div>
-      <div className="row">
+      <details className="grid-settings">
+        <summary>Grid settings</summary>
+        <p className="muted small">One grid for now.</p>
         <button onClick={() => setEditing(g)}>Change the grid</button>
-        <button className="danger" onClick={() => slotsApi.removeGrid().then((s) => { setPicked(null); setData(s); setEditing(DEFAULT); })
-          .catch(fail)}>Remove the grid</button>
-        <span className="muted small">Removing the grid changes no look; it only hides this view's shape.</span>
-      </div>
+        {confirmRemove ? (
+          <div className="inline-confirm warn" aria-label="Confirm removing the grid">
+            <p>The looks keep their preset ids; only this layout is forgotten.</p>
+            <button className="danger" onClick={() => slotsApi.removeGrid().then((s) => {
+              setConfirmRemove(false); setPicked(null); setData(s); setEditing(DEFAULT);
+            }).catch(fail)}>Yes, remove the grid</button>
+            <button onClick={() => setConfirmRemove(false)}>Keep the grid</button>
+          </div>
+        ) : <button className="danger" onClick={() => setConfirmRemove(true)}>Remove the grid</button>}
+      </details>
     </section>
     {bar}
   </>);

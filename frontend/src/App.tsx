@@ -28,6 +28,7 @@ export function App() {
   const [settings, setSettings] = useState<{ focus: "room" | "address" | null } | null>(null);
   // bumped when a room shape is saved: the views that draw it read it again
   const [roomVersion, setRoomVersion] = useState(0);
+  const [lookToOpen, setLookToOpen] = useState<string | null>(null);
 
   const notify = useCallback((msg: string, error = false) => {
     const id = Date.now() + Math.random();
@@ -84,11 +85,13 @@ export function App() {
         <DeviceSettings key={cur.id} device={cur} focus={settings.focus} notify={notify} onClose={() => setSettings(null)}
           onChanged={reload} onRemoved={() => { setSettings(null); reload(); }} onRoomSaved={() => setRoomVersion((n) => n + 1)} />
       )}
-      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={cur?.name} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} request={buildRequest} onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
+      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={cur?.name}
+        onOpenLook={(name) => { setView("looks"); setLookToOpen(name); }} /> : view === "firmware" ? <Firmware notify={notify} devices={devices ?? []} device={current} request={buildRequest} onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
         <EffectStudio notify={notify} device={current} onBuild={(folders) => { setViewState("firmware"); setBuildRequest({ folders, seq: Date.now() }); }} />
       ) :
         current ? <DevicePanel key={`${current}@${cur?.host ?? ""}`} deviceId={current} notify={notify}
           deviceName={cur?.name} host={cur?.host} roomVersion={roomVersion}
+          openLook={lookToOpen} onLookOpened={() => setLookToOpen(null)}
           onRoomShape={() => setSettings({ focus: "room" })} onEditAddress={() => setSettings({ focus: "address" })} onVirtual={(v) => {
           // the list says what the device was when last read; a different answer now: list again
           if (Boolean(devices?.find((d) => d.id === current)?.virtual) !== v) reload();

@@ -311,6 +311,11 @@ button.code-place { font: inherit; text-align: left; }
 .slot-items li { cursor: grab; }
 .slot-items button { width: 100%; display: flex; gap: .4rem; align-items: baseline; text-align: left; padding: .25rem .5rem; }
 button.slot.drop { border-color: var(--accent); border-style: solid; background: var(--hover); }
+button.slot.shared-id, .slot-items li.shared-id button { border-color: var(--warn); }
+.slot-duplicate { margin: .5rem 0; padding: .5rem .75rem; border: 1px solid var(--warn); border-radius: 6px; }
+.grid-settings { margin-top: 1rem; }
+.grid-settings > summary { cursor: pointer; font-weight: 600; }
+.inline-confirm { margin-top: .5rem; padding: .5rem .75rem; border: 1px solid var(--warn); border-radius: 6px; }
 .slot-state { font-size: .72rem; }
 .slot-state.same { color: var(--ok); }
 .slot-state.differs { color: var(--warn); }

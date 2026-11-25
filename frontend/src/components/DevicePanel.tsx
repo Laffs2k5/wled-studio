@@ -30,6 +30,8 @@ interface Props {
   /** Open the device settings at the room shape, or at the address. */
   onRoomShape?: () => void;
   onEditAddress?: () => void;
+  openLook?: string | null;
+  onLookOpened?: () => void;
 }
 
 /** What the panel shows instead of the live controls while the device doesn't answer: what's wrong,
@@ -59,7 +61,8 @@ export function DeviceOffline({ name, host, error, trying, onRetry, onEditAddres
 
 const SEND_DELAY_MS = 120;
 
-export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roomVersion = 0, onRoomShape, onEditAddress }: Props) {
+export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roomVersion = 0, onRoomShape, onEditAddress,
+  openLook, onLookOpened }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -99,6 +102,11 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
     if (didSave) reloadLooks();
   }, [reloadLooks]);
   const startEditing = useCallback((name: string) => { setSaved(null); setEditing(name); }, []);
+  useEffect(() => {
+    if (!openLook || !looks.some((look) => look.name === openLook)) return;
+    startEditing(openLook);
+    onLookOpened?.();
+  }, [openLook, looks, startEditing, onLookOpened]);
 
   useEffect(() => {
     let live = true;
