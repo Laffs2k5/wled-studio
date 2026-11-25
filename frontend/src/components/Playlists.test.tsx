@@ -53,5 +53,5 @@ test("a playlist shows the worst status of its looks", () => {
   render(<Playlists looks={looks} onChanged={() => {}} notify={() => {}}
     checks={[{ playlist: "Mix", status: "review", notes: ["'Calm' is review"] }]}
     playlists={[{ name: "Mix", preset_id: 9, entries: [{ look: "Calm", duration: 100, transition: 7 }], repeat: 0, shuffle: false }]} />);
-  expect(screen.getByText("review")).toHaveAttribute("title", "'Calm' is review");
+  expect(screen.getByText("effect changed")).toHaveAttribute("title", "Plays “Calm”, whose effect has different controls on this device.");
 });

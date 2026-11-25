@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { PushReportItem, PushResult } from "../types";
-import { explain } from "./StatusBadge";
+import { Notes } from "./StatusBadge";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const label = (r: PushReportItem) => r.look ?? `▶ ${r.playlist}`;
@@ -67,7 +67,7 @@ export function WritePlan({ deviceId, deviceName, plan, notify, onWritten }: Pro
         {rows.map((r) => (
           <tr key={keyOf(r)} className={`status-${r.status}`}>
             <td>{label(r)}</td><td>{r.preset_id ?? ""}</td><td>{onDevice(r)}</td>
-            <td>{explain(r, deviceName).replace(/\n/g, "; ")}</td>
+            <td><Notes item={r} where={deviceName} /></td>
             {extra && <td>{extra(r)}</td>}
           </tr>
         ))}

@@ -97,24 +97,33 @@ test("show a look live; delete asks first", async () => {
   await waitFor(() => expect(calls.some((c) => c.key === "DELETE /api/looks/Evening")).toBe(true));
 });
 
-test("a look's change-check status shows, with an Accept that takes a new snapshot", async () => {
+test("a look whose effect changed: said in plain words, and \"Looks right: keep\" confirms in the page first", async () => {
   const calls = stubFetch({ "POST /api/devices/desk/accept/Evening": { look: looks[0], status: "ok", notes: [], accepted: [] } });
-  vi.stubGlobal("confirm", vi.fn(() => true));
   const onChanged = vi.fn();
   const notify = vi.fn();
+  const raw = "'Comet' changed: Tail (ix) is gone; o1 relabelled: Twin -> Reverse; sx relabelled: Rate -> Speed";
   const checks = [
-    { look: "Evening", status: "review" as const, notes: ["'Comet' changed: Tail (ix) is gone"] },
+    { look: "Evening", status: "review" as const, notes: [raw] },
     { look: "Loose", status: "ok" as const, notes: [] },
   ];
   render(<Looks deviceId="desk" looks={looks} checks={checks} onChanged={onChanged} onApplied={() => {}} notify={notify} />);
-  const badge = screen.getByText("review");
-  expect(badge).toHaveAttribute("title", "'Comet' changed: Tail (ix) is gone");
-  expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(1); // not for ok looks
-  fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+  const plain = "The effect “Comet” on desk has different controls than when this look was saved "
+    + "(1 slider removed, 1 slider renamed, 1 option renamed). The look may not look the same.";
+  expect(screen.getByText("effect changed")).toHaveAttribute("title", plain);
+  expect(screen.queryByText("review")).toBeNull();
+  expect(screen.getAllByRole("button", { name: "Looks right: keep" })).toHaveLength(1); // not for ok looks
+  fireEvent.click(screen.getByRole("button", { name: "Looks right: keep" }));
+  const ask = screen.getByRole("group", { name: "Keep Evening as it looks on desk?" });
+  expect(ask).toHaveTextContent("Use desk's version of “Comet” as the reference for “Evening”? Other devices with the old version will then show “effect changed”.");
+  expect(ask).toHaveTextContent(raw);                                         // behind Details
+  expect(calls.some((c) => c.key.startsWith("POST"))).toBe(false);             // nothing yet
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("group", { name: /Keep Evening/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Looks right: keep" }));
+  fireEvent.click(screen.getByRole("button", { name: "Keep this version" }));
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
-  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Tail (ix) is gone"));
   expect(calls.map((c) => c.key)).toContain("POST /api/devices/desk/accept/Evening");
-  expect(notify).toHaveBeenCalledWith("Accepted “Evening” (now ok)");
+  expect(notify).toHaveBeenCalledWith("Kept desk's version of “Comet” for “Evening” (in the library)");
 });
 
 test("a look whose effect the device lacks: not on this device, can't be accepted, shown or edited", () => {
@@ -124,7 +133,7 @@ test("a look whose effect the device lacks: not on this device, can't be accepte
   const why = "Uses effect “Comet”, which desk does not have.";
   expect(screen.getByText("not on this device")).toHaveAttribute("title", why);
   expect(screen.queryByText("unavailable")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Looks right: keep" })).toBeNull();
   const [show, other] = screen.getAllByRole("button", { name: "Show" });
   expect(show).toBeDisabled();
   expect(show).toHaveAttribute("title", why);

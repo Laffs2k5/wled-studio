@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type DeviceSet } from "../api";
 import { folders, groupByFolder, moveWithin, sortWithin } from "../organise";
 import type { CheckItem, Device, Look, Playlist } from "../types";
-import { ACCEPTABLE, explain, StatusBadge } from "./StatusBadge";
+import { ACCEPTABLE, changedEffects, explain, StatusBadge } from "./StatusBadge";
 import { PresetIdEdit } from "./PresetIdEdit";
 
 interface Props {
@@ -32,6 +32,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const showable = (name: string) => !offline && status.get(name)?.status !== "unavailable";
   const whyNot = (name: string) => (offline ? `${offline} does not answer` : explain(status.get(name), deviceName));
   const [busy, setBusy] = useState(false);
+  // the look whose "Looks right: keep" waits for its confirmation in the row
+  const [keeping, setKeeping] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [moveTo, setMoveTo] = useState("");
@@ -221,10 +223,10 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                 )}
                 <StatusBadge item={status.get(l.name)} where={deviceName} />
                 {ACCEPTABLE.has(status.get(l.name)?.status ?? "ok") && (
-                  <button disabled={busy} title="Take the device's version of this look's effects as the new reference"
-                    onClick={() => confirm(`Accept the device's version of the effects in “${l.name}”?\n\n${status.get(l.name)?.notes.join("\n")}`)
-                      && run(() => api.accept(deviceId, l.name), (r) => `Accepted “${l.name}” (now ${r.status})`).then(onChanged)}>
-                    Accept
+                  <button disabled={busy} aria-expanded={keeping === l.name}
+                    title={`Show it on the strip first; if it looks right, keep ${deviceName}'s version of its effect`}
+                    onClick={() => setKeeping(keeping === l.name ? null : l.name)}>
+                    Looks right: keep
                   </button>
                 )}
                 <button disabled={busy || !showable(l.name)} title={showable(l.name) ? "Show it on the strip now" : whyNot(l.name)}
@@ -245,6 +247,27 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                   onClick={() => confirm(`Delete “${l.name}” from the library?`) && run(() => api.deleteLook(l.name)).then(onChanged)}>
                   ×
                 </button>
+                {keeping === l.name && (() => {
+                  const item = status.get(l.name);
+                  const fx = changedEffects(item);
+                  const effects = fx.length ? fx.map((n) => `“${n}”`).join(" and ") : "its effects";
+                  return (
+                    <div className="keep-confirm small" role="group" aria-label={`Keep ${l.name} as it looks on ${deviceName}?`}>
+                      <p>{explain(item, deviceName)}</p>
+                      <p>
+                        Use {deviceName}'s version of {effects} as the reference for “{l.name}”? Other devices with the old
+                        version will then show “effect changed”. Nothing is sent to {deviceName}.
+                      </p>
+                      <details className="muted"><summary>Details</summary>{item?.notes.map((n, i) => <div key={i}>{n}</div>)}</details>
+                      <div className="row">
+                        <button className="primary" disabled={busy} onClick={() => run(() => api.accept(deviceId, l.name),
+                          () => `Kept ${deviceName}'s version of ${effects} for “${l.name}” (in the library)`)
+                          .then(() => { setKeeping(null); onChanged(); })}>Keep this version</button>
+                        <button disabled={busy} onClick={() => setKeeping(null)}>Cancel</button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </li>
                 ))}
               </ul>
