@@ -42,7 +42,7 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), usb=(), serial=()",
+    "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), usb=(), serial=()",
 }
 
 

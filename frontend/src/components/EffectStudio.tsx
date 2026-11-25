@@ -8,7 +8,7 @@ import { CodeEditor } from "./CodeEditor";
 import type { Effect, Segment } from "../types";
 import { SOUND_SIMULATIONS } from "./SegmentLayout";
 import { EffectControls } from "./EffectControls";
-import { compileMessages, type Place } from "../compileLog";
+import { compileDiagnostics, compileMessages, type Place } from "../compileLog";
 import { remembered } from "../remember";
 import { elapsed, timeOfDay, useElapsed } from "../time";
 import { GitPanel } from "./GitPanel";
@@ -18,6 +18,7 @@ const LENGTH = 60;
 const STAND_IN_PALETTES = [{ id: 0, name: "Colours" }, { id: 1, name: "Rainbow" }];
 /** The effect folders ticked for compiling, remembered in this browser. */
 export const studioFolders = remembered<string[]>("wledstudio.studio.folders", []);
+const compileOnSaveChoice = remembered<boolean>("wledstudio.compile-on-save", false);
 
 function initialSegment(e: Effect): Segment {
   const d = e.defaults;
@@ -60,6 +61,8 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   const [compiling, setCompiling] = useState<{ since: number } | null>(null);
   const compileSecs = useElapsed(compiling?.since ?? null);
   const [failure, setFailure] = useState<{ job: string; log: string } | null>(null);
+  const [compileOnSave, setCompileOnSaveState] = useState(() => compileOnSaveChoice.get());
+  const setCompileOnSave = (value: boolean) => { setCompileOnSaveState(value); compileOnSaveChoice.set(value); };
   const [jump, setJump] = useState<(Place & { seq: number }) | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const socket = useRef<WebSocket | null>(null);
@@ -68,7 +71,22 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   // sound for sound effects in the preview: null = WLED's simulated beat, else a level 0-255.
   // A newly loaded preview starts with the simulation.
   const [level, setLevel] = useState<number | null>(null);
-  useEffect(() => { setLevel(null); }, [preview]);
+  const [micActive, setMicActive] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const micStream = useRef<MediaStream | null>(null);
+  const micContext = useRef<AudioContext | null>(null);
+  const micFrame = useRef(0);
+  const micRequest = useRef(0);
+  const stopMic = () => {
+    micRequest.current++;
+    cancelAnimationFrame(micFrame.current);
+    micStream.current?.getTracks().forEach((track) => track.stop());
+    micContext.current?.close().catch(() => {});
+    micStream.current = null;
+    micContext.current = null;
+    setMicActive(false);
+  };
+  useEffect(() => { stopMic(); setLevel(null); }, [preview]);
   const [room, setRoom] = useState<Room | null>(null);
   const [codeFolder, setCodeFolder] = useState<string | null>(null);
   const [codeVersion, setCodeVersion] = useState(0);
@@ -98,8 +116,45 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   useEffect(() => {
     const stop = () => { socket.current?.close(); socket.current = null; };
     window.addEventListener("pagehide", stop);
-    return () => { window.removeEventListener("pagehide", stop); stop(); };
+    return () => { window.removeEventListener("pagehide", stop); stop(); stopMic(); };
   }, []);
+
+  async function startMic() {
+    const requestId = ++micRequest.current;
+    if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+      notify("The microphone needs HTTPS and browser permission", true);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (requestId !== micRequest.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      stopMic();
+      micRequest.current++;
+      micStream.current = stream;
+      const context = new AudioContext();
+      micContext.current = context;
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      context.createMediaStreamSource(stream).connect(analyser);
+      const samples = new Uint8Array(analyser.fftSize);
+      setMicActive(true);
+      const read = () => {
+        analyser.getByteTimeDomainData(samples);
+        const energy = samples.reduce((sum, sample) => sum + Math.abs(sample - 128), 0) / samples.length;
+        const value = Math.min(255, Math.round(energy * 8));
+        setMicLevel(value);
+        preview?.sound(value);
+        micFrame.current = requestAnimationFrame(read);
+      };
+      read();
+    } catch (e) {
+      stopMic();
+      notify(`Microphone unavailable: ${(e as Error).message}`, true);
+    }
+  }
 
   function stopStream() {
     socket.current?.close();
@@ -179,6 +234,10 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   const messages = failure ? compileMessages(failure.log, mine ?? []) : null;
   const compileBox = mine && mine.length > 0 && (
     <div className="compile">
+      <label className="small">
+        <input type="checkbox" checked={compileOnSave} onChange={(e) => setCompileOnSave(e.target.checked)} />
+        Compile after Save
+      </label>
       <div className="row">
         <span className="small">Effect folders to compile:</span>
         {mine.map((u) => (
@@ -249,6 +308,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   // the code editor works with or without a preview: without one, it's how the first preview starts
   const editor = (
     <CodeEditor notify={notify} device={device} jump={jump} openFile={openFile} onFileOpen={onOpenFile}
+      diagnostics={failure ? compileDiagnostics(failure.log, mine ?? []) : []}
       showGit={false}
       onFolder={(folder) => setCodeFolder(folder)}
       onVersion={(folder) => { setCodeFolder(folder); setCodeVersion((version) => version + 1); }}
@@ -265,6 +325,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
       setChosen((c) => (c.includes(folder) ? c : [...c, folder]));
       if (shown?.folders.includes(folder)) setStale(true);
       setCodeVersion((version) => version + 1);
+      if (compileOnSave && compiling === null) void compile();
     }} onOpen={(folder) => {
       setCodeFolder(folder);
       // the open file's folder is the one to compile: only a folder the builder knows (before its list
@@ -356,12 +417,12 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
         <fieldset className="sound">
           <legend>Sound input</legend>
           <label className="row">
-            <input type="radio" name="studio-sound" checked={level === null} onChange={() => {
-              setLevel(null); preview.sound(null);
+            <input type="radio" name="studio-sound" checked={level === null && !micActive} onChange={() => {
+              stopMic(); setLevel(null); preview.sound(null);
             }} />
             Simulated beat
           </label>
-          {level === null && (
+          {level === null && !micActive && (
             <select aria-label="Sound simulation" value={Number(seg.si ?? 0)} onChange={(e) => {
               const si = Number(e.target.value); preview.set({ si }); setSeg({ ...seg, si });
             }}>
@@ -369,12 +430,12 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
             </select>
           )}
           <label className="row">
-            <input type="radio" name="studio-sound" checked={level !== null} onChange={() => {
-              setLevel(128); preview.sound(128);
+            <input type="radio" name="studio-sound" checked={level !== null && !micActive} onChange={() => {
+              stopMic(); setLevel(128); preview.sound(128);
             }} />
             Fixed level
           </label>
-          {level !== null && (
+          {level !== null && !micActive && (
             <label className="slider grow">
               <span>Sound level</span>
               <input type="range" min={0} max={255} value={level} aria-label="Sound level" onChange={(e) => {
@@ -383,7 +444,12 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
               <output>{level}</output>
             </label>
           )}
-          <p className="muted small">Browser microphone input is not available in this build.</p>
+          <label className="row">
+            <input type="radio" name="studio-sound" checked={micActive} disabled={!navigator.mediaDevices?.getUserMedia}
+              onChange={() => startMic()} />
+            This computer's microphone
+          </label>
+          {micActive && <output aria-label="Microphone sound level">{micLevel}</output>}
         </fieldset>
       )}
         </div>

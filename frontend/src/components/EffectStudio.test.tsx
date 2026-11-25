@@ -301,6 +301,44 @@ test("no sound controls for a build without preview_audio", async () => {
   expect(screen.queryByLabelText("Simulated beat")).toBeNull();
 });
 
+test("microphone is opt-in, feeds only the preview, and its tracks stop on exit", async () => {
+  const stopped = vi.fn();
+  const tracks = [{ stop: stopped }];
+  const stream = { getTracks: () => tracks } as unknown as MediaStream;
+  Object.defineProperty(navigator, "mediaDevices", { configurable: true,
+    value: { getUserMedia: vi.fn(async () => stream) } });
+  Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
+  const close = vi.fn(async () => {});
+  class FakeAudioContext {
+    createAnalyser() {
+      return {
+        fftSize: 256,
+        getByteTimeDomainData: (samples: Uint8Array) => samples.fill(192),
+      };
+    }
+    createMediaStreamSource() { return { connect: vi.fn() }; }
+    close = close;
+  }
+  vi.stubGlobal("AudioContext", FakeAudioContext);
+  const audio: number[] = [];
+  const strings = ["Solid", "Meter", "", "Gain;!;!;1v"];
+  const m = {
+    _preview_setup: () => {}, _preview_effect_count: () => 2,
+    _preview_effect_name: (id: number) => id, _preview_effect_metadata: (id: number) => id + 2,
+    _preview_select: () => 1, _preview_set: () => {}, _preview_length: () => 4, _preview_frame: () => 0,
+    _preview_audio: (level: number) => audio.push(level), UTF8ToString: (p: number) => strings[p],
+    HEAPU32: new Uint32Array(64),
+  };
+  const preview = new Preview(m as never);
+  const view = render(<EffectStudio notify={() => {}} load={async () => preview} />);
+  fireEvent.click(await screen.findByLabelText("This computer's microphone"));
+  await waitFor(() => expect(screen.getByLabelText("Microphone sound level")).toHaveTextContent("255"));
+  expect(audio.at(-1)).toBe(255);
+  view.unmount();
+  expect(stopped).toHaveBeenCalled();
+  expect(close).toHaveBeenCalled();
+});
+
 test("a new effect's folder is ticked for compiling at once, and the studio's ids count as used", async () => {
   let created = false;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {

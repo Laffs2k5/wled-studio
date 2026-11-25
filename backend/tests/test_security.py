@@ -24,6 +24,10 @@ def test_unknown_host_refused(client):
     assert client.get("/api/health", headers={"Host": "evil.example"}).status_code == 400
 
 
+def test_microphone_is_allowed_for_the_app_origin_only(client):
+    assert "microphone=(self)" in client.get("/api/health").headers["permissions-policy"]
+
+
 def test_writes_need_the_csrf_header(client):
     assert client.post("/api/devices", json={"name": "x", "host": "wled.lan"}).status_code == 403
 
