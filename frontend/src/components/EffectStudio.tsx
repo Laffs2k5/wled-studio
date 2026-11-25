@@ -295,20 +295,24 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
           ? "Colours, palettes and fades are WLED's own; the strip adds its gamma and white handling."
           : "Colours and fades are approximate."}
       </p>
-      {streaming && (
-        <div className="row stream-banner" role="status" aria-label="Streaming">
-          <span className="grow">
-            <strong>Streaming to {streamName}.</strong> The strip shows this preview instead of its own effect; its own
-            effect returns a few seconds after you stop. Leaving this view stops it too.
-          </span>
-          <button onClick={stopStream}>Stop</button>
+      <div className="effect-workflow">
+        <div className="effect-code-column">
+          <h2>1. Edit</h2>
+          {editor}
+          <h2>2. Compile</h2>
+          {compileBox}
         </div>
-      )}
-      <h2>1. Edit</h2>
-      {editor}
-      <h2>2. Compile</h2>
-      {compileBox}
-      <h2>3. Preview and stream</h2>
+        <div className="effect-preview-column">
+          {streaming && (
+            <div className="row stream-banner" role="status" aria-label="Streaming">
+              <span className="grow">
+                <strong>Streaming to {streamName}.</strong> The strip shows this preview instead of its own effect; its own
+                effect returns a few seconds after you stop. Leaving this view stops it too.
+              </span>
+              <button onClick={stopStream}>Stop</button>
+            </div>
+          )}
+          <h2>3. Preview and stream</h2>
       <p className="small preview-caption" aria-label="What the preview shows">
         {shown
           ? <>Showing: <strong>{shown.folders.join(", ")}</strong>, compiled {timeOfDay(shown.at)}.</>
@@ -382,6 +386,8 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
           <p className="muted small">Browser microphone input is not available in this build.</p>
         </fieldset>
       )}
+        </div>
+      </div>
       <h2>4. Commit and push</h2>
       {codeFolder ? <GitPanel folder={codeFolder} version={codeVersion} notify={notify} />
         : <p className="muted small">Open an effect folder to review its Git changes.</p>}

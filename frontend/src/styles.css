@@ -193,7 +193,14 @@ label.num input { width: 5rem; }
 .gate-checks .meaning { display: block; margin-left: 1.2rem; }
 pre.log { background: var(--deep); border: 1px solid var(--line); border-radius: 8px; padding: .75rem; max-height: 22rem; overflow: auto; font-size: .78rem; white-space: pre-wrap; }
 code { background: var(--deep); padding: .1rem .3rem; border-radius: 4px; }
-.studio { padding: 1rem 1.25rem; max-width: 64rem; }
+.studio { padding: 1rem 1.25rem; max-width: 92rem; margin: 0 auto; }
+.effect-workflow { display: grid; grid-template-columns: minmax(24rem, 1.15fr) minmax(22rem, .85fr); gap: 1.25rem; align-items: start; }
+.effect-code-column, .effect-preview-column { min-width: 0; }
+.effect-preview-column { position: sticky; top: 1rem; }
+@media (max-width: 1000px) {
+  .effect-workflow { grid-template-columns: 1fr; }
+  .effect-preview-column { position: static; }
+}
 canvas.strip { width: 100%; height: 32px; background: var(--led-bg); border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0; }
 .swatch { width: 4rem; height: 1rem; border-radius: 4px; border: 1px solid var(--line); }
 .gradient { height: 1.5rem; border-radius: 6px; border: 1px solid var(--line); margin: .5rem 0; }
