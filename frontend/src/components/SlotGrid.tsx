@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
 import { api, slots as slotsApi, type SlotCell, type SlotGridShape, type Slots } from "../api";
+import type { PushResult } from "../types";
 import { WriteBar } from "./WriteBar";
 
 const DEFAULT: SlotGridShape = { rows: 3, cols: 4, first: 101, row_step: 10, col_step: 1, name: "R{row}·{col} {name}" };
@@ -61,8 +62,33 @@ function Miniature({ g }: { g: SlotGridShape }) {
   );
 }
 
+/** A filled slot against the header's device, from the write bar's dry run: is the look that sits
+ * there what the device holds at that preset id? null for an empty slot or before the first check. */
+export function cellState(cell: SlotCell, plan: PushResult | null): { key: string; text: string; title: string } | null {
+  if (!cell.name || !plan) return null;
+  const item = plan.report.find((r) => (cell.kind === "playlist" ? r.playlist : r.look) === cell.name
+    && r.preset_id === cell.preset_id);
+  if (!item) return { key: "absent", text: "not for this device", title: "Not among the looks that go on this device" };
+  if ((plan.duplicates ?? []).some((d) => d.preset_id === cell.preset_id)) {
+    return { key: "differs", text: "shared id", title: "Another look has this preset id too: nothing is written until each has its own" };
+  }
+  if (item.status === "unavailable") return { key: "absent", text: "can't show here", title: "Its effect isn't on this device: it is skipped" };
+  if (item.status === "review" && !item.written) return { key: "differs", text: "effect changed", title: "Waiting for your decision in the write plan" };
+  if (!item.changed) return { key: "same", text: "on device", title: "The device holds this look at this preset id" };
+  if (item.on_device == null) return { key: "new", text: "not written", title: "The device has nothing at this preset id yet" };
+  return { key: "differs", text: "differs", title: `The device holds another version (“${item.on_device}”) at this preset id` };
+}
+
+/** The name a look gets in a slot (the grid's pattern), as the backend makes it: for the panel's words. */
+const nameIn = (g: SlotGridShape, cell: SlotCell, base: string) =>
+  g.name.replace("{row}", String(cell.row)).replace("{col}", String(cell.col)).replace("{name}", base);
+
+type Item = { kind: "look" | "playlist"; name: string; preset_id?: number };
+const itemKey = (i: Item) => `${i.kind === "look" ? "l" : "p"}:${i.name}`;
+
 /** Preset ids as a grid (a remote's banks, say): which look sits in each slot, and filling slots
- * from the library. Writing to a device is the usual write. */
+ * from the library beside it (click a slot, then a look; or drag a look onto a slot). Each slot says
+ * whether the header's device has it; writing is the usual write bar. */
 export function SlotGrid({ notify, deviceId = null, deviceName }: {
   notify: (msg: string, error?: boolean) => void;
   /** The header's device: the write bar compares its presets with the library. */
@@ -70,33 +96,46 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
   deviceName?: string;
 }) {
   const [data, setData] = useState<Slots | null>(null);
-  const [looks, setLooks] = useState<string[]>([]);
-  const [playlists, setPlaylists] = useState<string[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [editing, setEditing] = useState<SlotGridShape | null>(null);
   const [picked, setPicked] = useState<SlotCell | null>(null);
-  const [source, setSource] = useState("");
+  const [plan, setPlan] = useState<PushResult | null>(null);
+  const [over, setOver] = useState<number | null>(null);   // the slot a look is dragged over
   const [version, setVersion] = useState(0);   // bumped after every change: the write bar checks again
 
-  const load = useCallback(() => Promise.all([slotsApi.get(), api.looks(), api.playlists()]).then(([s, l, p]) => {
+  const loadItems = useCallback(() => Promise.all([api.looks(), api.playlists()]).then(([l, p]) => setItems([
+    ...l.map((x): Item => ({ kind: "look", name: x.name, preset_id: x.preset_id })).sort((a, b) => a.name.localeCompare(b.name)),
+    ...p.map((x): Item => ({ kind: "playlist", name: x.name, preset_id: x.preset_id })).sort((a, b) => a.name.localeCompare(b.name)),
+  ])), []);
+  const load = useCallback(() => Promise.all([slotsApi.get(), loadItems()]).then(([s]) => {
     setData(s);
-    setLooks(l.map((x) => x.name).sort());
-    setPlaylists(p.map((x) => x.name).sort());
     if (!s.grid) setEditing((e) => e ?? DEFAULT);
-  }).catch((e) => notify((e as Error).message, true)), [notify]);
+  }).catch((e) => notify((e as Error).message, true)), [notify, loadItems]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => setPlan(null), [deviceId]);
 
   const done = (s: Slots, msg: string) => {
     setData(s);
     setVersion((v) => v + 1);
     setPicked((p) => (p ? s.cells.find((c) => c.preset_id === p.preset_id) ?? null : null));
     notify(msg + (s.freed?.length ? ` (${s.freed.join(", ")} left the slot, kept in the library)` : ""));
-    api.looks().then((l) => setLooks(l.map((x) => x.name).sort())).catch(() => {});
-    api.playlists().then((p) => setPlaylists(p.map((x) => x.name).sort())).catch(() => {});
+    loadItems().catch(() => {});
   };
   const fail = (e: unknown) => notify((e as Error).message, true);
+  const fill = (cell: SlotCell, item: Item) =>
+    slotsApi.fill(cell.preset_id, item.kind === "look" ? { look: item.name } : { playlist: item.name })
+      .then((s) => done(s, `Copied “${item.name}” into slot ${cell.row}·${cell.col} as “${s.filled}” (in the library; write presets to put it on the device)`))
+      .catch(fail);
+  const show = (cell: SlotCell) => {
+    if (!deviceId || !cell.name) return;
+    (cell.kind === "playlist" ? api.play(deviceId, cell.name) : api.apply(deviceId, cell.name))
+      .then(() => notify(`Showing “${cell.name}” on ${deviceName ?? deviceId} (nothing stored on the device)`))
+      .catch(fail);
+  };
 
   if (!data) return null;
-  const bar = deviceId && <WriteBar key={deviceId} deviceId={deviceId} deviceName={deviceName ?? deviceId} notify={notify} version={version} />;
+  const bar = deviceId && <WriteBar key={deviceId} deviceId={deviceId} deviceName={deviceName ?? deviceId} notify={notify}
+    version={version} onPlan={setPlan} />;
   if (editing) {
     const g = editing;
     const set = (k: keyof SlotGridShape) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -157,56 +196,109 @@ export function SlotGrid({ notify, deviceId = null, deviceName }: {
   const at = (r: number, c: number): SlotCell => data.cells.find((x) => x.row === r && x.col === c)
     ?? { row: r, col: c, preset_id: idOf(g, r, c), kind: null, name: null, base: null, notes: [] };
   const rows = Array.from({ length: g.rows }, (_, i) => i + 1), cols = Array.from({ length: g.cols }, (_, i) => i + 1);
+  const where = deviceName ?? deviceId;
+  const dropped = (cell: SlotCell) => (e: React.DragEvent) => {
+    e.preventDefault();
+    setOver(null);
+    const key = e.dataTransfer.getData("text/plain");
+    const item = items.find((i) => itemKey(i) === key);
+    if (item) { setPicked(cell); fill(cell, item); }
+  };
+  const pickedState = picked && cellState(picked, plan);
   return (<>
     <section className="slots">
       <h2>Slot grid</h2>
       <p className="muted small">
-        Presets {g.first}–{idOf(g, g.rows, g.cols)}. Pick a slot, then a look or playlist to copy into it; it takes the
-        slot's preset id and name. The bar at the bottom says when the device is out of date, and writes to it.
+        Presets {g.first}–{idOf(g, g.rows, g.cols)}. Click a slot, then a look or playlist in the library beside the
+        grid (or drag one onto a slot): a copy of it takes the slot's preset id. The bar at the bottom says when
+        the device is out of date, and writes to it.
       </p>
-      <table className="slot-grid" aria-label="Slot grid">
-        <thead><tr><th />{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r}>
-              <th>{r}</th>
-              {cols.map((c) => {
-                const cell = at(r, c);
-                return (
-                  <td key={c}>
-                    <button className={`slot ${cell.name ? "filled" : "empty"} ${picked?.preset_id === cell.preset_id ? "picked" : ""}`}
-                      aria-label={`Slot ${r}·${c}, preset ${cell.preset_id}: ${cell.name ?? "empty"}`} onClick={() => setPicked(cell)}>
-                      <span className="slot-name">{cell.kind === "playlist" ? "▶ " : ""}{cell.base ?? "—"}</span>
-                      <span className="slot-id">{cell.preset_id}{cell.notes.length ? " ⚠" : ""}</span>
-                    </button>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {picked && (
-        <div className="slot-edit">
-          <h3>Slot {picked.row}·{picked.col}, preset {picked.preset_id}: {picked.name ?? "empty"}</h3>
-          {picked.notes.map((n) => <p key={n} className="warn small">⚠ {n}</p>)}
-          <div className="row">
-            <select aria-label="Look or playlist to put here" value={source} onChange={(e) => setSource(e.target.value)}>
-              <option value="">Copy a look or playlist here…</option>
-              <optgroup label="Looks">{looks.map((n) => <option key={`l:${n}`} value={`l:${n}`}>{n}</option>)}</optgroup>
-              <optgroup label="Playlists">{playlists.map((n) => <option key={`p:${n}`} value={`p:${n}`}>{n}</option>)}</optgroup>
-            </select>
-            <button className="primary" disabled={!source} onClick={() => {
-              const name = source.slice(2);
-              slotsApi.fill(picked.preset_id, source.startsWith("l:") ? { look: name } : { playlist: name })
-                .then((s) => { setSource(""); done(s, `Put “${s.filled}” in slot ${picked.row}·${picked.col} (in the library; write presets to put it on the device)`); }).catch(fail);
-            }}>Put here</button>
-            {picked.name && <button onClick={() => slotsApi.clear(picked.preset_id).then((s) => done(s, "Slot emptied (in the library)")).catch(fail)}>
-              Empty the slot
-            </button>}
-          </div>
+      <div className="slots-layout">
+        <div className="slot-grid-box">
+          {deviceId && (
+            <p className="small slot-legend" aria-label="What the slot states mean">
+              Against {where}: <span className="slot-state same">on device</span> · <span className="slot-state differs">differs</span>
+              {" · "}<span className="slot-state new">not written</span>{!plan && <span className="muted"> (checking…)</span>}
+            </p>
+          )}
+          <table className="slot-grid" aria-label="Slot grid">
+            <thead><tr><th />{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r}>
+                  <th>{r}</th>
+                  {cols.map((c) => {
+                    const cell = at(r, c);
+                    const st = cellState(cell, plan);
+                    return (
+                      <td key={c} onDragOver={(e) => { e.preventDefault(); setOver(cell.preset_id); }}
+                        onDragLeave={() => setOver((o) => (o === cell.preset_id ? null : o))} onDrop={dropped(cell)}>
+                        <button className={`slot ${cell.name ? "filled" : "empty"} ${picked?.preset_id === cell.preset_id ? "picked" : ""} ${over === cell.preset_id ? "drop" : ""}`}
+                          aria-label={`Slot ${r}·${c}, preset ${cell.preset_id}: ${cell.name ?? "empty"}${st ? ` (${st.text})` : ""}`}
+                          aria-pressed={picked?.preset_id === cell.preset_id} onClick={() => setPicked(cell)}>
+                          <span className="slot-name">{cell.kind === "playlist" ? "▶ " : ""}{cell.base ?? "—"}</span>
+                          <span className="slot-id">{cell.preset_id}{cell.notes.length ? " ⚠" : ""}
+                            {st && <span className={`slot-state ${st.key}`} title={st.title}> {st.text}</span>}</span>
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {picked ? (
+            <div className="slot-edit" aria-label="The picked slot">
+              <h3>Slot {picked.row}·{picked.col}, preset {picked.preset_id}: {picked.name ?? "empty"}</h3>
+              {pickedState && <p className="small">On {where}: <span className={`slot-state ${pickedState.key}`}>{pickedState.text}</span>. {pickedState.title}.</p>}
+              {picked.notes.map((n) => <p key={n} className="warn small">⚠ {n}</p>)}
+              <p className="small">
+                Now click a look or playlist in the library to put it here. <strong>Filling copies:</strong> this slot gets a
+                copy named like “{nameIn(g, picked, "Fire")}” with preset {picked.preset_id}; later changes to the original
+                don't reach the copy (edit the copy in Looks &amp; effects).
+                {picked.name && ` What is here now keeps its name and loses the preset id.`}
+              </p>
+              <div className="row">
+                {picked.name && (
+                  <button disabled={!deviceId} title={deviceId ? "Plays it on the strip now; nothing is stored on the device" : "Pick a device in the header"}
+                    onClick={() => show(picked)}>Show on strip</button>
+                )}
+                {picked.name && <button onClick={() => slotsApi.clear(picked.preset_id).then((s) => done(s, "Slot emptied (in the library)")).catch(fail)}>
+                  Empty the slot
+                </button>}
+                <button onClick={() => setPicked(null)}>Done</button>
+              </div>
+            </div>
+          ) : <p className="muted small">Click a slot to fill it, show it on the strip or empty it.</p>}
         </div>
-      )}
+        <aside className="slot-library" aria-label="Library">
+          <h3>Library</h3>
+          <p className="muted small">
+            {picked ? `Click one to copy it into slot ${picked.row}·${picked.col}.` : "Click a slot first, or drag one onto a slot."}
+          </p>
+          {(["look", "playlist"] as const).map((kind) => {
+            const list = items.filter((i) => i.kind === kind);
+            return list.length > 0 && (
+              <div key={kind}>
+                <h4>{kind === "look" ? "Looks" : "Playlists"}</h4>
+                <ul className="slot-items">
+                  {list.map((i) => (
+                    <li key={itemKey(i)} draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", itemKey(i)); e.dataTransfer.effectAllowed = "copy"; }}>
+                      <button aria-label={`${kind === "playlist" ? "Playlist " : ""}${i.name}`}
+                        title={picked ? `Copy into slot ${picked.row}·${picked.col}` : "Click a slot first"}
+                        onClick={() => (picked ? fill(picked, i) : notify("Click a slot first, then the look to put in it."))}>
+                        <span className="grow">{kind === "playlist" ? "▶ " : ""}{i.name}</span>
+                        <span className="muted small">{i.preset_id ? `preset ${i.preset_id}` : ""}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          {items.length === 0 && <p className="muted small">Nothing saved yet: save looks in Looks &amp; effects first.</p>}
+        </aside>
+      </div>
       <div className="row">
         <button onClick={() => setEditing(g)}>Change the grid</button>
         <button className="danger" onClick={() => slotsApi.removeGrid().then((s) => { setPicked(null); setData(s); setEditing(DEFAULT); })

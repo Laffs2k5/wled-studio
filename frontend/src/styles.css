@@ -195,7 +195,8 @@ button.slot.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 .slot-id { font-size: .72rem; color: var(--muted); }
 .slot-edit { margin: .75rem 0; }
 @media (max-width: 700px) { button.slot { width: 6.5rem; } }
-.slots { padding: 1rem 1.25rem; max-width: 64rem; }
+.slots { padding: 1rem 1.25rem; max-width: 80rem; }
+.slot-edit h3 { font-size: 1rem; margin: .3rem 0; }
 .look-group { margin: .25rem 0 .5rem; }
 .group-head { gap: .4rem; margin: .5rem 0 .1rem; }
 .group-head .link { color: var(--text); text-decoration: none; font-weight: 600; }
@@ -294,3 +295,20 @@ button.code-place { font: inherit; text-align: left; }
 .room-map-box p { margin: .2rem 0; }
 .look-list li.just-saved { background: var(--deep); border-left: 3px solid var(--ok); padding-left: .4rem; }
 .stop-pos { min-width: 2rem; text-align: right; }
+/* the slot grid with the library beside it: click a slot, then a look (or drag the look onto it) */
+.slots-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem); gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .slots-layout { grid-template-columns: minmax(0, 1fr); } }
+.slot-grid-box { min-width: 0; overflow-x: auto; }
+.slot-library { max-height: 70vh; overflow: auto; }
+.slot-library h3 { margin: .1rem 0 .3rem; font-size: .95rem; }
+.slot-library h4 { margin: .5rem 0 .2rem; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.slot-items { list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; }
+.slot-items li { cursor: grab; }
+.slot-items button { width: 100%; display: flex; gap: .4rem; align-items: baseline; text-align: left; padding: .25rem .5rem; }
+button.slot.drop { border-color: var(--accent); border-style: solid; background: var(--hover); }
+.slot-state { font-size: .72rem; }
+.slot-state.same { color: var(--ok); }
+.slot-state.differs { color: var(--warn); }
+.slot-state.new { color: var(--accent); }
+.slot-state.absent { color: var(--muted); }
+.slot-legend { margin: 0 0 .2rem; }

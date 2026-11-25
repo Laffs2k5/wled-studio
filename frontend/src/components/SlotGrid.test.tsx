@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { gridProblem, SlotGrid } from "./SlotGrid";
+import { cellState, gridProblem, SlotGrid } from "./SlotGrid";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -18,14 +18,16 @@ function stub(initial: object) {
     calls.push(`${key} ${init?.body ?? ""}`);
     const reply = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
     if (key === "GET /api/slots") return reply(state);
-    if (key === "GET /api/looks") return reply([{ name: "Fire" }, { name: "G1-1 Calm" }]);
+    if (key === "GET /api/looks") return reply([{ name: "Fire", preset_id: 3 }, { name: "G1-1 Calm", preset_id: 40 }]);
     if (key === "GET /api/playlists") return reply([{ name: "Evening" }]);
     if (key === "PUT /api/slots/grid") { state = { grid: JSON.parse(String(init!.body)), cells: cells({}) }; return reply(state); }
     if (key === "PUT /api/slots/41") return reply({ grid: GRID, cells: cells({ 40: "G1-1 Calm", 41: "G1-2 Fire" }), filled: "G1-2 Fire", freed: [] });
     if (key === "DELETE /api/slots/40") return reply({ grid: GRID, cells: cells({}), freed: ["G1-1 Calm"] });
     if (key === "POST /api/devices/desk/push") {
       const n = calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).length;
-      return reply({ done: false, drift: false, changed_ids: n > 1 ? ["41"] : [], backup: null, reason: "dry run", report: [] });
+      const report: object[] = [{ look: "G1-1 Calm", preset_id: 40, status: "ok", notes: [], written: true, changed: false, on_device: "G1-1 Calm" }];
+      if (n > 1) report.push({ look: "G1-2 Fire", preset_id: 41, status: "ok", notes: [], written: true, changed: true, on_device: null });
+      return reply({ done: false, drift: false, changed_ids: n > 1 ? ["41"] : [], backup: null, reason: "dry run", report });
     }
     return new Response(JSON.stringify({ detail: "no" }), { status: 404 });
   }));
@@ -87,9 +89,10 @@ test("shows what sits where, and fills and empties slots", async () => {
   render(<SlotGrid notify={notify} />);
   expect(await screen.findByLabelText("Slot 1·1, preset 40: G1-1 Calm")).toHaveTextContent("Calm");
   fireEvent.click(screen.getByLabelText("Slot 1·2, preset 41: empty"));
-  fireEvent.change(screen.getByLabelText("Look or playlist to put here"), { target: { value: "l:Fire" } });
-  fireEvent.click(screen.getByText("Put here"));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("Put “G1-2 Fire” in slot 1·2 (in the library; write presets to put it on the device)"));
+  const panel = screen.getByLabelText("The picked slot");
+  expect(panel).toHaveTextContent("Filling copies: this slot gets a copy named like “G1-2 Fire” with preset 41");
+  fireEvent.click(within(screen.getByLabelText("Library")).getByRole("button", { name: "Fire" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("Copied “Fire” into slot 1·2 as “G1-2 Fire” (in the library; write presets to put it on the device)"));
   expect(calls.find((c) => c.startsWith("PUT /api/slots/41"))).toContain('{"look":"Fire"}');
   fireEvent.click(screen.getByLabelText("Slot 1·1, preset 40: G1-1 Calm"));
   fireEvent.click(screen.getByText("Empty the slot"));
@@ -100,10 +103,42 @@ test("the write bar: the header's device checked on open and again after a slot 
   const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) });
   render(<SlotGrid notify={() => {}} deviceId="desk" deviceName="Desk" />);
   expect(await screen.findByText("Desk is up to date", undefined, { timeout: 2000 })).toBeInTheDocument();
-  fireEvent.click(screen.getByLabelText("Slot 1·2, preset 41: empty"));
-  fireEvent.change(screen.getByLabelText("Look or playlist to put here"), { target: { value: "l:Fire" } });
-  fireEvent.click(screen.getByText("Put here"));
+  expect(screen.getByLabelText("Slot 1·1, preset 40: G1-1 Calm (on device)")).toBeInTheDocument();
+  // dragged from the library onto a slot
+  const fire = within(screen.getByLabelText("Library")).getByRole("button", { name: "Fire" }).closest("li")!;
+  const data = new Map<string, string>();
+  const dataTransfer = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? "", effectAllowed: "" };
+  fireEvent.dragStart(fire, { dataTransfer });
+  fireEvent.drop(screen.getByLabelText("Slot 1·2, preset 41: empty").closest("td")!, { dataTransfer });
   expect(await screen.findByText("Desk: 1 preset differs from the library", undefined, { timeout: 2000 })).toBeInTheDocument();
+  expect(await screen.findByLabelText("Slot 1·2, preset 41: G1-2 Fire (not written)")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Review and write" })).toBeInTheDocument();
   expect(calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).every((c) => c.includes('"dry_run":true'))).toBe(true);
+});
+
+test("a picked slot can be shown on the strip; without a picked slot the library says to pick one", async () => {
+  const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) });
+  const notify = vi.fn();
+  render(<SlotGrid notify={notify} deviceId="desk" deviceName="Desk" />);
+  fireEvent.click(within(await screen.findByLabelText("Library")).getByRole("button", { name: "Fire" }));
+  expect(notify).toHaveBeenCalledWith("Click a slot first, then the look to put in it.");
+  expect(calls.some((c) => c.startsWith("PUT /api/slots"))).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: /^Slot 1·1, preset 40/ }));
+  fireEvent.click(screen.getByText("Show on strip"));
+  await waitFor(() => expect(calls.some((c) => c.startsWith("POST /api/devices/desk/apply/G1-1%20Calm"))).toBe(true));
+});
+
+test("cellState: each slot against the device's dry run", () => {
+  const cell = { row: 1, col: 1, preset_id: 40, kind: "look" as const, name: "A", base: "A", notes: [] };
+  const plan = (r: object, extra: object = {}) => ({ done: false, drift: false, changed_ids: [], backup: null, reason: null,
+    report: [{ look: "A", preset_id: 40, status: "ok", notes: [], ...r }], ...extra }) as never;
+  expect(cellState(cell, null)).toBeNull();
+  expect(cellState({ ...cell, name: null }, plan({}))).toBeNull();
+  expect(cellState(cell, plan({ look: "B" }))!.text).toBe("not for this device");
+  expect(cellState(cell, plan({ written: true, changed: false }))!.text).toBe("on device");
+  expect(cellState(cell, plan({ written: true, changed: true, on_device: null }))!.text).toBe("not written");
+  expect(cellState(cell, plan({ written: true, changed: true, on_device: "Old" }))!.text).toBe("differs");
+  expect(cellState(cell, plan({ status: "unavailable", written: false }))!.text).toBe("can't show here");
+  expect(cellState(cell, plan({ status: "review", written: false }))!.text).toBe("effect changed");
+  expect(cellState(cell, plan({ written: true }, { duplicates: [{ preset_id: 40, looks: ["A", "B"], playlists: [] }] }))!.text).toBe("shared id");
 });
