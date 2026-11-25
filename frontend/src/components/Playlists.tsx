@@ -19,6 +19,10 @@ interface Props {
   offline?: boolean;
   /** Called after a playlist was shown on the strip (the live controls read the device again). */
   onShown?: () => void;
+  /** In the shared library tree: render only this folder, or only the editor. */
+  folder?: string | null;
+  listOnly?: boolean;
+  formOnly?: boolean;
 }
 
 /** Seconds as people read them: "45 s", "2 min", "1 min 15 s". */
@@ -39,7 +43,8 @@ export function total(entries: PlaylistEntry[]): string {
 const DEFAULT_TRANSITION = 7;   // tenths of a second: WLED's default
 
 /** Playlists: looks in a row, each shown for a while. Written to the device with the looks. */
-export function Playlists({ looks, playlists, onChanged, notify, checks = [], deviceId, deviceName, offline = false, onShown }: Props) {
+export function Playlists({ looks, playlists, onChanged, notify, checks = [], deviceId, deviceName, offline = false, onShown,
+  folder, listOnly = false, formOnly = false }: Props) {
   const id = useId();
   const status = new Map(checks.filter((c) => c.playlist).map((c) => [c.playlist as string, c]));
   const [open, setOpen] = useState(false);
@@ -56,6 +61,8 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
   const [busy, setBusy] = useState(false);
   const [newFolder, setNewFolder] = useState<{ name: string; value: string } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
   const byName = new Map(looks.map((l) => [l.name, l]));
 
   function reset() {
@@ -108,12 +115,12 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
 
   const noId = looks.filter((l) => !l.preset_id);
 
-  return (
-    <section aria-label="Playlists">
-      <h2>Playlists</h2>
-      {groupByFolder(playlists).map(({ folder, items }) => (
-        <div key={folder ?? ""} className="look-group">
-          {folders([...playlists, ...looks]).length > 0 && <p className="small muted group-head">{folder ?? "Not in a folder"}</p>}
+  const rows = !formOnly && (
+    <>
+      {!listOnly && <h2>Playlists</h2>}
+      {groupByFolder(playlists).filter((group) => !listOnly || group.folder === folder).map(({ folder: groupFolder, items }) => (
+        <div key={groupFolder ?? ""} className={listOnly ? "playlist-folder-items" : "look-group"}>
+          {!listOnly && folders([...playlists, ...looks]).length > 0 && <p className="small muted group-head">{groupFolder ?? "Not in a folder"}</p>}
           <ul className="look-list">
             {items.map((p) => (
               <li key={p.name}>
@@ -125,29 +132,46 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
                     aria-label={`Show ${p.name} on strip`} onClick={() => show(p)}>Show on strip</button>
                 )}
                 <button aria-label={`Edit playlist ${p.name}`} onClick={() => edit(p)}>Edit</button>
-                <select aria-label={`Folder for ${p.name}`} value={p.folder ?? ""} onChange={(e) => {
-                  let to: string | null = e.target.value || null;
-                  if (to === "\u0000new") { setNewFolder({ name: p.name, value: "" }); return; }
-                  if (to === (p.folder ?? null)) return;
-                  api.setFolder("playlists", [p.name], to).then(onChanged).catch((er) => notify(er.message, true));
-                }}>
-                  <option value="">No folder</option>
-                  {folders([...playlists, ...looks]).map((f) => <option key={f} value={f}>{f}</option>)}
-                  <option value={"\u0000new"}>A new folder…</option>
-                </select>
+                <span className="row-menu">
+                  <button className="menu-button" aria-label={`More for playlist ${p.name}`} aria-expanded={menu === p.name}
+                    onClick={() => setMenu(menu === p.name ? null : p.name)}>⋯</button>
+                  {menu === p.name && (
+                    <div className="menu" role="menu" aria-label={`Playlist actions for ${p.name}`}>
+                      <button role="menuitem" onClick={() => { setMenu(null); setMoving(p.name); }}>Move to folder…</button>
+                      <button role="menuitem" className="danger" onClick={() => { setMenu(null); setDeleting(p.name); }}>Delete…</button>
+                    </div>
+                  )}
+                </span>
+                {moving === p.name && (
+                  <span className="inline-edit row">
+                    <select autoFocus aria-label={`Folder for ${p.name}`} value="" onChange={(e) => {
+                      const to = e.target.value || null;
+                      if (to === "\u0000new") { setNewFolder({ name: p.name, value: "" }); return; }
+                      if (to === (p.folder ?? null)) return;
+                      api.setFolder("playlists", [p.name], to).then(() => { setMoving(null); onChanged(); })
+                        .catch((er) => notify(er.message, true));
+                    }}>
+                      <option value="">Move to…</option>
+                      {folders([...playlists, ...looks]).filter((f) => f !== p.folder).map((f) => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                      <option value={"\u0000new"}>A new folder…</option>
+                      {p.folder && <option value={"\u0000none"}>No folder</option>}
+                    </select>
+                    <button onClick={() => setMoving(null)}>Cancel</button>
+                  </span>
+                )}
                 {newFolder?.name === p.name && (
                   <span className="inline-edit row">
                     <input autoFocus aria-label={`New folder for playlist ${p.name}`} value={newFolder.value}
                       onChange={(e) => setNewFolder({ ...newFolder, value: e.target.value })} />
                     <button disabled={!newFolder.value.trim()} onClick={() => {
                       api.setFolder("playlists", [p.name], newFolder.value.trim())
-                        .then(() => { setNewFolder(null); onChanged(); }).catch((er) => notify(er.message, true));
+                        .then(() => { setNewFolder(null); setMoving(null); onChanged(); }).catch((er) => notify(er.message, true));
                     }}>Move</button>
-                    <button onClick={() => setNewFolder(null)}>Cancel</button>
+                    <button onClick={() => { setNewFolder(null); setMoving(null); }}>Cancel</button>
                   </span>
                 )}
-                <button className="danger" aria-label={`Delete playlist ${p.name}`}
-                  onClick={() => setDeleting(p.name)}>×</button>
                 {deleting === p.name && (
                   <div className="inline-confirm" role="group" aria-label={`Delete playlist ${p.name}?`}>
                     <p>Delete “{p.name}” from the library? Its preset stays on the device until you remove it there.</p>
@@ -167,7 +191,11 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
           </ul>
         </div>
       ))}
-      {playlists.length === 0 && <p className="muted">No playlists yet.</p>}
+      {!listOnly && playlists.length === 0 && <p className="muted">No playlists yet.</p>}
+    </>
+  );
+
+  const form = !listOnly && (
       <details className="playlist-form" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
         <summary>{editing ? `Edit playlist “${editing.name}”` : "New playlist"}</summary>
         <p className="muted small">Looks shown in turn, each for a while. Only looks with a preset id can be in a playlist: it
@@ -231,6 +259,12 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
           {editing && <button onClick={() => { reset(); setOpen(false); }}>Cancel</button>}
         </div>
       </details>
+  );
+
+  return (
+    <section aria-label={formOnly ? "Playlist editor" : "Playlists"} className={listOnly ? "playlist-folder" : undefined}>
+      {rows}
+      {form}
     </section>
   );
 }

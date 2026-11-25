@@ -256,10 +256,15 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const library = (offlineName?: string) => (
     <aside className="library-column">
       <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
-        beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName} />
+        beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName}
+        renderPlaylists={(folder) => (
+          <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
+            deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
+            onShown={reloadState} folder={folder} listOnly />
+        )} />
       <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
         deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
-        onShown={reloadState} />
+        onShown={reloadState} formOnly />
       <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} deviceName={profile?.device.name ?? deviceName}
         pending={offlineName ? null : pendingPalettes} onCheckAndWrite={offlineName ? undefined : () => setOpenPlan((n) => n + 1)} />
     </aside>

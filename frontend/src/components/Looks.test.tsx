@@ -220,6 +220,15 @@ describe("folders and order", () => {
     expect(libCalls(calls)[0]).toEqual({ url: "/api/library/looks/order", body: { names: ["Calm", "Rain", "Party", "Fire"] } });
   });
 
+  test("a playlist folder is part of the same library tree", () => {
+    render(<Looks deviceId="desk" looks={lib} playlists={[
+      { name: "Mix", folder: "Evening", entries: [], repeat: 0, shuffle: false },
+    ]} onChanged={() => {}} onApplied={() => {}} notify={() => {}}
+      renderPlaylists={(folder) => folder === "Evening" ? <span>▶ Mix</span> : null} />);
+    const evening = screen.getByText(/Evening \(1\)/).closest(".look-group") as HTMLElement;
+    expect(within(evening).getByText("▶ Mix")).toBeInTheDocument();
+  });
+
   test("moves the selected looks to a folder", async () => {
     const calls = stubLib();
     render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);

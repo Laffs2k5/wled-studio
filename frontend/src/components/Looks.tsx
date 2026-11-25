@@ -23,6 +23,8 @@ interface Props {
   playlists?: Playlist[];
   /** The device's name while it doesn't answer: the library stays usable; showing and editing wait. */
   offline?: string;
+  /** Playlist rows rendered in each folder beside its looks. */
+  renderPlaylists?: (folder: string | null) => React.ReactNode;
 }
 
 /** A look saved as "effects and colours only": its segments have no bounds, so it leaves the strip's layout alone. */
@@ -46,7 +48,8 @@ export function importText(r: { imported: string[]; kept_existing: string[]; imp
   return parts.join(" ");
 }
 
-export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [], offline }: Props) {
+export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAction, checks = [], onEdit, playlists = [], offline,
+  renderPlaylists }: Props) {
   const usedIn = (name: string) => playlists.filter((p) => p.entries.some((e) => e.look === name) || p.end === name).map((p) => p.name);
   const status = new Map(checks.filter((c) => c.look).map((c) => [c.look as string, c]));
   // a look whose effect (or palette, or wall) this device lacks can't be shown or edited here
@@ -94,7 +97,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const deviceName = devices.find((d) => d.id === deviceId)?.name ?? deviceId;
   const others = devices.filter((d) => d.id !== deviceId);
   const order = looks.map((l) => l.name);
-  const known = folders(looks);
+  const known = folders([...looks, ...playlists]);
   const toggle = (set: Set<string>, key: string) => { const n = new Set(set); if (n.has(key)) n.delete(key); else n.add(key); return n; };
 
   // folders and order are library-only: they don't touch the device
@@ -245,7 +248,9 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
           <button onClick={() => setSelected(new Set())}>Clear selection</button>
         </div>
       )}
-      {groupByFolder(looks).map(({ folder, items }) => {
+      {groupByFolder([...looks, ...playlists]).map(({ folder }) => {
+        const items = looks.filter((look) => (look.folder || null) === folder);
+        const folderItems = items.length + playlists.filter((playlist) => (playlist.folder || null) === folder).length;
         const group = items.map((x) => x.name);
         const key = folder ?? "";
         const open = !closed.has(key);
@@ -254,7 +259,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
             {known.length > 0 && (
               <div className="row group-head">
                 <button className="link" aria-expanded={open} onClick={() => setClosed(toggle(closed, key))}>
-                  {open ? "▾" : "▸"} {folder ?? "Not in a folder"} ({items.length})
+                  {open ? "▾" : "▸"} {folder ?? "Not in a folder"} ({folderItems})
                 </button>
                 <label className="small">
                   <input type="checkbox" aria-label={`Select all in ${folder ?? "Not in a folder"}`}
@@ -300,7 +305,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               </div>
             )}
             {open && (
-              <ul className="look-list">
+              <>
+                <ul className="look-list">
                 {items.map((l, i) => (
               <li key={l.name} className={`look-row${onDevice(l.name) ? "" : " off-device"}`}>
                 <input type="checkbox" aria-label={`Select ${l.name}`} checked={selected.has(l.name)}
@@ -455,12 +461,14 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
                 })()}
               </li>
                 ))}
-              </ul>
+                </ul>
+                {renderPlaylists?.(folder)}
+              </>
             )}
           </div>
         );
       })}
-      {looks.length === 0 && <p className="muted">No looks yet. Import the device's presets, or save what the strip shows with
+      {looks.length === 0 && playlists.length === 0 && <p className="muted">No looks yet. Import the device's presets, or save what the strip shows with
         “Save as look…” under the controls.</p>}
 
     </section>
