@@ -80,8 +80,11 @@ const lastRuns = new Map<string, FlashRun>();
 export const forgetRuns = () => lastRuns.clear();
 
 /** Flash a gate-passed image to a device: the plan, a typed confirmation, the run; and the way back. */
-export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpenLooks }: {
-  job: string; device: string; deviceName: string; notify: (msg: string, error?: boolean) => void;
+export function FlashPanel({ job, device, deviceName, deviceAddress, automatic = false, notify, onShowLooks, onOpenLooks }: {
+  job: string; device: string; deviceName: string; deviceAddress?: string;
+  /** In the Firmware flow, plan as soon as the passed build and device are known. */
+  automatic?: boolean;
+  notify: (msg: string, error?: boolean) => void;
   /** Show which looks change with this image (the library check above). */
   onShowLooks?: () => void;
   /** After a flash: go to Looks & effects, where the new effects are. */
@@ -109,6 +112,18 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
   const [pending, setPending] = useState<{ action: "flash" | "go back"; go: (version: string) => Promise<FlashRun> } | null>(null);
 
   useEffect(() => { firmware.notice().then(setNotice).catch(() => setNotice(null)); }, []);
+  useEffect(() => {
+    if (!automatic) return;
+    let stop = false;
+    setPlan(null);
+    setFailure(null);
+    firmware.flashPlan(job, device).then((p) => {
+      if (!stop) { setPlan(p); setPlanAt(Date.now()); setNow(Date.now()); }
+    }).catch((e) => {
+      if (!stop) setFailure({ kind: "plan", text: `Couldn't plan the flash: ${(e as Error).message}` });
+    });
+    return () => { stop = true; };
+  }, [automatic, job, device]);
   useEffect(() => {
     if (!plan) return;
     const t = setInterval(() => setNow(Date.now()), 10_000);
@@ -173,8 +188,10 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
 
   return (
     <div className="flash">
-      <h2>Flash it to {deviceName} <ChangeDevice /></h2>
-      <button disabled={running} onClick={replan}>{plan ? "Check again" : "Plan the flash"}</button>
+      <h2>{automatic ? <><span>3</span> Checks on {deviceName} </> : <>Flash it to {deviceName} </>}
+        <ChangeDevice /></h2>
+      <button disabled={running} onClick={replan}>{plan || automatic ? "Check again" : "Plan the flash"}</button>
+      {automatic && !plan && !failure && <p className="small muted">Checking the device automatically…</p>}
       {failureLine(["plan"])}
       {plan && (
         <div className="flash-plan">
@@ -229,11 +246,16 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
             {plan.image.new_effects?.length ? `, which adds ${few(plan.image.new_effects)}` : ""}.
           </p>
           {plan.can_flash && (
-            <p className="small muted">
-              What happens: the device's presets and settings are backed up first; then the image is uploaded and the
-              device restarts, so the strip goes dark for a moment. It takes about a minute. If it isn't right afterwards,
-              you can go back to the previous firmware.
-            </p>
+            <>
+              {automatic && (
+                <h2><span>4</span> Flash {deviceName}{deviceAddress ? ` (${deviceAddress})` : ""}</h2>
+              )}
+              <p className="small muted">
+                What happens: the device's presets and settings are backed up first; then the image is uploaded and the
+                device restarts, so the strip goes dark for a moment. It takes about a minute. If it isn't right afterwards,
+                you can go back to the previous firmware.
+              </p>
+            </>
           )}
           {plan.can_flash && planOld && (
             <p className="warn small plan-old" role="alert">
@@ -268,6 +290,7 @@ export function FlashPanel({ job, device, deviceName, notify, onShowLooks, onOpe
         const v = running ? null : runVerdict(run, deviceName);
         return (
           <div className="run" aria-label="Flash progress">
+            {automatic && <h2><span>5</span> Result / go back</h2>}
             <h3>{run.kind === "flash" ? `Flashing ${deviceName}` : `Going back to the previous firmware on ${deviceName}`}
               {running ? "…" : ""}</h3>
             {running && <p className="warn do-not">Do not power off or unplug {deviceName} until this has finished.</p>}

@@ -44,6 +44,7 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   const [open, setOpen] = useState<FirmwareJob | null>(null);
   const [log, setLog] = useState("");
   const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const dev = devices.find((d) => d.id === device);
 
   const preflightBox = useRef<HTMLDivElement>(null);
   const checkLibrary = (job: string, dev: string) => firmware.preflight(job, dev).then(setPreflight)
@@ -110,6 +111,16 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open?.id]);
 
+  useEffect(() => {
+    setPreflight(null);
+    if (!open || open.state !== "passed" || open.kind === "preview" || !device) return;
+    let stop = false;
+    firmware.preflight(open.id, device)
+      .then((result) => { if (!stop) setPreflight(result); })
+      .catch((e) => notify((e as Error).message, true));
+    return () => { stop = true; };
+  }, [open?.id, open?.state, open?.kind, device, notify]);
+
   if (enabled === null) return <p className="muted pad">Loading…</p>;
   if (!enabled) {
     return (
@@ -121,7 +132,6 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   }
 
   const [pins, tgt] = target.split("|");
-  const dev = devices.find((d) => d.id === device);
   const current = targets.find((t) => t.pins === pins && t.target === tgt);
   // firmware builds only: the studio's preview compiles are its own business
   const builds = jobs.filter((j) => j.kind !== "preview");
@@ -206,30 +216,43 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
       {open && (
         <div className="job">
           <h2>{buildTitle(open)}</h2>
-          <BuildChecks job={open} log={log} />
-          {open.state === "passed" && open.kind !== "preview" && !dev && (
-            <p className="muted small">Add a device in the header to check your looks against this image and flash it.</p>
-          )}
-          {open.state === "passed" && open.kind !== "preview" && dev && (
-            <div className="preflight" ref={preflightBox}>
-              <h2>What this firmware changes for your looks on {dev.name} <ChangeDevice /></h2>
-              <div className="row">
-                <button onClick={() => checkLibrary(open.id, dev.id)}>Check the library</button>
-              </div>
-              {preflight && preflight.job === open.id && preflight.device === dev.id && <PreflightReport preflight={preflight} />}
-            </div>
-          )}
-          {open.state === "passed" && open.kind !== "preview" && dev && (dev.virtual ? (
-            <p className="muted flash">
-              {dev.name} is a virtual device: a software copy of WLED for testing, with no
-              LEDs. It runs the firmware it was built from, and can't be flashed or reverted. <ChangeDevice />
-            </p>
-          ) : (
-            <FlashPanel job={open.id} device={dev.id} notify={notify} deviceName={dev.name} onOpenLooks={onOpenLooks} onShowLooks={async () => {
-              await checkLibrary(open.id, dev.id);
-              preflightBox.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-            }} />
-          ))}
+          <ol className="firmware-steps" aria-label="Firmware steps">
+            <li>
+              <h2><span>1</span> Built and checked</h2>
+              <BuildChecks job={open} log={log} />
+            </li>
+            {open.state === "passed" && open.kind !== "preview" && (
+              <li>
+                <div className="preflight" ref={preflightBox}>
+                  <h2><span>2</span> What it does to your looks
+                    {dev && <> on {dev.name} <ChangeDevice /></>}</h2>
+                  {!dev ? (
+                    <p className="muted small">Pick a device in the header to check your looks against this image.</p>
+                  ) : preflight && preflight.job === open.id && preflight.device === dev.id ? (
+                    <PreflightReport preflight={preflight} />
+                  ) : (
+                    <p className="muted small">Checking the library automatically…</p>
+                  )}
+                </div>
+              </li>
+            )}
+            {open.state === "passed" && open.kind !== "preview" && dev && (
+              <li>
+                {dev.virtual ? (
+                  <p className="muted flash">
+                    {dev.name} is a virtual device: a software copy of WLED for testing, with no
+                    LEDs. It runs the firmware it was built from, and can't be flashed or reverted. <ChangeDevice />
+                  </p>
+                ) : (
+                  <FlashPanel job={open.id} device={dev.id} deviceName={dev.name} deviceAddress={dev.host}
+                    notify={notify} automatic onOpenLooks={onOpenLooks} onShowLooks={async () => {
+                      await checkLibrary(open.id, dev.id);
+                      preflightBox.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+                    }} />
+                )}
+              </li>
+            )}
+          </ol>
         </div>
       )}
     </section>
