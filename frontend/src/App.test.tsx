@@ -86,6 +86,11 @@ test("shows the device's effect with its own controls, and sends live changes", 
   await waitFor(() => expect(calls.some((c) => c.init?.method === "POST")).toBe(true));
   const post = calls.find((c) => c.init?.method === "POST")!;
   expect(JSON.parse(String(post.init!.body))).toEqual({ seg: [{ id: 0, ix: 201 }] });
+  expect(screen.getByLabelText("Undo live change")).toBeInTheDocument();
+  fireEvent.click(within(screen.getByLabelText("Undo live change")).getByRole("button", { name: "Undo" }));
+  await waitFor(() => expect(calls.filter((c) => c.init?.method === "POST").length).toBeGreaterThan(1));
+  const undo = calls.filter((c) => c.url === "/api/devices/desk/state" && c.init?.method === "POST").at(-1)!;
+  expect(JSON.parse(String(undo.init!.body))).toMatchObject({ seg: [{ id: 0, ix: 50 }] });
 });
 
 test("errors are shown", async () => {

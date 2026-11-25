@@ -82,6 +82,7 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
   const [dissolving, setDissolving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [newRowFolder, setNewRowFolder] = useState("");
+  const [dragOver, setDragOver] = useState<string | null>(null);
   const [imported, setImported] = useState<{ ok: boolean; text: string } | null>(null);
   const deviceName = listedDeviceName ?? deviceId;
   const order = looks.map((l) => l.name);
@@ -194,7 +195,15 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
         const key = folder ?? "";
         const open = !closed.has(key);
         return (
-          <div key={key} className="look-group">
+          <div key={key} className={`look-group${dragOver === key ? " drop" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(key); }}
+            onDragLeave={() => setDragOver((value) => value === key ? null : value)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(null);
+              const name = e.dataTransfer.getData("text/look");
+              if (name) organise(() => api.setFolder("looks", [name], folder), `Moved “${name}” to ${folder ? `“${folder}”` : "no folder"}`);
+            }}>
             {known.length > 0 && (
               <div className="row group-head">
                 <button className="link" aria-expanded={open} onClick={() => setClosed(toggle(closed, key))}>
@@ -247,7 +256,8 @@ export function Looks({ deviceId, looks, onChanged, onApplied, notify, beforeAct
               <>
                 <ul className="look-list">
                 {items.map((l, i) => (
-              <li key={l.name} className="look-row">
+              <li key={l.name} className="look-row" draggable
+                onDragStart={(e) => { e.dataTransfer.setData("text/look", l.name); e.dataTransfer.effectAllowed = "move"; }}>
                 <input type="checkbox" aria-label={`Select ${l.name}`} checked={selected.has(l.name)}
                   onChange={() => setSelected(toggle(selected, l.name))} />
                 <div className="look-main">

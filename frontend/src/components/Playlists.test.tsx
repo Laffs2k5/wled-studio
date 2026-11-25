@@ -116,3 +116,13 @@ test("durations in words", () => {
   expect(duration(1200)).toBe("2 min");
   expect(total([{ look: "A", duration: 100, transition: 7 }, { look: "B", duration: 0, transition: 7 }])).toBe("stays on “B” once it gets there");
 });
+
+test("a dragged look is added to the playlist form", async () => {
+  render(<Playlists looks={looks} playlists={[]} onChanged={() => {}} notify={() => {}} />);
+  fireEvent.click(screen.getByText("New playlist"));
+  const data = new Map<string, string>([["text/look", "Calm"]]);
+  fireEvent.drop(screen.getByLabelText("Looks in the playlist"), {
+    dataTransfer: { getData: (key: string) => data.get(key) ?? "" },
+  });
+  expect(screen.getByLabelText("Remove Calm")).toBeInTheDocument();
+});

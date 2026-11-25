@@ -239,6 +239,19 @@ describe("folders and order", () => {
     expect(libCalls(calls)[0]).toEqual({ url: "/api/library/looks/folder", body: { names: ["Calm", "Party"], folder: "Storms" } });
   });
 
+  test("dragging a look onto a folder moves it there", async () => {
+    const calls = stubLib();
+    render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);
+    const calm = screen.getByText("Calm").closest("li")!;
+    const data = new Map<string, string>();
+    const transfer = { setData: (key: string, value: string) => data.set(key, value), getData: (key: string) => data.get(key) ?? "" };
+    fireEvent.dragStart(calm, { dataTransfer: transfer });
+    fireEvent.drop(screen.getByText(/Storms \(2\)/).closest(".look-group")!, { dataTransfer: transfer });
+    await waitFor(() => expect(libCalls(calls).at(-1)).toEqual({
+      url: "/api/library/looks/folder", body: { names: ["Calm"], folder: "Storms" },
+    }));
+  });
+
   test("collapses a folder, renames and dissolves it", async () => {
     const calls = stubLib();
     render(<Looks deviceId="desk" looks={lib} onChanged={() => {}} onApplied={() => {}} notify={() => {}} />);

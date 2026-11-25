@@ -88,6 +88,7 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .device-home h2 { margin-top: 0; }
 .device-home p { margin: .2rem 0; }
 .firmware-history { padding-left: 1.1rem; font-size: .85rem; }
+.look-group.drop, .playlist-entries.drop { outline: 2px dashed var(--accent); background: var(--hover); }
 .room-columns { display: grid; grid-template-columns: 12rem 10rem 5rem; gap: .5rem; }
 .room-preview { max-height: 18rem; }
 .compare-devices { width: 100%; border-collapse: collapse; margin-top: .5rem; }

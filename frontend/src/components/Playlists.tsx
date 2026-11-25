@@ -63,6 +63,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
   const [deleting, setDeleting] = useState<string | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [entryDrop, setEntryDrop] = useState(false);
   const byName = new Map(looks.map((l) => [l.name, l]));
 
   function reset() {
@@ -210,7 +211,17 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
             <input value={slot} inputMode="numeric" className="preset-id" placeholder="optional" onChange={(e) => setSlot(e.target.value)} />
           </label>
         </div>
-        <ol className="small playlist-entries" aria-label="Looks in the playlist">
+        <ol className={`small playlist-entries${entryDrop ? " drop" : ""}`} aria-label="Looks in the playlist"
+          onDragOver={(e) => { e.preventDefault(); setEntryDrop(true); }}
+          onDragLeave={() => setEntryDrop(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setEntryDrop(false);
+            const look = e.dataTransfer.getData("text/look");
+            if (look && byName.get(look)?.preset_id) {
+              setEntries([...entries, { look, duration: tenths(seconds), transition: tenths(transition) }]);
+            }
+          }}>
           {entries.map((e, i) => (
             <li key={i} className="row">
               <span className="grow">{e.look}{byName.get(e.look)?.preset_id ? ` (preset ${byName.get(e.look)!.preset_id})` : ""}</span>

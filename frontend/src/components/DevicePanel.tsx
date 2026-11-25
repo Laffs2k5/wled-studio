@@ -89,6 +89,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const [segId, setSegId] = useState(0);
   const [newSegmentHint, setNewSegmentHint] = useState<number | null>(null);
   const [removedSegment, setRemovedSegment] = useState<Segment | null>(null);
+  const [undoSegment, setUndoSegment] = useState<Segment | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [roomRead, setRoomRead] = useState(false);
   // bumped whenever the library is read again after a change: the write bar checks the device again
@@ -172,6 +173,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   // live editing: show the change at once, send it to the device shortly after (coalesced)
   function change(patch: Partial<Segment>) {
     if (!state || !segment) return;
+    setUndoSegment({ ...segment });
     setState({ ...state, seg: state.seg.map((s) => (s.id === segment.id ? { ...s, ...patch } : s)) });
     pending.current = { ...pending.current, ...patch };
     pendingSeg.current = segment.id;
@@ -261,6 +263,20 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
     if (!state) return;
     setState({ ...state, ...patch });
     api.setState(deviceId, patch).catch((e) => notify(e.message, true));
+  }
+
+  async function undoLiveChange() {
+    if (!undoSegment) return;
+    const previous = undoSegment;
+    setState((old) => old ? { ...old, seg: old.seg.map((s) => s.id === previous.id ? previous : s) } : old);
+    setUndoSegment(null);
+    try {
+      await api.setState(deviceId, { seg: [previous] });
+      notify(`Undid the last live change to segment ${previous.id}`);
+    } catch (e) {
+      notify((e as Error).message, true);
+      reloadState();
+    }
   }
 
   const library = (offlineName?: string) => (
@@ -420,6 +436,13 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
             <span className="grow">Removed segment {removedSegment.id}{removedSegment.n ? ` “${removedSegment.n}”` : ""} from the live strip.</span>
             <button onClick={undoRemoveSegment}>Undo</button>
             <button className="small" onClick={() => setRemovedSegment(null)}>Dismiss</button>
+          </div>
+        )}
+        {undoSegment && (
+          <div className="row action-result" aria-label="Undo live change">
+            <span className="grow">Last live change: segment {undoSegment.id} can be put back.</span>
+            <button onClick={undoLiveChange}>Undo</button>
+            <button className="small" onClick={() => setUndoSegment(null)}>Dismiss</button>
           </div>
         )}
         <SegmentMap ledCount={profile.leds.count} room={room} segments={state.seg} selected={segment.id}
