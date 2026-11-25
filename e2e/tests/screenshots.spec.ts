@@ -33,7 +33,7 @@ test("screenshots", async ({ page }) => {
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${OUT}/look-studio.png` });
 
-  await page.getByRole("button", { name: "Effect studio" }).click();
+  await page.getByRole("button", { name: "Effect code" }).click();
   await expect(page.getByLabel("Preview effect")).toBeVisible();
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${OUT}/effect-studio.png` });

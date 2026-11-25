@@ -62,7 +62,7 @@ test("plans, asks for the device's name, flashes and follows the run", async () 
   await waitFor(() => expect(screen.getByText("Flashed and running: Desk runs WLED 16.0.1 with 190 effects.")).toBeInTheDocument(),
     { timeout: 3000 });
   expect(screen.queryByText(/Do not power off/)).toBeNull();
-  fireEvent.click(screen.getByText("Open Looks & effects"));
+  fireEvent.click(screen.getByText("Open Library"));
   expect(onOpenLooks).toHaveBeenCalled();
   const post = calls.find((c) => c.startsWith("POST") && c.includes("/jobs/") && c.includes("/flash"))!;
   expect(post).toContain('"confirm":"Desk"');

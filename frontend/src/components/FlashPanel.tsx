@@ -310,7 +310,7 @@ export function FlashPanel({ job, device, deviceName, deviceAddress, automatic =
             {v && run.kind === "flash" && run.state !== "failed" && run.result?.image_running !== false && (
               <p className="small next-step">
                 Next: your new effects are in {deviceName}'s effect list now.{" "}
-                {onOpenLooks && <><button className="link" onClick={onOpenLooks}>Open Looks &amp; effects</button> to use them, and </>}
+                {onOpenLooks && <><button className="link" onClick={onOpenLooks}>Open Library</button> to use them, and </>}
                 check what would change there before writing presets.
               </p>
             )}

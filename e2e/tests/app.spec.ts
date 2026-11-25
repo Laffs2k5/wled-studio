@@ -25,6 +25,7 @@ test("look studio: add the device, live control, save a look and write it", asyn
   await page.getByLabel("Address (IP or host name)").fill(DEVICE_HOST);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator(".toast")).toContainText(/Found: WLED .*, \d+ LEDs/);   // the connection test after adding
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible();
 
   // pick an effect: its own controls appear, with its labels
@@ -43,8 +44,10 @@ test("look studio: add the device, live control, save a look and write it", asyn
   await page.getByLabel("Look name").fill("E2E look");
   await page.getByLabel(/^Preset id \(optional/).fill("7");
   await page.getByRole("button", { name: "Save in the library" }).click();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E look")).toBeVisible();
-  // the write bar at the bottom sees the device is out of date, and opens the plan
+  await page.getByRole("button", { name: "Presets on device" }).click();
+  // the only write bar sees the device is out of date and opens the plan
   await expect(page.getByText(/presets? differs? from the library/)).toBeVisible();
   await page.getByRole("button", { name: "Review and write" }).click();
   await expect(page.getByRole("region", { name: "Will be written" }).getByRole("row", { name: /E2E look 7/ })).toBeVisible();
@@ -56,11 +59,13 @@ test("look studio: add the device, live control, save a look and write it", asyn
 
   // pick a sound-reactive effect and save straight away: the look must get that effect
   // (and the mic rule: on), not the one before (the live change is held back briefly)
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.getByRole("option", { name: /Spectrum Bars/ }).click();
   await page.getByRole("button", { name: "Save as look…" }).click();
   await page.getByLabel("Look name").fill("E2E loud");
   await page.getByLabel(/^Preset id \(optional/).fill("8");
   await page.getByRole("button", { name: "Save in the library" }).click();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(page.getByRole("region", { name: "Looks" }).getByText("E2E loud")).toBeVisible();
   const looks = await (await request.get("/api/looks")).json();
   const loud = looks.find((l: { name: string }) => l.name === "E2E loud");
@@ -238,7 +243,7 @@ test("a saved look is edited in the library, not on the strip", async ({ page, r
 test("effect studio: the WebAssembly preview loads and runs under the CSP", async ({ page }) => {
   const problems = watchCsp(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Effect studio" }).click();
+  await page.getByRole("button", { name: "Effect code" }).click();
   const select = page.getByLabel("Preview effect");
   await expect(select).toBeVisible();
   await expect(select.locator("option", { hasText: "Studio Comet (id 254)" })).toHaveCount(1);
@@ -261,7 +266,7 @@ test("effect studio: the code editor highlights, folds and follows the system th
   const problems = watchCsp(page);
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
-  await page.getByRole("button", { name: "Effect studio" }).click();
+  await page.getByRole("button", { name: "Effect code" }).click();
   const files = page.getByLabel("Effect files");
   await expect(files.getByText("e2e_fx", { exact: true })).toBeVisible();
   await files.getByRole("button", { name: "e2e_fx.cpp" }).click();

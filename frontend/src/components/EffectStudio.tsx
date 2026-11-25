@@ -276,7 +276,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   if (error) {
     return (
       <section className="studio">
-        <h2>Effect studio</h2>
+        <h2>Effect code</h2>
         {!device && <p className="first-run-note">You can try effects in the browser without a device; add one to stream to the strip.</p>}
         <p>This build has no effect preview ({error}). Previews are compiled with Emscripten by wled-studio-builder.</p>
         {editor}
@@ -287,7 +287,7 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
   }
   return (
     <section className="studio">
-      <h2>Effect studio</h2>
+      <h2>Effect code</h2>
       {!device && <p className="first-run-note">You can try effects in the browser without a device; add one to stream to the strip.</p>}
       <p className="muted small">
         Your own effects, compiled to WebAssembly and running in the browser: the logic is the effect's own code.{" "}
