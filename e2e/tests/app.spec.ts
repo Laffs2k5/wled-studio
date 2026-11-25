@@ -95,8 +95,8 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
 
   // an editing session remembers this state, to put it back at the end
   const atStart = (await segs()).map((s: { start: number; stop: number; fx: number; bm: number }) => [s.start, s.stop, s.fx, s.bm]);
-  await page.getByRole("button", { name: "Start editing session" }).click();
-  await expect(page.getByText(/Editing since/)).toBeVisible();
+  await page.getByRole("button", { name: "Remember what the strip shows now" }).click();
+  await expect(page.getByText(/Trying things since/)).toBeVisible();
 
   // a new segment on top, placed and blended
   await page.getByRole("button", { name: "+ Segment" }).click();
@@ -138,10 +138,10 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
   // add a layer again, then end the session: the device is back as it was at the start
   await page.getByRole("button", { name: "+ Segment" }).click();
   await expect.poll(async () => (await segs()).length).toBe(2);
-  await page.getByRole("button", { name: "Done: put the device back" }).click();
+  await page.getByRole("button", { name: "Put the strip back as it was" }).click();
   await expect.poll(async () => (await segs()).map((s: { start: number; stop: number; fx: number; bm: number }) =>
     [s.start, s.stop, s.fx, s.bm])).toEqual(atStart);
-  await expect(page.getByRole("button", { name: "Start editing session" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remember what the strip shows now" })).toBeVisible();
 
   expect(problems).toEqual([]);
 });

@@ -60,6 +60,9 @@ The effect list shows the device's effects (2D-only effects are hidden on strips
 sound-reactive ones). Picking one shows **only the controls that effect uses, with its own labels**,
 read from WLED's effect metadata. Changes go to the strip at once.
 
+- **Remember what the strip shows now**, above the controls, lets you try things and then **Put
+  the strip back as it was** (or **Keep what it shows now**). It only concerns the live strip:
+  saving looks is not affected.
 - **Import from device** turns the device's presets into looks, **by name**. A look keeps the
   effect's and palette's names, not their numbers, so it survives firmware changes. What it did
   stays under the button ("Imported 1 new look… 5 already in the library were left as they are.").

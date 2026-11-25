@@ -215,12 +215,14 @@ def test_check_and_accept_after_a_firmware_change(client, dev_id, device):
 
 def test_an_editing_session_puts_the_device_back(client, dev_id, device):
     base = f"/api/devices/{dev_id}/session"
-    assert client.get(base).json() == {"active": False, "started": None}
+    assert client.get(base).json() == {"active": False, "started": None, "showed": None}
     client.post(f"/api/devices/{dev_id}/state", json={"bri": 77, "seg": [{"id": 0, "fx": 2, "sx": 33}]}, headers=CSRF)
     before = [(s["id"], s["start"], s["stop"], s["fx"], s["sx"]) for s in device.state["seg"]]
 
     started = client.post(base, headers=CSRF)
     assert started.status_code == 200 and started.json()["active"] is True
+    # what the strip showed: no preset or playlist, segment 0's effect
+    assert started.json()["showed"] == {"preset": None, "playlist": None, "fx": [2]}
     assert client.post(base, headers=CSRF).status_code == 409  # one at a time
     # edit: another effect, a new segment on top, dimmer
     client.post(f"/api/devices/{dev_id}/state", json={"bri": 10, "seg": [{"id": 0, "fx": 8, "sx": 200},
@@ -233,6 +235,12 @@ def test_an_editing_session_puts_the_device_back(client, dev_id, device):
     assert device.state["bri"] == 77
     assert client.get(base).json()["active"] is False
     assert client.delete(base, headers=CSRF).status_code == 404
+
+
+def test_an_editing_session_says_which_preset_the_strip_showed(client, dev_id, device):
+    device.state["ps"], device.state["pl"] = 3, 20
+    showed = client.post(f"/api/devices/{dev_id}/session", headers=CSRF).json()["showed"]
+    assert showed["preset"] == 3 and showed["playlist"] == 20
 
 
 def test_an_editing_session_can_keep_the_edits(client, dev_id, device):

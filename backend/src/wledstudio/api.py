@@ -481,7 +481,15 @@ async def duplicate_segment(device_id: str, seg_id: int, request: Request):
 
 
 def session_info(s) -> dict:
-    return {"active": s is not None, "started": s.started if s is not None else None}
+    """Whether a session runs, since when, and what the strip showed when it started: the preset or
+    playlist it was playing (WLED's ps/pl, else null) and its segments' effect ids."""
+    if s is None:
+        return {"active": False, "started": None, "showed": None}
+    snap = s.snapshot
+    pick = lambda k: snap[k] if isinstance(snap.get(k), int) and snap[k] > 0 else None  # noqa: E731
+    return {"active": True, "started": s.started,
+            "showed": {"preset": pick("ps"), "playlist": pick("pl"),
+                       "fx": [seg["fx"] for seg in snap.get("seg", []) if isinstance(seg, dict) and isinstance(seg.get("fx"), int)]}}
 
 
 @router.get("/devices/{device_id}/session")

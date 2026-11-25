@@ -108,7 +108,12 @@ export interface PushReportItem {
 export interface DuplicateId { preset_id: number; looks: string[]; playlists: string[] }
 
 /** An editing session on a device: its state when editing started is put back at the end. */
-export interface EditingSession { active: boolean; started: number | null }
+export interface EditingSession {
+  active: boolean;
+  started: number | null;
+  /** What the strip showed when the session started: the preset or playlist it played, its effects. */
+  showed?: { preset: number | null; playlist: number | null; fx: number[] } | null;
+}
 
 /** A look's or playlist's change-check status on one device (GET /api/devices/<id>/check). */
 export interface CheckItem {

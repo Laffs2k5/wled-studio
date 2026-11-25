@@ -40,10 +40,11 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   words (a control the look sets is gone, now sound-reactive, 1D → 2D, fewer colour slots, …); a
   playlist takes the worst status of its looks. **Accept** takes the device's version as the new
   reference.
-- **Editing sessions:** "Start editing session" remembers what the device shows. "Done" puts it
-  back: segments, effects, brightness and the mic; segments added meanwhile are deleted, and a
-  running playlist is started again. "Keep my changes" ends the session without touching the
-  device.
+- **Editing sessions:** "Remember what the strip shows now" remembers what the device shows, and
+  says so while it runs ("Trying things since 23:34. Before that, the strip showed preset 3
+  “Evening”."). "Put the strip back as it was" restores segments, effects, brightness and the mic;
+  segments added meanwhile are deleted, and a running playlist is started again. "Keep what it
+  shows now" ends the session without touching the device. Saving looks is not affected.
 
 ### Effect studio and firmware
 - **Effect studio:** sound for sound effects in the preview (WLED's simulated beat with its four

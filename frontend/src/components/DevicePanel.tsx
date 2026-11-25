@@ -290,7 +290,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
           stored on the device until you write presets.
         </p>
         <LiveStrip deviceId={deviceId} room={room} />
-        <SessionBar deviceId={deviceId} notify={notify} beforeAction={flush} onRestored={reloadState} />
+        <SessionBar deviceId={deviceId} notify={notify} beforeAction={flush} onRestored={reloadState}
+          effects={profile.effects} looks={looks} playlists={playlists} />
         <div className="master row">
           <label><input type="checkbox" checked={state.on} onChange={(e) => master({ on: e.target.checked })} /> On</label>
           <label className="slider grow">
