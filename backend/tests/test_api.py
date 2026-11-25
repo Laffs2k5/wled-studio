@@ -102,6 +102,14 @@ def test_library_archive_is_portable_and_import_is_atomic(client):
                        headers={**CSRF, "Content-Type": "application/json"}).status_code == 413
 
 
+def test_protected_preset_ids_are_saved_and_reported(client, dev_id, device):
+    rows = [{"id": 111, "label": "Remote A bank 2 button 2"}]
+    assert client.put("/api/protected-presets", json=rows, headers=CSRF).json() == rows
+    device.presets["111"] = {"n": "External"}
+    state = client.get(f"/api/devices/{dev_id}/presets-on-device").json()
+    assert next(row for row in state["presets"] if row["id"] == 111)["protected_by"] == [rows[0]["label"]]
+
+
 def test_add_list_remove_device(client):
     r = client.post("/api/devices", json={"name": "Desk", "host": "wled.lan", "pin": "1234"}, headers=CSRF)
     assert r.status_code == 201

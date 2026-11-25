@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
-import { firmware, type PresetBackup, type PresetsOnDevice } from "../api";
+import { api, firmware, type PresetBackup, type PresetsOnDevice } from "../api";
 
 export function PresetSafety({ deviceId, deviceName, notify, version, onChanged }: {
   deviceId: string;
@@ -18,6 +18,7 @@ export function PresetSafety({ deviceId, deviceName, notify, version, onChanged 
   const [restoring, setRestoring] = useState("");
   const [restoreConfirm, setRestoreConfirm] = useState("");
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [protectedIds, setProtectedIds] = useState<{ id: number; label: string }[]>([]);
 
   const load = useCallback(() => {
     setPresets(null);
@@ -30,6 +31,10 @@ export function PresetSafety({ deviceId, deviceName, notify, version, onChanged 
       .then(([current, files]) => { setPresets(current); setBackups(files); })
       .catch((e) => setResult({ ok: false, text: e.message }));
   }, [deviceId]);
+  useEffect(() => {
+    api.protectedPresets().then((rows) => setProtectedIds(Array.isArray(rows) ? rows : []))
+      .catch(() => setProtectedIds([]));
+  }, []);
   useEffect(load, [load, version]);
 
   const remove = async () => {
@@ -88,6 +93,7 @@ export function PresetSafety({ deviceId, deviceName, notify, version, onChanged 
                         return next;
                       })} />
                       {" "}Preset {preset.id}: {preset.name}
+                      {preset.protected_by?.length ? <span className="warn"> · protected: {preset.protected_by.join(", ")}</span> : null}
                     </label>
                   </li>
                 ))}
@@ -134,6 +140,25 @@ export function PresetSafety({ deviceId, deviceName, notify, version, onChanged 
             <button onClick={() => { setBackup(null); setRestoring(""); setRestoreConfirm(""); }}>Cancel</button>
           </div>
         )}
+      </details>
+      <details className="protected-presets">
+        <summary>Preset IDs owned by remotes or automations</summary>
+        <p className="muted small">These are warnings, not a write block. Add a label for anything that depends on a fixed id.</p>
+        {protectedIds.map((row, index) => (
+          <div className="row" key={`${row.id}:${index}`}>
+            <input type="number" min={1} max={250} aria-label={`Protected preset ${index + 1} id`} value={row.id}
+              onChange={(e) => setProtectedIds((rows) => rows.map((x, i) => i === index ? { ...x, id: Number(e.target.value) } : x))} />
+            <input aria-label={`Protected preset ${index + 1} label`} value={row.label}
+              onChange={(e) => setProtectedIds((rows) => rows.map((x, i) => i === index ? { ...x, label: e.target.value } : x))} />
+            <button aria-label={`Remove protected preset ${index + 1}`} onClick={() => setProtectedIds((rows) => rows.filter((_, i) => i !== index))}>×</button>
+          </div>
+        ))}
+        <button onClick={() => setProtectedIds([...protectedIds, { id: 100, label: "Remote" }])}>Add protected id</button>
+        <button disabled={protectedIds.some((row) => !row.label.trim() || row.id < 1 || row.id > 250)}
+          onClick={() => api.saveProtectedPresets(protectedIds.map((row) => ({ ...row, label: row.label.trim() })))
+            .then(setProtectedIds).then(() => notify("Protected preset ids saved")).catch((e) => setResult({ ok: false, text: e.message }))}>
+          Save protected ids
+        </button>
       </details>
       {result && <p className={`action-result ${result.ok ? "done" : "error"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
     </section>

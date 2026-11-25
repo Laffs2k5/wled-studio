@@ -27,6 +27,7 @@ from .push import StateStore
 from .security import SecurityMiddleware
 from .session import Sessions
 from .trials import TrialStore
+from .protected_presets import ProtectedPresets
 
 
 def default_ddp_target(dev) -> tuple[str, int]:
@@ -55,6 +56,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.state.live_hubs = {}
     app.state.sessions = Sessions()
     app.state.trials = TrialStore(s.data_dir)
+    app.state.protected_presets = ProtectedPresets(s.data_dir)
     app.add_middleware(SecurityMiddleware, settings=s)
     app.include_router(router)
     app.include_router(firmware_router)

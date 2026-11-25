@@ -143,6 +143,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
       .then((s) => {
         setFillMode(null);
         setPendingItem(null);
+        if (s.protected_by?.length) notify(`Warning: preset ${cell.preset_id} is used by ${s.protected_by.join(", ")}.`, true);
         done(s, mode === "also"
           ? `“${item.name}” will also use preset ${cell.preset_id} (in this grid; write presets to put it on the device)`
           : `Moved “${item.name}” to preset ${cell.preset_id} (in the library; write presets to put it on the device)`);

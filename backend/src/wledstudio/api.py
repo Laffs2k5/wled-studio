@@ -220,6 +220,11 @@ class TrialRestoreIn(Strict):
     current_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class ProtectedPresetIn(Strict):
+    id: int = Field(ge=1, le=250)
+    label: str = Field(min_length=1, max_length=64)
+
+
 # --- dependencies ---------------------------------------------------------------
 
 def stores(request: Request) -> tuple[DeviceStore, LibraryStore, StateStore]:
@@ -1144,6 +1149,19 @@ def last_preset_write(device_id: str, request: Request):
     return {"last_write": request.app.state.statestore.last_written(device_id)}
 
 
+@router.get("/protected-presets")
+def protected_presets(request: Request):
+    return request.app.state.protected_presets.list()
+
+
+@router.put("/protected-presets")
+def save_protected_presets(body: list[ProtectedPresetIn], request: Request):
+    rows = [row.model_dump() for row in body]
+    if len({(row["id"], row["label"].casefold()) for row in rows}) != len(rows):
+        raise HTTPException(422, "The same protected use is listed twice.")
+    return request.app.state.protected_presets.save(rows)
+
+
 @router.get("/devices/{device_id}/backups/{name}")
 def backup(device_id: str, name: str, request: Request):
     device_or_404(device_id, request)
@@ -1171,6 +1189,7 @@ async def presets_on_device(device_id: str, request: Request):
     for row in rows:
         row["library"] = row["id"] in all_named_ids
         row["on_device_set"] = row["id"] in assigned_ids
+        row["protected_by"] = request.app.state.protected_presets.labels().get(row["id"], [])
     return {"name": dev.name, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "presets": rows}
 
 

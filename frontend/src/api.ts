@@ -177,7 +177,7 @@ export interface DeviceSet {
 export interface SlotGridShape { rows: number; cols: number; first: number; row_step: number; col_step: number; name: string }
 export interface SlotCell { row: number; col: number; preset_id: number; kind: "look" | "playlist" | null; name: string | null; base: string | null; notes: string[] }
 export interface Slots { grid: SlotGridShape | null; cells: SlotCell[]; id?: string | null; name?: string | null;
-  filled?: string; freed?: string[] }
+  filled?: string; freed?: string[]; protected_by?: string[] }
 export interface NamedGrids { current: string | null; grids: Slots[] }
 
 export const slots = {
@@ -203,7 +203,7 @@ export interface FlashNotice { version: string; title: string; text: string; rem
 export interface PresetsOnDevice {
   name: string;
   sha256: string;
-  presets: { id: number; name: string; library: boolean; on_device_set: boolean }[];
+  presets: { id: number; name: string; library: boolean; on_device_set: boolean; protected_by?: string[] }[];
 }
 export interface PresetBackup {
   name: string;
@@ -282,6 +282,9 @@ export const effects = {
 };
 
 export const api = {
+  protectedPresets: () => request<{ id: number; label: string }[]>("GET", "/api/protected-presets"),
+  saveProtectedPresets: (rows: { id: number; label: string }[]) =>
+    request<{ id: number; label: string }[]>("PUT", "/api/protected-presets", rows),
   exportLibrary: () => transferLibrary() as Promise<Blob>,
   importLibrary: (file: File, mode: "keep" | "replace", preview = false) =>
     transferLibrary(file, mode, preview) as Promise<{ looks: number; playlists: number; palettes: number; kept: string[] }>,
