@@ -54,29 +54,46 @@ test("two looks on one preset id block the write", () => {
   expect(screen.getByRole("button", { name: /^Write .* to Desk$/ })).toBeDisabled();
 });
 
-test("an effect that changed waits for a tick; drift must be acknowledged; the write sends both", async () => {
+test("an effect that changed waits for a tick and is sent with the write", async () => {
   const bodies = stubPush({ ...base, done: true, backup: "b.json", reason: null });
   const onWritten = vi.fn();
   const notify = vi.fn();
   render(<WritePlan deviceId="desk" deviceName="Desk" notify={notify} onWritten={onWritten} plan={plan({
-    drift: true, changed_ids: ["3"],
+    changed_ids: ["3"],
     report: [
       { look: "Evening", preset_id: 3, status: "ok", notes: [], written: true, changed: true, on_device: null },
       { look: "Storm", preset_id: 4, status: "review", notes: ["'Comet' changed: Tail (ix) is gone"], written: false, changed: false, on_device: "Storm" },
     ] })} />);
-  expect(screen.getByText(/changed since the last write/)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Needs your decision: effect changed (1)" })).toBeInTheDocument();
   const write = screen.getByRole("button", { name: "Write 1 preset to Desk" });
-  expect(write).toBeDisabled();                                  // drift not acknowledged yet
-  fireEvent.click(screen.getByLabelText(/Write anyway \(keeps/));
   expect(write).toBeEnabled();
   fireEvent.click(screen.getByLabelText("Write Storm anyway"));
   expect(screen.getByRole("button", { name: "Write 2 presets to Desk" })).toBe(write);
   fireEvent.click(write);
   await waitFor(() => expect(onWritten).toHaveBeenCalled());
-  expect(bodies[0]).toEqual({ dry_run: false, adopt_drift: true, accept_review: ["Storm"] });
+  expect(bodies[0]).toEqual({ dry_run: false, accept_review: ["Storm"] });
   expect(onWritten.mock.calls[0][0]).toMatchObject({ done: true, backup: "b.json" });
   expect(notify).not.toHaveBeenCalled();   // the write bar shows the result where the write was
+});
+
+test("drift lists outside changes and can be acknowledged with nothing to write", async () => {
+  const bodies = stubPush({ ...base, done: true, reason: "outside changes kept" });
+  const onWritten = vi.fn();
+  render(<WritePlan deviceId="desk" deviceName="Desk" notify={() => {}} onWritten={onWritten} plan={plan({
+    drift: true,
+    drift_items: [
+      { preset_id: "4", action: "added", name: "New outside" },
+      { preset_id: "7", action: "changed", name: "Renamed", previous_name: "Old" },
+      { preset_id: "9", action: "removed", name: "Gone" },
+    ],
+  })} />);
+  const outside = screen.getByRole("region", { name: "Outside changes" });
+  expect(outside).toHaveTextContent("Preset 4: added “New outside”");
+  expect(outside).toHaveTextContent("Preset 7: changed from “Old” to “Renamed”");
+  expect(outside).toHaveTextContent("Preset 9: removed “Gone”");
+  fireEvent.click(screen.getByRole("button", { name: "Keep them on the device and continue" }));
+  await waitFor(() => expect(onWritten).toHaveBeenCalled());
+  expect(bodies).toEqual([{ dry_run: false, adopt_drift_only: true }]);
 });
 
 test("nothing to write", () => {

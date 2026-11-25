@@ -202,6 +202,7 @@ class RoomIn(Strict):
 class PushIn(Strict):
     dry_run: bool = True
     adopt_drift: bool = False
+    adopt_drift_only: bool = False
     # write looks whose effect changed ("review"): all of them, or the looks named
     accept_review: bool | list[Annotated[str, Field(max_length=64)]] = Field(default=False, max_length=500)
 
@@ -941,7 +942,8 @@ async def push_looks(device_id: str, body: PushIn, request: Request):
     async with make_client(request, dev) as c:
         try:
             res = await push(c, dev.id, looks, request.app.state.statestore, dry_run=body.dry_run,
-                             adopt_drift=body.adopt_drift, accept_review=body.accept_review, playlists=playlists,
+                             adopt_drift=body.adopt_drift, adopt_drift_only=body.adopt_drift_only,
+                             accept_review=body.accept_review, playlists=playlists,
                              palettes=palettes, room=room_for(request, dev.id))
         except DuplicatePresetIds as e:
             raise HTTPException(409, str(e)) from None

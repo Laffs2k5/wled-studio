@@ -134,6 +134,7 @@ export interface PushResult {
   duplicates?: DuplicateId[] | null;
   /** When the app last wrote this device's presets (ISO 8601), if it has. */
   last_write?: string | null;
+  drift_items?: { preset_id: string; action: "added" | "changed" | "removed"; name: string; previous_name?: string }[];
 }
 
 export interface PlaylistEntry { look: string; duration: number; transition: number }

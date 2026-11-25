@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "../api";
 import type { PushReportItem, PushResult } from "../types";
 import { Notes } from "./StatusBadge";
+import { importText } from "./Looks";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const label = (r: PushReportItem) => r.look ?? `▶ ${r.playlist}`;
@@ -34,13 +35,14 @@ interface Props {
   onWritten: (result: PushResult) => void;
   /** A write that failed (the device didn't answer, say): the message, shown where the write was. */
   onFailed?: (message: string) => void;
+  onLibraryChanged?: () => void;
 }
 
 /** The write plan: what writing the library to the device would change, and the write itself. */
-export function WritePlan({ deviceId, deviceName, plan, notify, onWritten, onFailed }: Props) {
-  const [adopt, setAdopt] = useState(false);
+export function WritePlan({ deviceId, deviceName, plan, notify, onWritten, onFailed, onLibraryChanged }: Props) {
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [driftResult, setDriftResult] = useState<{ ok: boolean; text: string } | null>(null);
   const g = groupPlan(plan);
   // looks whose effect changed are written once ticked: they don't count in the dry run's ids
   const ticked = g.decide.filter((r) => r.look && accepted.has(r.look));
@@ -52,11 +54,29 @@ export function WritePlan({ deviceId, deviceName, plan, notify, onWritten, onFai
   async function write() {
     setBusy(true);
     try {
-      const r = await api.push(deviceId, { dry_run: false, adopt_drift: adopt, accept_review: ticked.map((x) => x.look!) });
+      const r = await api.push(deviceId, { dry_run: false, accept_review: ticked.map((x) => x.look!) });
       onWritten(r);
     } catch (e) {
       if (onFailed) onFailed((e as Error).message);
       else notify((e as Error).message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resolveDrift(imported: boolean) {
+    setBusy(true);
+    setDriftResult(null);
+    try {
+      if (imported) {
+        const result = await api.importPresets(deviceId);
+        setDriftResult({ ok: true, text: importText(result, deviceName) });
+        onLibraryChanged?.();
+      }
+      const result = await api.push(deviceId, { dry_run: false, adopt_drift_only: true });
+      onWritten(result);
+    } catch (e) {
+      setDriftResult({ ok: false, text: `Couldn't resolve the outside changes: ${(e as Error).message}` });
     } finally {
       setBusy(false);
     }
@@ -89,7 +109,29 @@ export function WritePlan({ deviceId, deviceName, plan, notify, onWritten, onFai
 
   return (
     <div className="plan" aria-label="Write plan">
-      {plan.drift && <p className="warn">The device's presets changed since the last write (another tool or WLED's own UI).</p>}
+      {plan.drift && (
+        <section className="plan-group drift" aria-label="Outside changes">
+          <h3>Presets on {deviceName} were changed outside this app</h3>
+          <p className="small">They may have been changed in WLED's own UI or by another tool.</p>
+          {(plan.drift_items?.length ?? 0) > 0 ? (
+            <ul>
+              {plan.drift_items!.map((item) => (
+                <li key={`${item.action}-${item.preset_id}`}>
+                  Preset {item.preset_id}: {item.action === "added" ? <>added “{item.name}”</>
+                    : item.action === "removed" ? <>removed “{item.name}”</>
+                      : <>changed from “{item.previous_name ?? item.name}” to “{item.name}”</>}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="small muted">The old preset file is not available, so the changed ids cannot be listed yet.</p>}
+          <div className="row">
+            <button disabled={busy} onClick={() => resolveDrift(true)}>Import those into the library</button>
+            <button disabled={busy} onClick={() => resolveDrift(false)}>Keep them on the device and continue</button>
+          </div>
+          {driftResult && <p className={`action-result ${driftResult.ok ? "done" : "error"}`}
+            role={driftResult.ok ? undefined : "alert"}>{driftResult.text}</p>}
+        </section>
+      )}
       {g.duplicates.length > 0 && (
         <section className="plan-group blocking" aria-label="Two looks want the same preset id">
           <h3>Two looks want the same preset id ({g.duplicates.length})</h3>
@@ -139,10 +181,9 @@ export function WritePlan({ deviceId, deviceName, plan, notify, onWritten, onFai
       {palettes.length > 0 && (
         <p className="small">Palettes to upload: {palettes.map((p) => `${p.palette} (id ${p.id})`).join(", ")}</p>
       )}
-      {plan.drift && <label className="small"><input type="checkbox" checked={adopt} onChange={(e) => setAdopt(e.target.checked)} /> Write anyway (keeps the other changes)</label>}
       <p className="small plan-summary">{summary}</p>
       <div className="row">
-        <button className="primary" disabled={busy || blocked || nothing || (plan.drift && !adopt)} onClick={write}>
+        <button className="primary" disabled={busy || blocked || nothing || plan.drift} onClick={write}>
           Write {plural(count, "preset")} to {deviceName}
         </button>
       </div>

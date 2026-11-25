@@ -394,6 +394,20 @@ def test_push_stops_on_drift(client, dev_id, device):
     assert device.presets["20"] == {"n": "made elsewhere"} and device.presets["2"]["n"] == "B"
 
 
+def test_drift_lists_changes_and_can_be_kept_with_nothing_to_write(client, dev_id, device):
+    client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)
+    assert client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()["done"]
+    device.presets["20"] = {"n": "Added outside"}
+    dry = client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()
+    assert dry["drift"] is True and dry["changed_ids"] == []
+    assert dry["drift_items"] == [{"preset_id": "20", "action": "added", "name": "Added outside"}]
+    kept = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False, "adopt_drift_only": True},
+                       headers=CSRF).json()
+    assert kept["done"] is True and kept["drift"] is False and kept["reason"] == "outside changes kept"
+    assert device.presets["1"]["n"] == "A" and device.presets["20"]["n"] == "Added outside"
+    assert client.post(f"/api/devices/{dev_id}/push", json={}, headers=CSRF).json()["drift"] is False
+
+
 def test_push_with_pin(client, dev_id, device):
     device.pin = "4711"
     client.post(f"/api/devices/{dev_id}/capture/A?preset_id=1", headers=CSRF)

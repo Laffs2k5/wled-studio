@@ -290,6 +290,7 @@ export const api = {
   accept: (id: string, name: string) =>
     request<{ look: Look; status: string; notes: string[]; accepted: string[] }>(
       "POST", `/api/devices/${enc(id)}/accept/${enc(name)}`),
-  push: (id: string, opts: { dry_run: boolean; adopt_drift?: boolean; accept_review?: boolean | string[] }) =>
+  push: (id: string, opts: { dry_run: boolean; adopt_drift?: boolean; adopt_drift_only?: boolean;
+    accept_review?: boolean | string[] }) =>
     request<PushResult>("POST", `/api/devices/${enc(id)}/push`, opts),
 };

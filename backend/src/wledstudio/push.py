@@ -45,7 +45,22 @@ class StateStore:
         self.dir.mkdir(parents=True, exist_ok=True)
         written = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
         (self.dir / f"{device_id}.json").write_text(
-            json.dumps({"presets_sha256": sha256(text), "written": written}) + "\n")
+            json.dumps({"presets_sha256": sha256(text), "written": written, "presets": json.loads(text)}) + "\n")
+
+    def presets_snapshot(self, device_id: str) -> dict | None:
+        p = self.dir / f"{device_id}.json"
+        if not p.exists():
+            return None
+        presets = json.loads(p.read_text()).get("presets")
+        return presets if isinstance(presets, dict) else None
+
+    def adopt_presets(self, device_id: str, text: str) -> None:
+        """Acknowledge an outside edit without claiming that this app wrote it."""
+        self.dir.mkdir(parents=True, exist_ok=True)
+        p = self.dir / f"{device_id}.json"
+        old = json.loads(p.read_text()) if p.exists() else {}
+        old.update({"presets_sha256": sha256(text), "presets": json.loads(text)})
+        p.write_text(json.dumps(old) + "\n")
 
     def last_written(self, device_id: str) -> str | None:
         """When wled-studio last wrote this device's presets (ISO 8601, UTC); None if unknown."""
@@ -97,6 +112,7 @@ class PushResult:
     palettes: list | None = None
     duplicates: list | None = None   # preset ids wanted by more than one item: they block the write
     last_write: str | None = None    # when the app last wrote this device's presets
+    drift_items: list | None = None  # additions, changes and removals since the last app write
 
 
 async def fetch_lists(client: WLEDClient, custom: dict[str, int] | None = None) -> DeviceLists:
@@ -111,6 +127,22 @@ def diff_ids(before: dict, after: dict) -> list[str]:
     return sorted((k for k in keys if before.get(k) != after.get(k)), key=lambda k: int(k) if k.isdigit() else -1)
 
 
+def drift_details(before: dict | None, after: dict) -> list[dict]:
+    if before is None:
+        return []
+    items = []
+    for preset_id in diff_ids(before, after):
+        old, new = before.get(preset_id), after.get(preset_id)
+        old_name = old.get("n") if isinstance(old, dict) else None
+        new_name = new.get("n") if isinstance(new, dict) else None
+        action = "added" if old is None else "removed" if new is None else "changed"
+        item = {"preset_id": preset_id, "action": action, "name": new_name or old_name or f"Preset {preset_id}"}
+        if old_name and new_name and old_name != new_name:
+            item["previous_name"] = old_name
+        items.append(item)
+    return items
+
+
 async def push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, **kw) -> PushResult:
     res = await _push(client, device_id, looks, state, **kw)
     res.last_write = state.last_written(device_id)
@@ -118,7 +150,8 @@ async def push(client: WLEDClient, device_id: str, looks: list[dict], state: Sta
 
 
 async def _push(client: WLEDClient, device_id: str, looks: list[dict], state: StateStore, *,
-                dry_run: bool = False, adopt_drift: bool = False, accept_review: bool | list[str] = False,
+                dry_run: bool = False, adopt_drift: bool = False, adopt_drift_only: bool = False,
+                accept_review: bool | list[str] = False,
                 playlists: list[dict] | None = None, palettes: list[dict] | None = None,
                 room: dict | None = None) -> PushResult:
     dups = duplicate_ids(looks, playlists or [])
@@ -132,11 +165,20 @@ async def _push(client: WLEDClient, device_id: str, looks: list[dict], state: St
     current = json.loads(current_text or "{}")
     last = state.last_pushed(device_id)
     drift = last is not None and sha256(current_text) != last
+    drift_items = drift_details(state.presets_snapshot(device_id), current)
     planned, report = plan_presets(current, looks, lists, accept_review=accept_review, playlists=playlists,
                                    room=room)
     changed = diff_ids(current, planned)
     if dry_run:
-        return PushResult(False, drift, report, changed, reason="dry run", palettes=pal_report, duplicates=dups)
+        return PushResult(False, drift, report, changed, reason="dry run", palettes=pal_report, duplicates=dups,
+                          drift_items=drift_items)
+    if adopt_drift_only:
+        if not drift:
+            return PushResult(False, False, report, changed, reason="no outside changes to acknowledge",
+                              palettes=pal_report, duplicates=dups, drift_items=[])
+        state.adopt_presets(device_id, current_text)
+        return PushResult(True, False, report, changed, reason="outside changes kept", palettes=[],
+                          duplicates=dups, drift_items=[])
     if drift and not adopt_drift:
         return PushResult(False, True, report, changed, palettes=pal_report,
                           reason="the device's presets changed since the last push; adopt or review first")

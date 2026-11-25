@@ -12,6 +12,9 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /** What a write did, in a line that stays in the bar until the next write (or OK). */
 export function writeResult(r: PushResult, deviceName: string, at = new Date()): { ok: boolean; text: string } {
   if (!r.done) return { ok: false, text: `Not written to ${deviceName}: ${r.reason ?? "the device refused it"}.` };
+  if (r.reason === "outside changes kept") {
+    return { ok: true, text: `Kept the presets changed outside this app on ${deviceName}. The library can continue from here.` };
+  }
   const time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const n = r.changed_ids.length;
   const pals = r.palettes?.length ?? 0;
@@ -38,12 +41,14 @@ interface Props {
   openRequest?: number;
   /** Each check's answer (null when the device couldn't be checked): the palettes it would upload, say. */
   onPlan?: (plan: PushResult | null) => void;
+  /** An import from the drift warning changed the library; refresh it before checking again. */
+  onLibraryChanged?: () => void;
 }
 
 /** The one route to the device: a bar at the bottom of the view that says whether the device's
  * presets match the library, and opens the write plan. It checks when the view opens, after
  * library changes and on "Check again"; it never polls. */
-export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 0, onPlan }: Props) {
+export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 0, onPlan, onLibraryChanged }: Props) {
   const [plan, setPlan] = useState<PushResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -119,6 +124,7 @@ export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 
     <div className={`write-dock ${state}`} aria-label="Write to device">
       {open && plan && (
         <WritePlan deviceId={deviceId} deviceName={deviceName} plan={plan} notify={notify}
+          onLibraryChanged={onLibraryChanged}
           onWritten={(r) => { setResult(writeResult(r, deviceName)); if (r.done) setOpen(false); check(); }}
           onFailed={(msg) => setResult({ ok: false, text: `Writing to ${deviceName} failed: ${msg}` })} />
       )}

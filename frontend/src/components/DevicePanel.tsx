@@ -370,6 +370,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
       {library()}
     </div>
     <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan}
+      onLibraryChanged={reloadLooks}
       onPlan={(p) => setPendingPalettes(p ? (p.palettes ?? []).map((x) => x.palette) : null)} />
   </>);
 }
