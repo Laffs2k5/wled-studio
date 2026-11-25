@@ -107,24 +107,25 @@ export function App() {
       <header>
         <h1>wled-studio</h1>
         <nav className="row" aria-label="Views">
-          <button className={view === "looks" ? "primary" : ""} onClick={() => setView("looks")}>Looks &amp; effects</button>
-          <button className={view === "slots" ? "primary" : ""} onClick={() => setView("slots")}>Slot grid</button>
-          <button className={view === "studio" ? "primary" : ""} onClick={() => setView("studio")}>Effect studio</button>
+          <button className={view === "design" || view === "legacy" ? "primary" : ""} onClick={() => setView("design")}>Design</button>
+          <button className={view === "library" ? "primary" : ""} onClick={() => setView("library")}>Library</button>
+          <button className={view === "presets" ? "primary" : ""} onClick={() => setView("presets")}>Presets on device</button>
+          <button className={view === "studio" ? "primary" : ""} onClick={() => setView("studio")}>Effect code</button>
           <button className={view === "firmware" ? "primary" : ""} onClick={() => setView("firmware")}>Firmware</button>
         </nav>
         {devices && <DeviceBar devices={devices} current={current} onSelect={setCurrent} onChanged={reload} notify={notify}
-          hideAdd={devices.length === 0 && view === "looks"}
+          hideAdd={devices.length === 0 && (view === "design" || view === "legacy" || view === "library")}
           settingsOpen={settings !== null} onSettings={() => setSettings(settings ? null : { focus: null })} />}
       </header>
       {settings && cur && (
         <DeviceSettings key={cur.id} device={cur} focus={settings.focus} notify={notify} onClose={() => setSettings(null)}
           onChanged={reload} onRemoved={() => { setSettings(null); reload(); }} onRoomSaved={() => setRoomVersion((n) => n + 1)} />
       )}
-      {view === "slots" ? <SlotGrid notify={notify} deviceId={current} deviceName={cur?.name}
-        onOpenLook={(name) => { setView("looks"); setLookToOpen(name); }} /> : view === "firmware" ? <Firmware
+      {view === "presets" ? <SlotGrid notify={notify} deviceId={current} deviceName={cur?.name}
+        onOpenLook={(name) => { setView("library"); setLookToOpen(name); }} /> : view === "firmware" ? <Firmware
         notify={notify} devices={devices ?? []} device={current} request={buildRequest} openJob={route.job}
         onOpenJob={(job) => setView("firmware", { job })}
-        onOpenLooks={() => setView("looks")} /> : view === "studio" ? (
+        onOpenLooks={() => setView("library")} /> : view === "studio" ? (
         <EffectStudio notify={notify} device={current} openFile={route.folder && route.file ? {
           folder: route.folder, name: route.file,
         } : null}

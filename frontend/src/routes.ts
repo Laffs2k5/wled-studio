@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-export type View = "looks" | "slots" | "studio" | "firmware";
+export type View = "design" | "library" | "presets" | "studio" | "firmware" | "legacy";
 export interface AppRoute {
   view: View;
   device?: string | null;
@@ -13,9 +13,12 @@ export interface AppRoute {
 export function parseRoute(hash = window.location.hash): AppRoute {
   const [path, query = ""] = hash.replace(/^#/, "").split("?");
   const parts = path.split("/").filter(Boolean);
-  const view: View = parts[0] === "slots" || parts[0] === "studio" || parts[0] === "firmware"
-    ? parts[0]
-    : parts[0] === "code" ? "studio" : "looks";
+  const view: View = parts[0] === "library" ? "legacy"
+    : parts[0] === "saved" ? "library"
+      : parts[0] === "slots" || parts[0] === "presets" ? "presets"
+        : parts[0] === "studio" || parts[0] === "code" ? "studio"
+          : parts[0] === "firmware" ? "firmware"
+            : "design";
   const device = new URLSearchParams(query).get("device");
   if (view === "firmware" && parts[1] === "job" && parts[2]) {
     return { view, device, job: decodeURIComponent(parts[2]) };
@@ -28,7 +31,8 @@ export function parseRoute(hash = window.location.hash): AppRoute {
 
 export function routeHash(route: AppRoute): string {
   const enc = encodeURIComponent;
-  let path = route.view === "looks" ? "/library" : route.view === "slots" ? "/slots"
+  let path = route.view === "legacy" ? "/library" : route.view === "design" ? "/design"
+    : route.view === "library" ? "/saved" : route.view === "presets" ? "/presets"
     : route.view === "firmware" ? route.job ? `/firmware/job/${enc(route.job)}` : "/firmware"
       : route.folder && route.file ? `/code/${enc(route.folder)}/${enc(route.file)}` : "/studio";
   if (route.device) path += `?device=${enc(route.device)}`;
