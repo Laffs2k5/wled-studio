@@ -209,10 +209,14 @@ test("a saved look is edited in the library, not on the strip", async ({ page, r
 
   await page.getByLabel("Edit E2E to edit").click();
   await expect(page.getByRole("region", { name: "Editing E2E to edit" })).toBeVisible();
-  await page.getByLabel("Effect", { exact: true }).selectOption({ label: "Comet" });
+  await expect(page.getByText("Editing the saved look “E2E to edit”. The strip does not change.")).toBeVisible();
+  // the effect list on the left picks for the look being edited, not for the strip
+  await page.getByRole("listbox", { name: "Effects" }).getByRole("option", { name: "Comet" }).click();
+  await expect(page.getByLabel("Effect", { exact: true }).locator("option:checked")).toHaveText("Comet");
   await page.getByLabel("Tail").fill("33");
   await page.getByRole("button", { name: "Save “E2E to edit”" }).click();
-  await expect(page.getByRole("listbox", { name: "Effects" })).toBeVisible(); // back to live editing
+  // back to live editing, with a note that the look is saved in the library only
+  await expect(page.getByRole("note", { name: "Saved look" })).toContainText("Saved “E2E to edit” in the library.");
 
   const look = (await (await request.get("/api/looks")).json()).find((l: { name: string }) => l.name === "E2E to edit");
   expect(look.segments[0].effect).toBe("Comet");

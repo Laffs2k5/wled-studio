@@ -38,6 +38,13 @@ button.danger { color: var(--bad); }
 .badge.check-unavailable { color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; }
 .warn { color: var(--warn); }
 .live-banner { margin: 0 0 .5rem; padding: .3rem .6rem; border-left: 3px solid var(--accent); }
+/* the look editor: a frame and banner of its own, so it can't be taken for the live controls */
+aside.editing, main.editing { border: 2px dashed var(--warn); }
+.edit-banner { margin: 0 0 .5rem; padding: .4rem .6rem; border-left: 3px solid var(--warn); background: var(--deep); }
+.edit-note { margin: 0 0 .5rem; color: var(--warn); }
+.saved-note { margin: 0 0 .5rem; padding: .3rem .6rem; border-left: 3px solid var(--ok); background: var(--deep); }
+.confirm { padding: .3rem .6rem; border: 1px solid var(--warn); border-radius: 6px; }
+.pad { padding: 1rem 1.25rem; }
 .library-line { margin: -.25rem 0 .5rem; }
 .device-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .device-panel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr minmax(18rem, 24rem); gap: 1rem; padding: 1rem 1.25rem; }

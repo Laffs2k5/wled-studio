@@ -81,3 +81,12 @@ test("a time from another day carries its date", () => {
   expect(when("2020-01-02T03:04:05+00:00")).toMatch(/2020|20/);
   expect(when("not a time")).toBe("not a time");
 });
+
+test("the plan opens on request from elsewhere (the look editor's Check and write)", async () => {
+  stub([differ]);
+  const { rerender } = render(<WriteBar deviceId="desk" deviceName="Desk" notify={() => {}} version={0} />);
+  await screen.findByText("Desk: 2 presets differ from the library", undefined, LATER);
+  expect(screen.queryByRole("button", { name: "Write 2 presets to Desk" })).toBeNull();
+  rerender(<WriteBar deviceId="desk" deviceName="Desk" notify={() => {}} version={0} openRequest={1} />);
+  expect(await screen.findByRole("button", { name: "Write 2 presets to Desk" })).toBeInTheDocument();
+});

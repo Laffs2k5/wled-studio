@@ -35,6 +35,12 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
   const [palettes, setPalettes] = useState<Palette[]>([]);
   const [checks, setChecks] = useState<CheckItem[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  // while a look is open in the editor: its edited segment's effect, and a pick from the list on the left
+  const [editorFx, setEditorFx] = useState(0);
+  const [pick, setPick] = useState<{ fx: number; seq: number } | null>(null);
+  // after the editor saved: what the device now lacks, until dismissed; and a request to open the write plan
+  const [saved, setSaved] = useState<{ name: string; presetId: number | null; changed: boolean } | null>(null);
+  const [openPlan, setOpenPlan] = useState(0);
   const [segId, setSegId] = useState(0);
   const [room, setRoom] = useState<Room | null>(null);
   // bumped whenever the library is read again after a change: the write bar checks the device again
@@ -48,10 +54,12 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
     api.check(deviceId).catch(() => [] as CheckItem[]), // the device may be unreachable; the lists still load
   ]).then(([l, p, c, k]) => { setLooks(l); setPlaylists(p); setPalettes(c); setChecks(k); setVersion((v) => v + 1); })
     .catch((e) => notify(e.message, true)), [deviceId, notify]);
-  const closeEditor = useCallback((saved: boolean) => {
+  const closeEditor = useCallback((didSave: boolean) => {
     setEditing(null);
-    if (saved) reloadLooks();
+    setPick(null);
+    if (didSave) reloadLooks();
   }, [reloadLooks]);
+  const startEditing = useCallback((name: string) => { setSaved(null); setEditing(name); }, []);
 
   useEffect(() => {
     setProfile(null);
@@ -168,17 +176,36 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
 
   return (<>
     <div className="device-panel">
-      <aside>
-        {editing ? <p className="muted small">Editing a saved look: pick its effects in the editor.</p> : (
+      <aside className={editing ? "editing" : undefined}>
+        {editing ? (<>
+          <p className="small edit-note">Picks the effect of the segment you're editing in “{editing}”. The strip does not change.</p>
+          <EffectList effects={profile.effects} selected={editorFx} hasMatrix={hasMatrix}
+            onSelect={(fx) => setPick({ fx, seq: Date.now() })} />
+        </>) : (
           <EffectList effects={profile.effects} selected={segment.fx} hasMatrix={hasMatrix}
             onSelect={(fx) => change({ fx })} />
         )}
       </aside>
-      <main>
+      <main className={editing ? "editing" : undefined}>
         {editing ? (
           <LookEditor key={editing} deviceId={deviceId} name={editing} profile={profile} room={room} notify={notify}
-            onClose={closeEditor} looks={looks} playlists={playlists} />
+            onClose={closeEditor} looks={looks} playlists={playlists} deviceName={profile.device.name}
+            pick={pick} onEffect={setEditorFx} onSaved={setSaved} />
         ) : (<>
+        {saved && (
+          <div className="row saved-note small" role="note" aria-label="Saved look">
+            <span className="grow">
+              Saved “{saved.name}” in the library.{" "}
+              {!saved.changed ? "Nothing had changed."
+                : saved.presetId ? `Preset ${saved.presetId} on ${profile.device.name} is now out of date until you write presets.`
+                  : "It has no preset id, so it stays in the library only."}
+            </span>
+            {saved.changed && saved.presetId && (
+              <button className="small primary" onClick={() => { setOpenPlan((n) => n + 1); setSaved(null); }}>Check and write</button>
+            )}
+            <button className="small" onClick={() => setSaved(null)}>OK</button>
+          </div>
+        )}
         <p className="live-banner small" aria-label="Where changes go">
           <strong>Live on {profile.device.name}</strong>
           {virtual && <span className="badge" title="WLED's own code running as software, for testing: it behaves like a controller, but there's no strip">{VIRTUAL}</span>}
@@ -256,11 +283,11 @@ export function DevicePanel({ deviceId, notify, onVirtual }: Props) {
       </main>
       <aside>
         <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
-          beforeAction={flush} checks={checks} onEdit={setEditing} playlists={playlists} />
+          beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} />
         <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks} />
         <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} />
       </aside>
     </div>
-    <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} />
+    <WriteBar deviceId={deviceId} deviceName={profile.device.name} notify={notify} version={version} openRequest={openPlan} />
   </>);
 }

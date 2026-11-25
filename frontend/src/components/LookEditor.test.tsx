@@ -116,3 +116,50 @@ test("the preset id is changed in the editor, with a warning when another look h
   expect(posts()[1]).toMatchObject({ keep_slot: false });
   expect(posts()[1].preset_id).toBeUndefined();
 });
+
+test("the editor says the strip does not change, and Cancel asks first when there are changes", async () => {
+  stub(base);
+  const onClose = vi.fn();
+  render(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={() => {}} onClose={onClose} deviceName="Desk" />);
+  expect(await screen.findByText("Editing the saved look “Calm”. The strip does not change.")).toBeInTheDocument();
+  expect(screen.getByText(/Desk gets it when you write presets/)).toBeInTheDocument();
+  expect(screen.getByText("No changes yet")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Look brightness"), { target: { value: "200" } });
+  expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByText(/Discard your changes to “Calm”\?/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+  expect(screen.getByRole("button", { name: "Save “Calm”" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+  expect(onClose).toHaveBeenCalledWith(false);
+});
+
+test("Cancel without changes closes at once", async () => {
+  stub(base);
+  const onClose = vi.fn();
+  render(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={() => {}} onClose={onClose} />);
+  await screen.findByText(/Editing “Calm”/);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(onClose).toHaveBeenCalledWith(false);
+});
+
+test("an effect picked in the list on the left goes to the edited segment; saving reports what changed", async () => {
+  const calls = stub(base);
+  const onEffect = vi.fn();
+  const onSaved = vi.fn();
+  const notify = () => {};
+  const onClose = () => {};
+  const { rerender } = render(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={notify}
+    onClose={onClose} onEffect={onEffect} onSaved={onSaved} />);
+  await screen.findByText(/Editing “Calm”/);
+  expect(onEffect).toHaveBeenLastCalledWith(8);
+  rerender(<LookEditor deviceId="desk" name="Calm" profile={profile} room={null} notify={notify}
+    onClose={onClose} onEffect={onEffect} onSaved={onSaved} pick={{ fx: 5, seq: 1 }} />);
+  await waitFor(() => expect(onEffect).toHaveBeenLastCalledWith(5));
+  expect(screen.getByLabelText("Effect")).toHaveValue("5");
+  fireEvent.click(screen.getByRole("button", { name: "Save “Calm”" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledWith({ name: "Calm", presetId: 6, changed: true }));
+  expect(JSON.parse(calls.find((c) => c.key.startsWith("POST"))!.body!).seg[0].fx).toBe(5);
+});

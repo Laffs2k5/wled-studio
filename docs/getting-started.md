@@ -50,6 +50,11 @@ read from WLED's effect metadata. Changes go to the strip at once.
   segments the strip has). The mic follows the look: on for a sound-reactive effect, off for any
   other.
 - **Show** plays a look on the strip without saving anything on the device.
+- **Edit** opens a saved look in the look editor, in a dashed frame under the banner "Editing the
+  saved look … The strip does not change.": the editor changes the look in the library only. The
+  effect list on the left picks the effect of the segment being edited. **Cancel** asks first when
+  there are unsaved changes. After **Save**, a note says that the look's preset on the device is
+  out of date until the next write, with **Check and write** to open the write plan.
 - **A look's preset id** can be changed later: click "preset 6" (or "no preset id") on its row, or
   use the field at the top of the look editor. It changes the library; the next write puts the look
   at its new id (the old preset stays on the device: writing never deletes presets).

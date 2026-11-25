@@ -23,12 +23,14 @@ interface Props {
   notify: (msg: string, error?: boolean) => void;
   /** Bumped after every library change: the device is checked again shortly after (debounced). */
   version: number;
+  /** Bumped to open the plan from elsewhere (the look editor's "Check and write"). */
+  openRequest?: number;
 }
 
 /** The one route to the device: a bar at the bottom of the view that says whether the device's
  * presets match the library, and opens the write plan. It checks when the view opens, after
  * library changes and on "Check again"; it never polls. */
-export function WriteBar({ deviceId, deviceName, notify, version }: Props) {
+export function WriteBar({ deviceId, deviceName, notify, version, openRequest = 0 }: Props) {
   const [plan, setPlan] = useState<PushResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -56,6 +58,7 @@ export function WriteBar({ deviceId, deviceName, notify, version }: Props) {
     return () => clearTimeout(t);
   }, [check, version]);
   useEffect(() => () => { seq.current++; }, []);   // a late answer after unmounting is dropped
+  useEffect(() => { if (openRequest) setOpen(true); }, [openRequest]);
 
   let text: string;
   let state: "pending" | "differ" | "same" | "blocked" | "error";

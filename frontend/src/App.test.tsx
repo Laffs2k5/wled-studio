@@ -197,3 +197,33 @@ test("one device picker in the header for every view, remembered across reloads"
   await waitFor(() => expect(screen.getByLabelText("Device")).toHaveValue("twin"));
   localStorage.clear();
 });
+
+test("the look editor: a frame of its own, the effect list picks for it, and after saving the device is said to be out of date", async () => {
+  const look = { name: "Evening", preset_id: 3, status: "ok", notes: [], owns_layout: true, ids: true, bounds: true,
+    state: { on: true, bri: 90, seg: [{ id: 0, start: 0, stop: 60, fx: 8 }] } };
+  const calls = backend({
+    "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
+    "GET /api/devices/desk/profile": () => profile,
+    "GET /api/devices/desk/state": () => state,
+    "GET /api/looks": () => [{ name: "Evening", preset_id: 3, segments: [] }],
+    "GET /api/playlists": () => [],
+    "GET /api/palettes": () => [],
+    "GET /api/devices/desk/room": () => null,
+    "GET /api/devices/desk/check": () => [],
+    "GET /api/devices/desk/looks/Evening/edit": () => look,
+    "POST /api/devices/desk/looks/Evening": () => ({ name: "Evening", segments: [] }),
+  });
+  render(<App />);
+  fireEvent.click(await screen.findByLabelText("Edit Evening"));
+  expect(await screen.findByText("Editing the saved look “Evening”. The strip does not change.")).toBeInTheDocument();
+  expect(screen.getByText(/Picks the effect of the segment you're editing in “Evening”/)).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("listbox", { name: "Effects" })).getByRole("option", { name: /Pulse Meter/ }));
+  expect(screen.getByLabelText("Effect")).toHaveValue("5");
+  expect(calls.some((c) => c.url === "/api/devices/desk/state" && c.init?.method === "POST")).toBe(false);   // not live
+  fireEvent.click(screen.getByRole("button", { name: "Save “Evening”" }));
+  expect(await screen.findByRole("note", { name: "Saved look" })).toHaveTextContent(
+    "Saved “Evening” in the library. Preset 3 on Desk is now out of date until you write presets.");
+  expect(screen.getByRole("button", { name: "Check and write" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "OK" }));
+  expect(screen.queryByRole("note", { name: "Saved look" })).toBeNull();
+});

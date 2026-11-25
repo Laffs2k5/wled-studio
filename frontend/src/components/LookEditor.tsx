@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Room } from "../room";
 import type { CheckItem, Look, Playlist, Profile, Segment } from "../types";
@@ -34,7 +34,19 @@ interface Props {
   /** The library, to warn when the preset id is another item's. */
   looks?: Look[];
   playlists?: Playlist[];
+  /** The device's name, for the banner. */
+  deviceName?: string;
+  /** An effect picked in the effect list on the left: set on the edited segment (seq tells repeats apart). */
+  pick?: { fx: number; seq: number } | null;
+  /** The edited segment's effect, for the effect list on the left to mark. */
+  onEffect?: (fx: number) => void;
+  /** Called after a save, before onClose: what was saved, and whether anything had changed. */
+  onSaved?: (saved: { name: string; presetId: number | null; changed: boolean }) => void;
 }
+
+/** What the editor compares to tell whether there is anything to lose on Cancel. */
+const snapshot = (segs: Segment[], bri: number, pidText: string) =>
+  JSON.stringify([segs.map(({ _set, ...rest }) => rest), bri, pidText.trim()]);
 
 /** A segment with display defaults filled in. `_set` lists the fields it really has: the ones it
  * came with, plus the ones edited here. Only those are saved, so editing one slider of a look
@@ -47,29 +59,48 @@ const filled = (s: Partial<Segment>, ledCount: number, all = false): Segment => 
 const fieldsOf = (s: Segment) => new Set((s._set as string[] | undefined) ?? SEGMENT_KEYS);
 
 /** A saved look, edited in the library: nothing is sent to the strip. */
-export function LookEditor({ deviceId, name, profile, room, notify, onClose, looks = [], playlists = [] }: Props) {
+export function LookEditor({ deviceId, name, profile, room, notify, onClose, looks = [], playlists = [], deviceName,
+  pick, onEffect, onSaved }: Props) {
   const [look, setLook] = useState<EditedLook | null>(null);
   const [segs, setSegs] = useState<Segment[]>([]);
   const [bri, setBri] = useState(128);
   const [segId, setSegId] = useState(0);
   const [busy, setBusy] = useState(false);
   const [pidText, setPidText] = useState("");
+  const [discarding, setDiscarding] = useState(false);
+  const initial = useRef<string | null>(null);
   const count = profile.leds.count;
 
   useEffect(() => {
     api.editLook(deviceId, name).then((l) => {
+      const s = l.state.seg.map((x) => filled(x, count));
+      const p = l.preset_id ? String(l.preset_id) : "";
       setLook(l);
-      setSegs(l.state.seg.map((s) => filled(s, count)));
+      setSegs(s);
       setBri(l.state.bri ?? 128);
       setSegId(Number(l.state.seg[0]?.id ?? 0));
-      setPidText(l.preset_id ? String(l.preset_id) : "");
+      setPidText(p);
+      initial.current = snapshot(s, l.state.bri ?? 128, p);
     }).catch((e) => { notify((e as Error).message, true); onClose(false); });
   }, [deviceId, name, count, notify, onClose]);
 
-  if (!look) return <p className="muted">Loading “{name}”…</p>;
+  const segment = segs.find((s) => s.id === segId) ?? segs[0];
+  const fx = segment?.fx;
+  // the effect list on the left marks the edited segment's effect, and picking there sets it
+  useEffect(() => { if (fx !== undefined) onEffect?.(fx); }, [fx, onEffect]);
+  const seenPick = useRef(pick?.seq);
+  useEffect(() => {
+    if (!pick || pick.seq === seenPick.current) return;
+    seenPick.current = pick.seq;
+    setSegs((list) => list.map((s) => (s.id === (segment?.id ?? 0)
+      ? { ...s, fx: pick.fx, _set: [...fieldsOf(s), "fx"] } : s)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick]);
+
+  if (!look || !segment) return <p className="muted pad">Loading “{name}”…</p>;
+  const changed = initial.current !== null && snapshot(segs, bri, pidText) !== initial.current;
   const pid = parsePresetId(pidText);
   const pidUsers = typeof pid === "number" ? presetUsers(pid, looks, playlists, name) : [];
-  const segment = segs.find((s) => s.id === segId) ?? segs[0];
   const place = segs.indexOf(segment);
   const effect = profile.effects.find((e) => e.id === segment.fx) ?? profile.effects[0];
   const change = (patch: Partial<Segment>) => setSegs(segs.map((s) => (s.id === segment.id
@@ -96,7 +127,8 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose, loo
         // the preset id as the field has it: a number, or none (cleared)
         ...(typeof pid === "number" ? { preset_id: pid } : { keep_slot: false }),
       });
-      notify(`Saved “${name}” in the library (not shown on the strip, not on the device yet)`);
+      notify(`Saved “${name}” in the library`);
+      onSaved?.({ name, presetId: typeof pid === "number" ? pid : null, changed });
       onClose(true);
     } catch (e) {
       notify((e as Error).message, true);
@@ -107,9 +139,12 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose, loo
 
   return (
     <section className="look-editor" aria-label={`Editing ${name}`}>
+      <p className="edit-banner" aria-label="Where changes go">
+        <strong>Editing the saved look “{name}”. The strip does not change.</strong>{" "}
+        <span className="small">Save keeps it in the library; {deviceName ?? "the device"} gets it when you write presets.</span>
+      </p>
       <h2>
-        Editing “{name}” <StatusBadge item={{ look: name, status: look.status, notes: look.notes }} />
-        <span className="muted small"> · not shown on the strip</span>
+        Editing “{name}” <StatusBadge item={{ look: name, status: look.status, notes: look.notes }} where={deviceName} />
       </h2>
       <label className="field preset-field">
         <span>Preset id (empty: none; the look then stays in the library only)</span>
@@ -174,10 +209,19 @@ export function LookEditor({ deviceId, name, profile, room, notify, onClose, loo
         </label>
       )}
       <EffectControls effect={effect} segment={segment} palettes={profile.palettes} rgbw={profile.leds.rgbw} onChange={change} />
-      <div className="row">
-        <button className="primary" disabled={busy || pid === "bad"} onClick={save}>Save “{name}”</button>
-        <button disabled={busy} onClick={() => onClose(false)}>Cancel</button>
-      </div>
+      {discarding ? (
+        <div className="row confirm" role="group" aria-label="Discard changes?">
+          <span className="warn">Discard your changes to “{name}”? The saved look stays as it was.</span>
+          <button className="danger" onClick={() => onClose(false)}>Discard changes</button>
+          <button onClick={() => setDiscarding(false)}>Keep editing</button>
+        </div>
+      ) : (
+        <div className="row">
+          <button className="primary" disabled={busy || pid === "bad"} onClick={save}>Save “{name}”</button>
+          <button disabled={busy} onClick={() => (changed ? setDiscarding(true) : onClose(false))}>Cancel</button>
+          <span className="muted small">{changed ? "Unsaved changes" : "No changes yet"}</span>
+        </div>
+      )}
       {!look.bounds && <p className="muted small">This look leaves the layout alone: it sets effects and colours on the segments the strip has.</p>}
     </section>
   );
