@@ -107,6 +107,8 @@ test("shows what sits where, and fills and empties slots", async () => {
   const notify = vi.fn();
   render(<SlotGrid notify={notify} />);
   expect(await screen.findByLabelText("Slot 1·1, preset 40: G1-1 Calm")).toHaveTextContent("Calm");
+  fireEvent.click(screen.getByText("Visual remote-button layout"));
+  expect(screen.getByLabelText("Remote bank 1, button 1: G1-1 Calm")).toHaveTextContent("Calm");
   fireEvent.click(screen.getByLabelText("Slot 1·2, preset 41: empty"));
   const panel = screen.getByLabelText("The picked slot");
   expect(panel).toHaveTextContent("Slots reference the saved item; no renamed duplicate is created");

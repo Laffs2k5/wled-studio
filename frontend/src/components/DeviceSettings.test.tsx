@@ -95,3 +95,15 @@ test("the room shape is here, opened when asked for, with the device's LED count
   fireEvent.click(screen.getByText("Add wall"));
   expect(await screen.findByText("10 of 30 LEDs")).toBeInTheDocument();
 });
+
+test("links a real controller to an explicitly chosen virtual twin", async () => {
+  const calls = stub();
+  open({ devices: [
+    { ...desk, virtual: false },
+    { id: "twin", name: "Offline twin", host: "twin:8080", has_pin: false, virtual: true },
+  ] });
+  fireEvent.change(screen.getByLabelText("Virtual twin"), { target: { value: "twin" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save twin" }));
+  expect(await screen.findByText("Virtual twin linked.")).toBeInTheDocument();
+  expect(JSON.parse(calls.find((c) => c.key === "PATCH /api/devices/desk")!.body!)).toEqual({ twin_id: "twin" });
+});

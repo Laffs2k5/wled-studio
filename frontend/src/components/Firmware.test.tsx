@@ -60,6 +60,25 @@ test("warns about unverified targets", async () => {
   await waitFor(() => expect(screen.getByText(/no verified result yet/)).toBeInTheDocument());
 });
 
+test("repeats a previous build with the same target and folders", async () => {
+  const old = { id: JID, state: "passed", pins: "q.json", target: "board", usermods: ["my_fx"], created: 1700000000,
+    report: { passed: true } };
+  const calls = stub({
+    "GET /api/firmware/status": json({ enabled: true }),
+    "GET /api/firmware/targets": json([{ pins: "q.json", release: "q", target: "board", verified: ["windows"] }]),
+    "GET /api/firmware/usermods": json(["my_fx"]),
+    "GET /api/firmware/jobs": json([old]),
+    "POST /api/firmware/jobs": json({ ...old, id: "b".repeat(32), state: "queued" }, 202),
+    [`GET /api/firmware/jobs/${"b".repeat(32)}`]: json({ ...old, id: "b".repeat(32), state: "queued" }),
+    [`GET /api/firmware/jobs/${"b".repeat(32)}/log`]: () => new Response("", { status: 200 }),
+  });
+  render(<Firmware notify={() => {}} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Same again" }));
+  await waitFor(() => expect(calls.some((call) => call.key === "POST /api/firmware/jobs")).toBe(true));
+  expect(JSON.parse(calls.find((call) => call.key === "POST /api/firmware/jobs")!.body!))
+    .toEqual({ pins: "q.json", target: "board", usermods: ["my_fx"] });
+});
+
 test("checks the library against a passed image before flashing", async () => {
   const job = { id: JID, state: "passed", pins: "q.json", target: "board", usermods: ["my_fx"], created: 1700000000,
     report: { passed: true, checks: { fits_app_slot: true } } };
@@ -227,12 +246,12 @@ test("lists firmware builds only, in plain words, and heads the open one with wh
   const rows = [...table.querySelectorAll("tbody tr")].map((r) => [...r.querySelectorAll("td")].map((td) => td.textContent));
   expect(rows).toHaveLength(3);                                    // no preview compile
   expect(rows.map((r) => r.slice(1))).toEqual([
-    ["board · acme-16.0.0", "a, b", "running"],
-    ["dig-next-2 · acme-16.0.1", "my_fx", "ready to flash"],
-    ["dig-next-2 · acme-16.0.1", "my_fx", "failed check 2"],
+    ["board · acme-16.0.0", "a, b", "running", "Same again"],
+    ["dig-next-2 · acme-16.0.1", "my_fx", "ready to flash", "Same again"],
+    ["dig-next-2 · acme-16.0.1", "my_fx", "failed check 2", "Same again"],
   ]);
   expect(rows[0][0]).toMatch(/^today \d\d:\d\d$/);
-  expect(table.querySelectorAll("tbody tr")[2].querySelector("td:last-child")).toHaveAttribute("title",
+  expect(table.querySelectorAll("tbody tr")[2].querySelectorAll("td")[3]).toHaveAttribute("title",
     expect.stringMatching(/^Something besides your effect code changed/));
   fireEvent.click(screen.getByText("ready to flash"));
   expect(onOpenJob).toHaveBeenCalledWith(JID);

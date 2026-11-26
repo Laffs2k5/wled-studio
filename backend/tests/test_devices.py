@@ -54,3 +54,18 @@ def test_update_keeps_the_id_and_forgets_virtual_on_a_new_address(tmp_path):
     assert (u.id, u.name, u.host, u.virtual) == (d.id, "Desk 2", "b.lan", False)
     assert s.get(d.id).host == "b.lan"
     assert s.update("nope", name="x") is None
+
+
+def test_real_device_can_link_only_to_a_virtual_twin(tmp_path):
+    s = DeviceStore(tmp_path)
+    real = s.add("Desk", "desk.lan")
+    other = s.add("Shelf", "shelf.lan")
+    twin = s.add("Desk twin", "twin.lan")
+    s.mark_virtual(twin.id, True)
+    s.update(real.id, twin_id=twin.id)
+    assert s.get(real.id).twin_id == twin.id
+    with pytest.raises(ValueError):
+        s.update(real.id, twin_id=other.id)
+    s.update(twin.id, host="new-twin.lan")
+    assert s.get(real.id).twin_id is None
+    assert s.remove(twin.id)

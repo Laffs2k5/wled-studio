@@ -105,6 +105,11 @@ export interface FirmwareJob {
     virtual?: { effects_run?: number; crashed?: string[]; error?: string | null } | null };
 }
 
+export interface EffectReplacement {
+  old: string;
+  choices: { name: string; score: number }[];
+}
+
 export const firmware = {
   status: () => request<{ enabled: boolean }>("GET", "/api/firmware/status"),
   targets: () => request<FirmwareTarget[]>("GET", "/api/firmware/targets"),
@@ -291,12 +296,16 @@ export const api = {
   devices: () => request<Device[]>("GET", "/api/devices"),
   addDevice: (name: string, host: string, pin?: string) =>
     request<Device>("POST", "/api/devices", pin ? { name, host, pin } : { name, host }),
-  editDevice: (id: string, body: { name?: string; host?: string }) => request<Device>("PATCH", `/api/devices/${enc(id)}`, body),
+  editDevice: (id: string, body: { name?: string; host?: string; twin_id?: string | null }) =>
+    request<Device>("PATCH", `/api/devices/${enc(id)}`, body),
   removeDevice: (id: string) => request<null>("DELETE", `/api/devices/${enc(id)}`),
   setPin: (id: string, pin: string | null) => request<null>("PUT", `/api/devices/${enc(id)}/pin`, { pin }),
   profile: (id: string) => request<Profile>("GET", `/api/devices/${enc(id)}/profile`),
   state: (id: string) => request<DeviceState>("GET", `/api/devices/${enc(id)}/state`),
   setState: (id: string, patch: object) => request<DeviceState>("POST", `/api/devices/${enc(id)}/state`, patch),
+  restoreSnapshot: (id: string, snapshot: DeviceState, currentSha256: string) =>
+    request<{ restored: boolean; state: DeviceState }>("POST", `/api/devices/${enc(id)}/snapshots/restore`,
+      { snapshot, current_sha256: currentSha256 }),
   importPresets: (id: string) =>
     request<{ imported: string[]; kept_existing: string[]; imported_playlists: string[]; skipped_presets: string[] }>(
       "POST", `/api/devices/${enc(id)}/import`),
@@ -329,6 +338,12 @@ export const api = {
   editLook: (id: string, name: string) => request<EditedLook>("GET", `/api/devices/${enc(id)}/looks/${enc(name)}/edit`),
   saveEditedLook: (id: string, name: string, body: object) =>
     request<Look>("POST", `/api/devices/${enc(id)}/looks/${enc(name)}`, body),
+  effectReplacements: (id: string, name: string) =>
+    request<{ replacements: EffectReplacement[] }>("GET",
+      `/api/devices/${enc(id)}/looks/${enc(name)}/effect-replacements`),
+  replaceEffect: (id: string, name: string, old: string, replacement: string) =>
+    request<{ changed: number }>("POST", `/api/devices/${enc(id)}/looks/${enc(name)}/effect-replacements`,
+      { old, new: replacement }),
   moveSegment: (id: string, seg: number, direction: "up" | "down") =>
     request<{ id: number }>("POST", `/api/devices/${enc(id)}/segments/${seg}/move?direction=${direction}`),
   duplicateSegment: (id: string, seg: number) =>

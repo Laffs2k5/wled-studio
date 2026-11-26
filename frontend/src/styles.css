@@ -87,6 +87,10 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .device-home { border-left: 3px solid var(--accent); padding: .25rem .65rem; margin-bottom: .75rem; background: var(--deep); }
 .device-home h2 { margin-top: 0; }
 .device-home p { margin: .2rem 0; }
+.device-status-grid { display: grid; grid-template-columns: repeat(4, minmax(7rem, 1fr)); gap: .4rem; margin: .6rem 0; }
+.device-status-grid > div { background: var(--bg); border: 1px solid var(--line); border-radius: .35rem; padding: .45rem; display: grid; gap: .15rem; }
+.device-status-grid strong { font-size: 1.05rem; }
+.device-status-grid span { color: var(--muted); font-size: .75rem; }
 .firmware-history { padding-left: 1.1rem; font-size: .85rem; }
 .look-group.drop, .playlist-entries.drop { outline: 2px dashed var(--accent); background: var(--hover); }
 .room-columns { display: grid; grid-template-columns: 12rem 10rem 5rem; gap: .5rem; }
@@ -361,6 +365,35 @@ button.code-place { font: inherit; text-align: left; }
 .slots-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem); gap: 1rem; align-items: start; }
 @media (max-width: 900px) { .slots-layout { grid-template-columns: minmax(0, 1fr); } }
 .slot-grid-box { min-width: 0; overflow-x: auto; }
+.remote-preview-panel { margin-top: .75rem; }
+.remote-preview { display: grid; gap: .5rem; justify-items: start; margin-top: .5rem; }
+.remote-body { width: min(100%, 32rem); padding: 1rem; border: 2px solid var(--line); border-radius: 1.4rem; background: var(--deep); box-shadow: 0 .4rem 1.2rem #0004; }
+.remote-brand { text-align: center; font-weight: 700; margin-bottom: .7rem; }
+.remote-top, .remote-rocker, .remote-buttons { display: grid; gap: .4rem; }
+.remote-top { grid-template-columns: repeat(3, 1fr); text-align: center; margin-bottom: .5rem; }
+.remote-top span, .remote-rocker { border: 1px solid var(--line); border-radius: 999px; padding: .4rem; }
+.remote-rocker { grid-template-columns: auto 1fr auto; align-items: center; text-align: center; margin-bottom: .8rem; }
+.remote-bank { margin-top: .6rem; }
+.remote-bank > strong { font-size: .8rem; color: var(--muted); }
+.remote-buttons { margin-top: .3rem; }
+.remote-buttons button { min-height: 4rem; border-radius: 50%; display: grid; align-content: center; gap: .15rem; }
+.remote-buttons button b { font-size: 1rem; }
+.remote-buttons button span { font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 6rem; }
+.remote-buttons button.filled { border-color: var(--accent); background: var(--hover); }
+.live-snapshots { margin: .65rem 0; }
+.live-snapshots ul { margin: .5rem 0; padding-left: 1.2rem; }
+.live-snapshots li { display: flex; gap: .5rem; align-items: center; margin: .25rem 0; }
+.effect-replacements { display: grid; gap: .25rem; margin-top: .35rem; }
+.effect-replacements p { margin: 0; }
+@media (max-width: 700px) {
+  .device-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media print {
+  body * { visibility: hidden; }
+  .remote-preview, .remote-preview * { visibility: visible; }
+  .remote-preview { position: absolute; inset: 0; }
+  .remote-preview > button, .remote-preview > p { display: none; }
+}
 .slot-library { max-height: 70vh; overflow: auto; }
 .slot-library h3 { margin: .1rem 0 .3rem; font-size: .95rem; }
 .slot-library h4 { margin: .5rem 0 .2rem; font-size: .85rem; color: var(--muted); font-weight: 600; }

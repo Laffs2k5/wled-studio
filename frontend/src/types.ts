@@ -6,6 +6,8 @@ export interface Device {
   has_pin: boolean;
   /** A virtual WLED (no LEDs, can't be flashed), as the device said when the app last read it. */
   virtual?: boolean;
+  /** The virtual firmware twin this real device is linked to for offline work. */
+  twin_id?: string | null;
 }
 
 export interface Control {

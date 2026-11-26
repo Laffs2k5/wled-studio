@@ -2,7 +2,7 @@
 import { VIRTUAL } from "../devices";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, request } from "../api";
-import type { CheckItem, DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
+import type { CheckItem, Device, DeviceState, Look, Palette, Playlist, Profile, Segment } from "../types";
 import { EffectControls } from "./EffectControls";
 import { EffectList } from "./EffectList";
 import { areas, type Room } from "../room";
@@ -19,6 +19,8 @@ import { SaveLook } from "./SaveLook";
 import { LibraryTransfer } from "./LibraryTransfer";
 import { CrossDevice } from "./CrossDevice";
 import { DeviceHome } from "./DeviceHome";
+import { saveLiveSnapshot } from "../liveSnapshots";
+import { LiveSnapshots } from "./LiveSnapshots";
 
 interface Props {
   deviceId: string;
@@ -40,6 +42,8 @@ interface Props {
   /** A shared token: Library mutations notify the Presets view to invalidate its plan. */
   onLibraryChanged?: () => void;
   onOpenPresets?: () => void;
+  devices?: Device[];
+  onSelectDevice?: (id: string) => void;
 }
 
 /** What the panel shows instead of the live controls while the device doesn't answer: what's wrong,
@@ -70,7 +74,7 @@ export function DeviceOffline({ name, host, error, trying, onRetry, onEditAddres
 const SEND_DELAY_MS = 120;
 
 export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roomVersion = 0, onRoomShape, onEditAddress,
-  openLook, onLookOpened, viewMode = "legacy", onLibraryChanged, onOpenPresets }: Props) {
+  openLook, onLookOpened, viewMode = "legacy", onLibraryChanged, onOpenPresets, devices = [], onSelectDevice }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -100,6 +104,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const [attempt, setAttempt] = useState(0);
   const [trying, setTrying] = useState(false);
   const [mobileTab, setMobileTab] = useState<"effects" | "strip" | "library">("strip");
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const lastSnapshot = useRef({ at: 0, label: "" });
   const pending = useRef<Partial<Segment>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -171,9 +177,23 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
     }
   }
 
+  const rememberLive = (label: string) => {
+    if (!state) return;
+    const now = Date.now();
+    if (now - lastSnapshot.current.at < 800 && lastSnapshot.current.label === label) return;
+    saveLiveSnapshot(deviceId, state, label);
+    lastSnapshot.current = { at: now, label };
+    setHistoryVersion((version) => version + 1);
+  };
+  const beforeLiveAction = async () => {
+    rememberLive("before showing a look or playlist");
+    await flush();
+  };
+
   // live editing: show the change at once, send it to the device shortly after (coalesced)
   function change(patch: Partial<Segment>) {
     if (!state || !segment) return;
+    rememberLive("before segment edit");
     setUndoSegment({ ...segment });
     setState({ ...state, seg: state.seg.map((s) => (s.id === segment.id ? { ...s, ...patch } : s)) });
     pending.current = { ...pending.current, ...patch };
@@ -194,6 +214,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   // one is found by comparing the ids before and after
   async function addSegment() {
     if (!state || !profile) return;
+    rememberLive("before adding a segment");
     await flush();
     const used = new Set(state.seg.map((s) => s.id));
     let id = 0;
@@ -215,6 +236,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
 
   async function removeSegment(id: number) {
     if (!state || state.seg.length < 2) return;
+    rememberLive(`before removing segment ${id}`);
     await flush();
     const removed = state.seg.find((s) => s.id === id);
     try {
@@ -243,6 +265,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
 
   // a segment's place in the stack (WLED draws in id order), or a copy of it on top
   async function restack(f: () => Promise<{ id: number }>) {
+    rememberLive("before changing segment layers");
     await flush();
     try {
       const r = await f();
@@ -256,12 +279,14 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   // the device's sound input (the AudioReactive usermod), on or off
   function setMic(on: boolean) {
     if (!state) return;
+    rememberLive(on ? "before turning the microphone on" : "before turning the microphone off");
     setState({ ...state, AudioReactive: { on } });
     api.setState(deviceId, { AudioReactive: { enabled: on } }).catch((er) => notify(er.message, true));
   }
 
   function master(patch: { on?: boolean; bri?: number }) {
     if (!state) return;
+    rememberLive("before master control");
     setState({ ...state, ...patch });
     api.setState(deviceId, patch).catch((e) => notify(e.message, true));
   }
@@ -283,16 +308,16 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
   const library = (offlineName?: string) => (
     <aside className="library-column">
       <Looks deviceId={deviceId} looks={looks} onChanged={reloadLooks} onApplied={reloadState} notify={notify}
-        beforeAction={flush} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName}
+        beforeAction={beforeLiveAction} checks={checks} onEdit={startEditing} playlists={playlists} offline={offlineName}
         deviceName={profile?.device.name ?? deviceName}
         renderPlaylists={(folder) => (
           <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
             deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
-            onShown={reloadState} folder={folder} listOnly />
+            onShown={reloadState} beforeAction={beforeLiveAction} folder={folder} listOnly />
         )} />
       <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
         deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
-        onShown={reloadState} formOnly />
+        onShown={reloadState} beforeAction={beforeLiveAction} formOnly />
       <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} deviceName={profile?.device.name ?? deviceName}
         pending={offlineName ? null : pendingPalettes} onCheckAndWrite={offlineName ? undefined : () => setOpenPlan((n) => n + 1)} />
       <LibraryTransfer onChanged={reloadLooks} notify={notify} />
@@ -362,7 +387,9 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
             onClose={closeEditor} looks={looks} playlists={playlists} deviceName={profile.device.name}
             pick={pick} onEffect={setEditorFx} onSaved={setSaved} />
         ) : (<>
-        <DeviceHome deviceId={deviceId} profile={profile} lastPresetWrite={lastPresetWrite} />
+        <DeviceHome deviceId={deviceId} profile={profile} state={state}
+          device={devices.find((candidate) => candidate.id === deviceId)} devices={devices}
+          lastPresetWrite={lastPresetWrite} onSelectDevice={onSelectDevice} />
         {saved && (
           <div className="row saved-note small" role="note" aria-label="Saved look">
             <span className="grow">
@@ -386,6 +413,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
         <LiveStrip deviceId={deviceId} room={room} />
         <SessionBar deviceId={deviceId} notify={notify} beforeAction={flush} onRestored={reloadState}
           effects={profile.effects} looks={looks} playlists={playlists} />
+        <LiveSnapshots key={historyVersion} deviceId={deviceId} notify={notify}
+          onRestored={(restored) => setState(restored)} />
         <div className="master row">
           <label><input type="checkbox" checked={state.on} onChange={(e) => master({ on: e.target.checked })} /> On</label>
           <label className="slider grow">

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from difflib import SequenceMatcher
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -40,6 +41,7 @@ class DeviceIn(Strict):
 class DeviceEditIn(Strict):
     name: str | None = Field(default=None, min_length=1, max_length=64)
     host: str | None = Field(default=None, min_length=1, max_length=260)
+    twin_id: str | None = None
 
 
 class PinIn(Strict):
@@ -220,6 +222,23 @@ class TrialRestoreIn(Strict):
     current_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class SnapshotRestoreIn(Strict):
+    snapshot: dict = Field(max_length=64)
+    current_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("snapshot")
+    @classmethod
+    def snapshot_size(cls, value: dict) -> dict:
+        if len(json.dumps(value).encode()) > 64 * 1024:
+            raise ValueError("live snapshot is too large")
+        return value
+
+
+class EffectReplacementIn(Strict):
+    old: str = Field(min_length=1, max_length=64)
+    new: str = Field(min_length=1, max_length=64)
+
+
 class ProtectedPresetIn(Strict):
     id: int = Field(ge=1, le=250)
     label: str = Field(min_length=1, max_length=64)
@@ -283,7 +302,11 @@ def health():
 
 
 def device_view(ds: DeviceStore, d: Device) -> dict:
-    return {"id": d.id, "name": d.name, "host": d.host, "has_pin": ds.pin(d.id) is not None, "virtual": d.virtual}
+    view = {"id": d.id, "name": d.name, "host": d.host, "has_pin": ds.pin(d.id) is not None,
+            "virtual": d.virtual}
+    if d.twin_id is not None:
+        view["twin_id"] = d.twin_id
+    return view
 
 
 @router.get("/devices")
@@ -303,7 +326,7 @@ def add_device(body: DeviceIn, request: Request):
     dev = ds.add(body.name.strip(), host)
     if body.pin is not None:
         ds.set_pin(dev.id, body.pin.get_secret_value())
-    return {"id": dev.id, "name": dev.name, "host": dev.host, "has_pin": body.pin is not None, "virtual": dev.virtual}
+    return device_view(ds, dev)
 
 
 @router.patch("/devices/{device_id}")
@@ -321,7 +344,12 @@ def edit_device(device_id: str, body: DeviceEditIn, request: Request):
     if name == "":
         raise HTTPException(422, "the name can't be empty")
     ds = request.app.state.devices
-    return device_view(ds, ds.update(device_id, name=name, host=host))
+    twin = body.twin_id if "twin_id" in body.model_fields_set else ...
+    try:
+        updated = ds.update(device_id, name=name, host=host, twin_id=twin)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    return device_view(ds, updated)
 
 
 @router.delete("/devices/{device_id}", status_code=204)
@@ -914,6 +942,79 @@ async def look_for_editing(device_id: str, name: str, request: Request):
             "bounds": all("start" in s and "stop" in s for s in segs), "state": state}
 
 
+def _effect_suggestions(look: dict, lists: DeviceLists) -> list[dict]:
+    missing = sorted({
+        s["effect"] for s in look.get("segments", [])
+        if isinstance(s, dict) and isinstance(s.get("effect"), str) and lists.effect_id(s["effect"]) is None
+    })
+    names = [name for name in lists.effects if "RSVD" not in name]
+    out = []
+    for old in missing:
+        ranked = sorted(names, key=lambda name: (
+            -SequenceMatcher(None, old.casefold(), name.casefold()).ratio(),
+            name.casefold(),
+        ))[:3]
+        out.append({"old": old, "choices": [
+            {"name": name, "score": round(SequenceMatcher(None, old.casefold(), name.casefold()).ratio(), 3)}
+            for name in ranked
+        ]})
+    return out
+
+
+@router.get("/devices/{device_id}/looks/{name}/effect-replacements")
+async def effect_replacements(device_id: str, name: str, request: Request):
+    """Nearest available effect names for every missing effect in a look. Read-only suggestions."""
+    dev = device_or_404(device_id, request)
+    look = request.app.state.library.looks().get(name)
+    if look is None:
+        raise HTTPException(404, "no such look")
+    async with make_client(request, dev) as c:
+        try:
+            lists = await lists_for(c, request, dev.id)
+        except WLEDError as e:
+            raise device_errors(e) from None
+    return {"device": dev.id, "name": name, "replacements": _effect_suggestions(look, lists)}
+
+
+@router.post("/devices/{device_id}/looks/{name}/effect-replacements")
+async def replace_look_effect(device_id: str, name: str, body: EffectReplacementIn, request: Request):
+    """Explicitly replace a missing effect in the shared look with one available on this device."""
+    dev = device_or_404(device_id, request)
+    lib: LibraryStore = request.app.state.library
+    if lib.looks().get(name) is None:
+        raise HTTPException(404, "no such look")
+    async with make_client(request, dev) as c:
+        try:
+            lists = await lists_for(c, request, dev.id)
+        except WLEDError as e:
+            raise device_errors(e) from None
+    if lists.effect_id(body.old) is not None:
+        raise HTTPException(409, f"{body.old!r} is already available on this device")
+    fx = lists.effect_id(body.new)
+    if fx is None:
+        raise HTTPException(422, f"{body.new!r} isn't on this device")
+    current = lib.looks().get(name)
+    if current is None:
+        raise HTTPException(404, "no such look")
+    changed = 0
+    look = json.loads(json.dumps(current))
+    for segment in look.get("segments", []):
+        if segment.get("effect") == body.old:
+            segment["effect"] = body.new
+            changed += 1
+    if not changed:
+        raise HTTPException(409, f"the look no longer uses {body.old!r}")
+    snapshot = dict(look.get("snapshot") or {})
+    snapshot.pop(body.old, None)
+    snapshot[body.new] = lists.meta(fx)
+    look["snapshot"] = snapshot
+    imported = dict(look.get("imported_ids") or {})
+    imported.pop(body.old, None)
+    look["imported_ids"] = imported
+    saved = lib.put(look)
+    return {"name": saved["name"], "old": body.old, "new": body.new, "changed": changed}
+
+
 @router.post("/devices/{device_id}/looks/{name}")
 async def save_edited_look(device_id: str, name: str, body: EditedLookIn, request: Request):
     """Save a look edited in the app (not shown on the device), as capture would from the device."""
@@ -1110,6 +1211,22 @@ async def restore_bank_trial(device_id: str, body: TrialRestoreIn, request: Requ
         except WLEDError as e:
             raise device_errors(e) from None
     request.app.state.trials.finish(device_id)
+    return {"restored": True, "state": result}
+
+
+@router.post("/devices/{device_id}/snapshots/restore")
+async def restore_live_snapshot(device_id: str, body: SnapshotRestoreIn, request: Request):
+    """Restore a browser-kept live-state snapshot, refusing if the strip changed since inspection."""
+    dev = device_or_404(device_id, request)
+    async with make_client(request, dev) as client:
+        try:
+            current = await client.state()
+            payload = restore_payload(body.snapshot, current)
+            result = await client.restore_if_current(body.current_sha256, payload)
+        except WLEDStateChanged as e:
+            raise HTTPException(409, str(e)) from None
+        except WLEDError as e:
+            raise device_errors(e) from None
     return {"restored": True, "state": result}
 
 

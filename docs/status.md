@@ -6,18 +6,24 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
 
 ### Five-view app
 - **Design:** live control, effects, segment layout/map, editing-session recovery, one-step Undo and
-  **Save as look…**. The device status card reports WLED version, LED count and persisted firmware
-  history. Saving a preset look offers a direct hand-off to Presets on device.
+  **Save as look…**. Automatic live history keeps eight previous states in the browser and restores
+  one only after a current-state hash check. The device status card reports WLED version, LED count,
+  room/set/trial/session status, linked virtual twins and persisted firmware history. Saving a preset
+  look offers a direct hand-off to Presets on device.
 - **Library:** looks, playlists and palettes in one shared folder tree; inline organisation, drag/drop
   into folders/playlists, library editor, portable JSON export/import and cross-device comparison.
 - **Presets on device:** one write owner for the device set, named remote grids and their "also use"
   references, bank trials, drift/duplicate handling, device-only preset deletion and verified backup
-  restore, plus protected remote/automation preset-ID warnings.
+  restore, protected remote/automation preset-ID warnings, and a print-ready visual remote layout.
 - **Effect code:** ordered Edit → Compile → Preview/stream → Git, two-column on desktop and stacked on
   phones. Preview sound can be simulated, fixed, or sampled from the opt-in browser microphone.
   Compiler errors are marked in CodeMirror; compile-after-save is remembered and opt-in.
 - **Firmware:** board/release build, gate, library preflight, device plan, flash and result/go-back.
-  Firmware flashing remains explicitly off in normal and deployed configurations.
+  Any previous build can be repeated with exactly the same target and effect folders. Firmware
+  flashing remains explicitly off in normal and deployed configurations.
+
+- **Device comparison:** a missing effect can be replaced with a nearest-name suggestion after an
+  explicit confirmation that the shared look changes for every device.
 
 ### Design and Library
 - **Devices and the profile:** each effect's own controls from its metadata; live control through
@@ -79,8 +85,8 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
 ### Quality
 - **Security baseline** ([security.md](security.md)).
 - **Tests:**
-  - backend: pytest, 230 tests, 91 % coverage;
-  - frontend: Vitest, 240 tests, above 90 % of statements;
+  - backend: pytest, 233 tests, 91 % coverage;
+  - frontend: Vitest, 245 tests, above 90 % of statements;
   - browser tests (Playwright, Chromium) and a smoke test against the containers with the fake
     device;
   - the firmware profile end to end.
@@ -152,7 +158,8 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
    the flash plan blocks it. DDP on UDP 4048 feeds WLED's own realtime pixels, so Effect code
    streams to a twin and the live view shows what was sent. Not in it: WLED's config code, other
    realtime/network inputs and firmware updates. Phase 4 is complete for streaming and device
-   recognition; left: linking a real device to its twin.
+   recognition. A real device can be linked to an added virtual twin from Device settings, with
+   dashboard shortcuts in both directions.
 
    **A virtual device is always one firmware** (owner, 2026-11-24): built from that firmware's
    exact sources and build settings, the ones the builder already uses to reproduce it.

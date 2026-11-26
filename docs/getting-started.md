@@ -47,6 +47,9 @@ device; none of it is sent to the device:
   PIN, room shape, which looks go on it, and the record of what the app last wrote and flashed).
   Nothing on the device changes, the library stays, and backups of its presets stay in the data
   folder.
+- **Offline firmware twin**: link a real controller to a virtual WLED added from the same firmware.
+  Its status card then links directly to the twin. The link never redirects flashing; a virtual
+  device still cannot be flashed.
 
 **A device that doesn't answer** (switched off, off the network, a wrong address): Design
 says so where the live controls would be ("Desk does not answer at 192.168.1.40. Check that it is
@@ -59,6 +62,9 @@ The effect list shows the device's effects (2D-only effects are hidden on strips
 sound-reactive ones). Picking one shows **only the controls that effect uses, with its own labels**,
 read from WLED's effect metadata. Changes go to the strip at once.
 
+- **Automatic live history** keeps the last eight previous states in this browser before master,
+  segment, microphone, layer or look changes. Restore rechecks the current WLED state first and
+  refuses if Home Assistant or a remote changed it meanwhile. It writes no preset.
 - **Remember what the strip shows now**, above the controls, lets you try things and then **Put
   the strip back as it was** (or **Keep what it shows now**). It only concerns the live strip:
   saving looks is not affected.
@@ -92,6 +98,9 @@ read from WLED's effect metadata. Changes go to the strip at once.
 - **A look's preset id** can be changed later: click "preset 6" (or "no preset id") on its row, or
   use the field at the top of the look editor. It changes the library; the next write puts the look
   at its new id (the old preset stays on the device: writing never deletes presets).
+- **Compare devices** can find nearest available effect names for a look a target device cannot
+  play. Choosing one is explicit and confirms that the shared look changes for every device that
+  uses it.
 - **The write bar** at the bottom of **Presets on device** compares the header's device
   with the library: "Desk: 3 presets differ from the library", or "Desk is up to date (written
   22:30)". It checks (a dry run that writes nothing) when the view opens, shortly after each change
@@ -130,6 +139,11 @@ The editor shows each stop's position as a number (0 to 255).
 The Library view can export a portable JSON file containing looks, playlists and palettes, excluding
 device PINs, hosts, device sets and remote-grid assignments. Import first previews what will be merged,
 then either keeps existing names or explicitly replaces them. It never writes a device.
+
+In **Presets on device**, named slot grids lay out preset ids as remote buttons and banks. **Visual
+remote-button layout** renders the current assignments in a remote-shaped, print-ready view; clicking
+a filled button shows that look live without storing a preset. Bank trials and ordinary preset writing
+remain separate from the visualisation.
 
 ## 4. The room's shape
 
@@ -223,7 +237,8 @@ choice per device and the ticked folders are remembered in the browser.
 
 **Your builds** lists the firmware builds (Effect code's preview compiles aren't among them):
 when, board and release, effects, and the result: *ready to flash*, *failed check N* (hover for
-which) or *running*. Click one to open it.
+which) or *running*. Click one to open it. **Same again** queues a fresh build with exactly the same
+board, release and effect folders.
 
 Supported boards are those with a pins file in wled-studio-builder (today: QuinLED's 16.0.0 and
 16.0.1 releases).

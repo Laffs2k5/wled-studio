@@ -46,6 +46,7 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   const [open, setOpen] = useState<FirmwareJob | null>(null);
   const [log, setLog] = useState("");
   const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const [repeating, setRepeating] = useState<string | null>(null);
   const dev = devices.find((d) => d.id === device);
 
   const preflightBox = useRef<HTMLDivElement>(null);
@@ -149,6 +150,15 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
   const fitOf = (t: typeof targets[number]) => (dev && !dev.virtual ? targetFit(t, info) : null);
   const fit = current ? fitOf(current) : null;
   const match = dev && !dev.virtual ? matchingTarget(targets, info) : undefined;
+  const repeat = (job: FirmwareJob) => {
+    setRepeating(job.id);
+    firmware.submit(job.pins, job.target, job.usermods).then((next) => {
+      setOpen(next);
+      onOpenJob?.(next.id);
+      reloadJobs();
+      notify(`Repeated “${buildTitle(job)}” with the same board, release and effects`);
+    }).catch((e) => notify((e as Error).message, true)).finally(() => setRepeating(null));
+  };
   return (
     <section className="firmware">
       <h2>Build firmware with your effects</h2>
@@ -209,7 +219,7 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
         <>
           <h2>Your builds</h2>
           <table className="jobs" aria-label="Your builds">
-            <thead><tr><th>When</th><th>Board and release</th><th>Effects</th><th>Result</th></tr></thead>
+            <thead><tr><th>When</th><th>Board and release</th><th>Effects</th><th>Result</th><th>Again</th></tr></thead>
             <tbody>
               {builds.map((j) => (
                 <tr key={j.id} className={`state-${j.state}${open?.id === j.id ? " open" : ""}`} tabIndex={0}
@@ -222,6 +232,10 @@ export function Firmware({ notify, devices = [], device = null, request = null, 
                   <td>{j.usermods.join(", ")}</td>
                   <td title={j.state === "failed" ? gateLines({ passed: false, checks: j.report?.checks ?? j.checks, error: j.error })
                     .find((c) => !c.ok)?.text ?? j.error ?? undefined : undefined}>{buildResult(j)}</td>
+                  <td><button className="small" disabled={repeating === j.id}
+                    onClick={(event) => { event.stopPropagation(); repeat(j); }}>
+                    {repeating === j.id ? "Queuing…" : "Same again"}
+                  </button></td>
                 </tr>
               ))}
             </tbody>

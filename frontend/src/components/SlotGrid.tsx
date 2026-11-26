@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, slots as slotsApi, type SlotCell, type SlotGridShape, type Slots } from "../api";
 import type { PushResult } from "../types";
+import { saveLiveSnapshot } from "../liveSnapshots";
 
 const DEFAULT: SlotGridShape = { rows: 3, cols: 4, first: 101, row_step: 10, col_step: 1, name: "R{row}·{col} {name}" };
 
@@ -58,6 +59,46 @@ function Miniature({ g }: { g: SlotGridShape }) {
         )}
       </tbody>
     </table>
+  );
+}
+
+function RemotePreview({ name, rows, cols, at, onShow }: {
+  name: string;
+  rows: number[];
+  cols: number[];
+  at: (row: number, col: number) => SlotCell;
+  onShow: (cell: SlotCell) => void;
+}) {
+  return (
+    <div className="remote-preview" aria-label={`Visual button layout for ${name}`}>
+      <div className="remote-body">
+        <div className="remote-brand">{name}</div>
+        <div className="remote-top">
+          <span>On</span><span>Moon</span><span>Off</span>
+        </div>
+        <div className="remote-rocker"><span>−</span><strong>Brightness</strong><span>+</span></div>
+        <div className="remote-banks">
+          {rows.map((row) => (
+            <div className="remote-bank" key={row}>
+              <strong>Bank {row}</strong>
+              <div className="remote-buttons" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(2.4rem, 1fr))` }}>
+                {cols.map((col) => {
+                  const cell = at(row, col);
+                  return <button key={col} className={cell.name ? "filled" : "empty"}
+                    disabled={!cell.name} aria-label={`Remote bank ${row}, button ${col}: ${cell.name ?? "empty"}`}
+                    title={`${cell.name ?? "Empty"} · preset ${cell.preset_id}`}
+                    onClick={() => onShow(cell)}>
+                    <b>{col}</b><span>{cell.base ?? "—"}</span>
+                  </button>;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="muted small">The top controls are the remote's fixed controls. The numbered buttons show this grid's assignments; clicking one shows it live.</p>
+      <button className="small" onClick={() => window.print()}>Print this layout</button>
+    </div>
   );
 }
 
@@ -158,11 +199,18 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
     }
     fill(cell, item);
   };
-  const show = (cell: SlotCell) => {
+  const rememberLive = async (label: string) => {
+    if (!deviceId) return;
+    try { saveLiveSnapshot(deviceId, await api.state(deviceId), label); }
+    catch (e) { fail(e); }
+  };
+  const show = async (cell: SlotCell) => {
     if (!deviceId || !cell.name) return;
-    (cell.kind === "playlist" ? api.play(deviceId, cell.name) : api.apply(deviceId, cell.name))
-      .then(() => notify(`Showing “${cell.name}” on ${deviceName ?? deviceId} (nothing stored on the device)`))
-      .catch(fail);
+    try {
+      await rememberLive(`before showing remote ${cell.row}·${cell.col}`);
+      await (cell.kind === "playlist" ? api.play(deviceId, cell.name) : api.apply(deviceId, cell.name));
+      notify(`Showing “${cell.name}” on ${deviceName ?? deviceId} (nothing stored on the device)`);
+    } catch (e) { fail(e); }
   };
   if (!data) return null;
   if (editing) {
@@ -249,6 +297,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
     const bank = cols.map((col) => at(row, col)).filter((cell) => cell.name);
     if (!bank.length) { notify(`Bank ${row} has nothing that can be shown`); return; }
     const next = ((index % bank.length) + bank.length) % bank.length;
+    await rememberLive(`before trying bank ${row}, button ${next + 1}`);
     const trial = trialRow === null
       ? await api.startBankTrial(deviceId).catch((e) => { fail(e); return null; })
       : await api.bankTrial(deviceId).catch((e) => { fail(e); return null; });
@@ -322,6 +371,10 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
               ))}
             </tbody>
           </table>
+          <details className="remote-preview-panel">
+            <summary>Visual remote-button layout</summary>
+            <RemotePreview name={data.name ?? "Remote"} rows={rows} cols={cols} at={at} onShow={show} />
+          </details>
           {trialRow !== null && (
             <div className="bank-trial" aria-label="Bank trial">
               {trialRow === -1 ? (

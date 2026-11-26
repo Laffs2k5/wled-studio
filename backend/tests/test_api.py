@@ -750,6 +750,34 @@ def test_custom_palettes(client, dev_id, device):
     assert client.delete("/api/palettes/Ice", headers=CSRF).status_code == 404
 
 
+def test_effect_replacement_suggests_and_explicitly_updates_the_shared_look(client, dev_id):
+    look = {"name": "Old fire", "segments": [{"start": 0, "stop": 60, "effect": "Fire 2012"}]}
+    assert client.put("/api/looks/Old%20fire", json=look, headers=CSRF).status_code == 200
+    suggestions = client.get(
+        f"/api/devices/{dev_id}/looks/Old%20fire/effect-replacements").json()["replacements"]
+    assert suggestions[0]["old"] == "Fire 2012"
+    assert suggestions[0]["choices"]
+    replacement = suggestions[0]["choices"][0]["name"]
+    result = client.post(
+        f"/api/devices/{dev_id}/looks/Old%20fire/effect-replacements",
+        json={"old": "Fire 2012", "new": replacement}, headers=CSRF)
+    assert result.status_code == 200
+    assert client.get("/api/looks").json()[0]["segments"][0]["effect"] == replacement
+
+
+def test_live_snapshot_restore_refuses_a_changed_device(client, dev_id):
+    before = client.get(f"/api/devices/{dev_id}/state").json()
+    changed = client.post(f"/api/devices/{dev_id}/state", json={"bri": 44}, headers=CSRF).json()
+    import hashlib
+    hash_of = lambda value: hashlib.sha256(  # noqa: E731
+        __import__("json").dumps(value, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+    body = {"snapshot": before, "current_sha256": hash_of(changed)}
+    assert client.post(f"/api/devices/{dev_id}/snapshots/restore", json=body, headers=CSRF).status_code == 200
+    assert client.get(f"/api/devices/{dev_id}/state").json()["bri"] == before["bri"]
+    body["current_sha256"] = "0" * 64
+    assert client.post(f"/api/devices/{dev_id}/snapshots/restore", json=body, headers=CSRF).status_code == 409
+
+
 def test_room_model(client, dev_id):
     assert client.get(f"/api/devices/{dev_id}/room").json() is None
     room = {"edges": [{"direction": "right", "pixels": 30, "label": "A"}, {"direction": "down", "pixels": 60},

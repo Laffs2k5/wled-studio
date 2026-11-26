@@ -19,6 +19,8 @@ interface Props {
   offline?: boolean;
   /** Called after a playlist was shown on the strip (the live controls read the device again). */
   onShown?: () => void;
+  /** Flush or snapshot the live strip before playback starts. */
+  beforeAction?: () => Promise<void>;
   /** In the shared library tree: render only this folder, or only the editor. */
   folder?: string | null;
   listOnly?: boolean;
@@ -44,6 +46,7 @@ const DEFAULT_TRANSITION = 7;   // tenths of a second: WLED's default
 
 /** Playlists: looks in a row, each shown for a while. Written to the device with the looks. */
 export function Playlists({ looks, playlists, onChanged, notify, checks = [], deviceId, deviceName, offline = false, onShown,
+  beforeAction,
   folder, listOnly = false, formOnly = false }: Props) {
   const id = useId();
   const status = new Map(checks.filter((c) => c.playlist).map((c) => [c.playlist as string, c]));
@@ -104,6 +107,7 @@ export function Playlists({ looks, playlists, onChanged, notify, checks = [], de
     setBusy(true);
     setShown(null);
     try {
+      await beforeAction?.();
       await api.play(deviceId, p.name);
       setShown({ name: p.name, ok: true, text: `Playing “${p.name}” on ${deviceName ?? "the device"} (live; nothing is saved on it).` });
       onShown?.();

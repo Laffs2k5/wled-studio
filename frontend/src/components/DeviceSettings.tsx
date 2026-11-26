@@ -5,10 +5,11 @@ import type { Device } from "../types";
 import { normaliseHost } from "./AddDevice";
 import { RoomEditor } from "./RoomEditor";
 
-type Where = "address" | "pin" | "remove";
+type Where = "address" | "pin" | "twin" | "remove";
 
 interface Props {
   device: Device;
+  devices?: Device[];
   /** Open with the room shape unfolded and in view (from "Set the room shape…" elsewhere). */
   focus?: "room" | "address" | null;
   onClose: () => void;
@@ -23,13 +24,14 @@ interface Props {
 
 /** One device's settings in the app: its name and address, its settings PIN, its room shape, and
  * removing it. None of this is sent to the device. */
-export function DeviceSettings({ device, focus = null, onClose, onChanged, onRemoved, onRoomSaved, notify }: Props) {
+export function DeviceSettings({ device, devices = [], focus = null, onClose, onChanged, onRemoved, onRoomSaved, notify }: Props) {
   const id = useId();
   const [name, setName] = useState(device.name);
   const [host, setHost] = useState(device.host);
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [twinId, setTwinId] = useState(device.twin_id ?? "");
   // the result of the last action here, until the next one
   const [result, setResult] = useState<{ where: Where; text: string; error: boolean } | null>(null);
   const [ledCount, setLedCount] = useState<number | undefined>(undefined);
@@ -37,7 +39,9 @@ export function DeviceSettings({ device, focus = null, onClose, onChanged, onRem
   const hostRef = useRef<HTMLInputElement>(null);
 
   // the list read again after a save: the fields follow it, the result line stays
-  useEffect(() => { setName(device.name); setHost(device.host); }, [device.name, device.host]);
+  useEffect(() => {
+    setName(device.name); setHost(device.host); setTwinId(device.twin_id ?? "");
+  }, [device.name, device.host, device.twin_id]);
   // the LED count, for the room shape's "n of m LEDs" (unknown while the device doesn't answer)
   useEffect(() => {
     let live = true;
@@ -134,6 +138,33 @@ export function DeviceSettings({ device, focus = null, onClose, onChanged, onRem
         </form>
         {outcome("pin")}
       </div>
+
+      {!device.virtual && (
+        <div className="settings-group">
+          <h3>Offline firmware twin</h3>
+          <p className="muted small">
+            Link this controller to a virtual WLED that was built from the same firmware. The twin is then a
+            visible shortcut from the device dashboard; flashing still only targets the real controller.
+          </p>
+          <div className="row">
+            <label className="grow">Virtual twin
+              <select value={twinId} onChange={(e) => setTwinId(e.target.value)}>
+                <option value="">No twin linked</option>
+                {devices.filter((candidate) => candidate.virtual).map((candidate) =>
+                  <option key={candidate.id} value={candidate.id}>{candidate.name} ({candidate.host})</option>)}
+              </select>
+            </label>
+            <button disabled={busy || twinId === (device.twin_id ?? "")} onClick={() => run("twin", async () => {
+              const saved = await api.editDevice(device.id, { twin_id: twinId || null });
+              onChanged();
+              return saved.twin_id ? "Virtual twin linked." : "Virtual twin unlinked.";
+            })}>Save twin</button>
+          </div>
+          {devices.filter((candidate) => candidate.virtual).length === 0 &&
+            <p className="warn small">Add a virtual device first, then reopen these settings to link it.</p>}
+          {outcome("twin")}
+        </div>
+      )}
 
       <div className="settings-group" ref={roomRef}>
         <RoomEditor deviceId={device.id} ledCount={ledCount} notify={notify} defaultOpen={focus === "room"}

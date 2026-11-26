@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
-import { api, type DeviceSet } from "../api";
+import { api, type DeviceSet, type EffectReplacement } from "../api";
 import type { CheckItem, Device, Look } from "../types";
 import { StatusBadge } from "./StatusBadge";
 
@@ -14,6 +14,7 @@ export function CrossDevice({ current, looks, notify, onChanged }: {
 }) {
   const [others, setOthers] = useState<Compared[]>([]);
   const [busy, setBusy] = useState("");
+  const [suggestions, setSuggestions] = useState<Record<string, EffectReplacement[]>>({});
   const load = useCallback(async () => {
     const devices = await api.devices();
     const targets = devices.filter((device) => device.id !== current);
@@ -41,6 +42,8 @@ export function CrossDevice({ current, looks, notify, onChanged }: {
                 const status = checks.find((item) => item.look === look.name);
                 const selected = set.all || set.on_device.looks.includes(look.name);
                 const forced = selected && !set.all && !set.looks.includes(look.name);
+                const key = `${device.id}:${look.name}`;
+                const replacements = suggestions[key];
                 return (
                   <td key={device.id}>
                     <StatusBadge item={status} where={device.name} />
@@ -56,6 +59,38 @@ export function CrossDevice({ current, looks, notify, onChanged }: {
                           }).catch((e) => notify(e.message, true)).finally(() => setBusy(""));
                         }}>Put in {device.name}'s set</button>
                     )}
+                    {status?.status === "unavailable" && !replacements && (
+                      <button className="small" onClick={() => {
+                        setBusy(`suggest:${key}`);
+                        api.effectReplacements(device.id, look.name).then((result) => {
+                          setSuggestions((current) => ({ ...current, [key]: result.replacements }));
+                        }).catch((e) => notify(e.message, true)).finally(() => setBusy(""));
+                      }} disabled={busy === `suggest:${key}`}>Find nearest effects</button>
+                    )}
+                    {replacements?.map((replacement) => (
+                      <div className="effect-replacements" key={replacement.old}>
+                        <p className="small warn">“{replacement.old}” is missing on {device.name}.</p>
+                        {replacement.choices.map((choice) => (
+                          <button key={choice.name} className="small" disabled={busy === `replace:${key}`}
+                            title={`Name similarity ${Math.round(choice.score * 100)} percent. This explicitly changes the shared look.`}
+                            onClick={() => {
+                              if (!window.confirm(
+                                `Replace “${replacement.old}” with “${choice.name}” in the shared look “${look.name}”? ` +
+                                `This affects every device set that uses this look.`
+                              )) return;
+                              setBusy(`replace:${key}`);
+                              api.replaceEffect(device.id, look.name, replacement.old, choice.name).then(() => {
+                                notify(`Replaced “${replacement.old}” with “${choice.name}” in “${look.name}” across the shared library`);
+                                setSuggestions((current) => ({ ...current, [key]: [] }));
+                                onChanged();
+                                return load();
+                              }).catch((e) => notify(e.message, true)).finally(() => setBusy(""));
+                            }}>
+                            Use {choice.name}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
                   </td>
                 );
               })}

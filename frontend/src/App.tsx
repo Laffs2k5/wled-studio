@@ -120,7 +120,7 @@ export function App() {
           settingsOpen={settings !== null} onSettings={() => setSettings(settings ? null : { focus: null })} />}
       </header>
       {settings && cur && (
-        <DeviceSettings key={cur.id} device={cur} focus={settings.focus} notify={notify} onClose={() => setSettings(null)}
+        <DeviceSettings key={cur.id} device={cur} devices={devices ?? []} focus={settings.focus} notify={notify} onClose={() => setSettings(null)}
           onChanged={reload} onRemoved={() => { setSettings(null); reload(); }} onRoomSaved={() => setRoomVersion((n) => n + 1)} />
       )}
       {view === "presets" && current ? <PresetsView deviceId={current} deviceName={cur?.name ?? current} notify={notify}
@@ -137,6 +137,7 @@ export function App() {
       ) :
         current ? <DevicePanel key={`${current}@${cur?.host ?? ""}`} deviceId={current} notify={notify}
           deviceName={cur?.name} host={cur?.host} roomVersion={roomVersion}
+          devices={devices ?? []} onSelectDevice={(id) => { setCurrent(id); setView("design"); }}
           viewMode={view === "library" ? "library" : view === "legacy" ? "legacy" : "design"}
           onLibraryChanged={libraryChanged}
           onOpenPresets={() => setView("presets")}

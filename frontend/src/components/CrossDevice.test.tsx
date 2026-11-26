@@ -25,3 +25,25 @@ test("compares another device and adds a look to its set explicitly", async () =
   await waitFor(() => expect(changed).toHaveBeenCalled());
   expect(calls).toContain("POST /api/devices/shelf/set/add");
 });
+
+test("suggests a nearest effect and replaces only after confirmation", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    calls.push(key);
+    const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+    if (url === "/api/devices") return reply([{ id: "desk", name: "Desk" }, { id: "shelf", name: "Shelf" }]);
+    if (url === "/api/devices/shelf/check") return reply([{ look: "Fire", status: "unavailable", notes: ["missing"] }]);
+    if (url === "/api/devices/shelf/set") return reply({ all: true, looks: [], playlists: [], brought: [], on_device: { looks: ["Fire"], playlists: [] } });
+    if (key === "GET /api/devices/shelf/looks/Fire/effect-replacements") return reply({
+      replacements: [{ old: "Fire 2012", choices: [{ name: "Sparkle Rain", score: 0.4 }] }],
+    });
+    if (key === "POST /api/devices/shelf/looks/Fire/effect-replacements") return reply({ changed: 1 });
+    return reply({});
+  }));
+  render(<CrossDevice current="desk" looks={[{ name: "Fire", segments: [] }]} notify={() => {}} onChanged={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Find nearest effects" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Use Sparkle Rain" }));
+  await waitFor(() => expect(calls).toContain("POST /api/devices/shelf/looks/Fire/effect-replacements"));
+});

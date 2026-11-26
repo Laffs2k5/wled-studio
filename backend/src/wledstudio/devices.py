@@ -20,6 +20,8 @@ class Device:
     # a virtual WLED (WLED's code in a container: no LEDs, can't be flashed), as the device said
     # the last time the app read its /json/info (arch "virtual")
     virtual: bool = False
+    # A real device may be linked to a virtual firmware twin for offline work.
+    twin_id: str | None = None
 
     @property
     def base_url(self) -> str:
@@ -64,7 +66,8 @@ class DeviceStore:
         self._save(devices)
         return dev
 
-    def update(self, device_id: str, name: str | None = None, host: str | None = None) -> Device | None:
+    def update(self, device_id: str, name: str | None = None, host: str | None = None,
+               twin_id: str | None | object = ...) -> Device | None:
         """Change a device's name or address; its id (and so its PIN, set and room shape) stays.
         A new address may be another device: whether it's virtual is learned again at the next read."""
         devices = self._load()
@@ -76,6 +79,16 @@ class DeviceStore:
         if host is not None and host != dev.host:
             dev.host = host
             dev.virtual = False
+            dev.twin_id = None
+            for candidate in devices.values():
+                if candidate.twin_id == device_id:
+                    candidate.twin_id = None
+        if twin_id is not ...:
+            if twin_id is not None and (
+                twin_id == device_id or twin_id not in devices or not devices[twin_id].virtual
+            ):
+                raise ValueError("the twin must be another virtual device")
+            dev.twin_id = twin_id
         self._save(devices)
         return dev
 
@@ -85,12 +98,21 @@ class DeviceStore:
         dev = devices.get(device_id)
         if dev is not None and dev.virtual != virtual:
             dev.virtual = virtual
+            if virtual:
+                dev.twin_id = None
+            else:
+                for candidate in devices.values():
+                    if candidate.twin_id == device_id:
+                        candidate.twin_id = None
             self._save(devices)
 
     def remove(self, device_id: str) -> bool:
         devices = self._load()
         if devices.pop(device_id, None) is None:
             return False
+        for dev in devices.values():
+            if dev.twin_id == device_id:
+                dev.twin_id = None
         self._save(devices)
         self.set_pin(device_id, None)
         return True
