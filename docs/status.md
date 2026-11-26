@@ -148,10 +148,11 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
    `virtual/server` puts it behind WLED's HTTP JSON API and websocket: the app adds it like any
    device (`docker compose --profile virtual`, host `virtual-device:8080`). WLED's own code applies
    states, saves and recalls presets, runs playlists and checks the PIN; the server keeps the
-   device's files between restarts. It reports `arch: "virtual"`, so the flash plan blocks it. Not
-   in it: WLED's config code, DDP and other realtime input, firmware updates. Left: phase 4,
-   polish (Effect code streaming to it, the app knowing a virtual device by name, linking a
-   real device to its twin).
+   device's files between restarts. It reports `arch: "virtual"`, so the app marks it virtual and
+   the flash plan blocks it. DDP on UDP 4048 feeds WLED's own realtime pixels, so Effect code
+   streams to a twin and the live view shows what was sent. Not in it: WLED's config code, other
+   realtime/network inputs and firmware updates. Phase 4 is complete for streaming and device
+   recognition; left: linking a real device to its twin.
 
    **A virtual device is always one firmware** (owner, 2026-11-24): built from that firmware's
    exact sources and build settings, the ones the builder already uses to reproduce it.
