@@ -1,10 +1,25 @@
 # Status and roadmap
 
-Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spikes alongside.
+Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spikes alongside.
 
 ## Done
 
-### Look studio
+### Five-view app
+- **Design:** live control, effects, segment layout/map, editing-session recovery, one-step Undo and
+  **Save as look…**. The device status card reports WLED version, LED count and persisted firmware
+  history. Saving a preset look offers a direct hand-off to Presets on device.
+- **Library:** looks, playlists and palettes in one shared folder tree; inline organisation, drag/drop
+  into folders/playlists, library editor, portable JSON export/import and cross-device comparison.
+- **Presets on device:** one write owner for the device set, named remote grids and their "also use"
+  references, bank trials, drift/duplicate handling, device-only preset deletion and verified backup
+  restore, plus protected remote/automation preset-ID warnings.
+- **Effect code:** ordered Edit → Compile → Preview/stream → Git, two-column on desktop and stacked on
+  phones. Preview sound can be simulated, fixed, or sampled from the opt-in browser microphone.
+  Compiler errors are marked in CodeMirror; compile-after-save is remembered and opt-in.
+- **Firmware:** board/release build, gate, library preflight, device plan, flash and result/go-back.
+  Firmware flashing remains explicitly off in normal and deployed configurations.
+
+### Design and Library
 - **Devices and the profile:** each effect's own controls from its metadata; live control through
   a whitelisted schema; token login in the UI.
 - **The library:** looks by name, with each effect's metadata as it was when saved; capture and
@@ -46,8 +61,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
   segments added meanwhile are deleted, and a running playlist is started again. "Keep what it
   shows now" ends the session without touching the device. Saving looks is not affected.
 
-### Effect studio and firmware
-- **Effect studio:** sound for sound effects in the preview (WLED's simulated beat with its four
+### Effect code and firmware
+- **Effect code:** sound for sound effects in the preview (WLED's simulated beat with its four
   styles, or a fixed sound level, through the builder's `preview_audio`); a code editor for `./effects` (CodeMirror 6: C++ and JSON highlighting, folding, bracket matching, search and replace, multiple cursors, Tab indents, indent guides, a light or dark theme following the system); new effects from a template with a fixed effect
   id; compiled unchanged to WebAssembly through the builder's job service and animated in the
   browser with each effect's own controls; the preview **streamed to the strip** (DDP).
@@ -64,8 +79,8 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
 ### Quality
 - **Security baseline** ([security.md](security.md)).
 - **Tests:**
-  - backend: pytest, 155 tests, 94 % coverage;
-  - frontend: Vitest, 67 tests, 94 % of statements;
+  - backend: pytest, 230 tests, 91 % coverage;
+  - frontend: Vitest, 240 tests, above 90 % of statements;
   - browser tests (Playwright, Chromium) and a smoke test against the containers with the fake
     device;
   - the firmware profile end to end.
@@ -99,7 +114,7 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    is set up where the app is deployed (docs/security.md).
 3. ~~Exact colours in the preview~~ (done 2026-11-24): previews compiled by the builder run
    WLED's own colour and palette code (wled-studio-builder's `preview/wled_colors.py`, from a pins
-   file's WLED commit), and the Effect studio then offers all of WLED's palettes by name. The
+   file's WLED commit), and Effect code then offers all of WLED's palettes by name. The
    image's bundled preview is built the same way. Not in the preview: gamma, auto-white and the
    brightness limiter, which WLED applies on the way to the LEDs.
 4. **Bulk tools** for the library. Done: renaming with playlists following, and where a look is
@@ -113,9 +128,9 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    out of a set leaves its preset on the device: writing never deletes presets.
 5. ~~A real code editor~~ (done 2026-11-24; see Decided design).
 
-6. **A virtual WLED in the browser** (agreed 2026-11-24, not started): WLED's own built-in effects,
+6. **A virtual WLED in the browser** (agreed 2026-11-24; phases 1–3 done): WLED's own built-in effects,
    segments, layers and blend modes compiled to WebAssembly from the firmware's checkout (as the
-   exact colours are), so Looks & effects can work with no device: a "virtual device" with the
+   exact colours are), so Design can work with no device: a "virtual device" with the
    firmware's real effect list (the builder's `effects.json`), moving, with the simulated beat.
    **Spiked 2026-11-24: feasible.** WLED 16.0.1's own effect code (`FX.cpp`, `FX_fcn.cpp`, 2D,
    the particle system, colours, palettes) compiles unchanged against a small `wled.h` of ours,
@@ -135,7 +150,7 @@ Updated 2026-11-23. Milestones follow the plan's order: app first, firmware spik
    states, saves and recalls presets, runs playlists and checks the PIN; the server keeps the
    device's files between restarts. It reports `arch: "virtual"`, so the flash plan blocks it. Not
    in it: WLED's config code, DDP and other realtime input, firmware updates. Left: phase 4,
-   polish (the Effect studio streaming to it, the app knowing a virtual device by name, linking a
+   polish (Effect code streaming to it, the app knowing a virtual device by name, linking a
    real device to its twin).
 
    **A virtual device is always one firmware** (owner, 2026-11-24): built from that firmware's

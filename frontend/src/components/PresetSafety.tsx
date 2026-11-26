@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
-import { api, firmware, type PresetBackup, type PresetsOnDevice } from "../api";
+import { api, firmware, token, type PresetBackup, type PresetsOnDevice } from "../api";
 
 export function PresetSafety({ deviceId, deviceName, notify, version, onChanged }: {
   deviceId: string;
@@ -73,11 +73,15 @@ export function PresetSafety({ deviceId, deviceName, notify, version, onChanged 
 
   const unmanaged = presets?.presets.filter((p) => !p.library) ?? [];
   const offSet = presets?.presets.filter((p) => p.library && !p.on_device_set) ?? [];
+  const protectedWrites = token.get() !== null;
 
   return (
     <section className="preset-safety" aria-label="Device preset safety">
       <h2>Presets stored on {deviceName}</h2>
       <p className="muted small">Normal library writes never delete presets. Remove them here only when they are not in the library.</p>
+      {!protectedWrites && (
+        <p className="warn small">Delete and restore are locked in this browser because no WLED Studio access token is stored. Set the token prompt, then reopen Presets.</p>
+      )}
       {!presets ? <p className="muted small">Reading stored presets…</p> : (
         <>
           {unmanaged.length === 0 ? <p className="small ok">No presets are outside the library.</p> : (
@@ -98,7 +102,7 @@ export function PresetSafety({ deviceId, deviceName, notify, version, onChanged 
                   </li>
                 ))}
               </ul>
-              {!deleting && selected.size > 0 && <button className="danger" onClick={() => setDeleting(true)}>
+              {!deleting && selected.size > 0 && <button className="danger" disabled={!protectedWrites} onClick={() => setDeleting(true)}>
                 Delete {selected.size} preset{selected.size === 1 ? "" : "s"} from {deviceName}
               </button>}
               {deleting && (
@@ -136,7 +140,7 @@ export function PresetSafety({ deviceId, deviceName, notify, version, onChanged 
             <label>Type the device name: <strong>{deviceName}</strong>
               <input value={restoreConfirm} onChange={(e) => setRestoreConfirm(e.target.value)} autoComplete="off" />
             </label>
-            <button className="danger" disabled={restoreConfirm !== deviceName} onClick={restore}>Restore this backup</button>
+            <button className="danger" disabled={!protectedWrites || restoreConfirm !== deviceName} onClick={restore}>Restore this backup</button>
             <button onClick={() => { setBackup(null); setRestoring(""); setRestoreConfirm(""); }}>Cancel</button>
           </div>
         )}

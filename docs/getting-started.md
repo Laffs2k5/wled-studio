@@ -16,14 +16,14 @@ docker compose up -d                    # http://localhost:8080
   `virtual-device:8080`. It runs WLED's own code (QuinLED's 16.0.1: its effects, presets, playlists
   and API) with no hardware, so looks, presets and playlists behave as on a device. The first start
   builds it (several minutes). The app marks it **virtual (no LEDs)**; it can't be flashed or
-  reverted, and the Effect studio's DDP stream doesn't reach it.
+  reverted, and Effect code's DDP stream doesn't reach it.
 - **To use it from another machine:** read [security.md](security.md#using-it-from-other-machines)
   first. In short, publish the port, add the name you browse to to `WLEDSTUDIO_ALLOWED_HOSTS`, and
   set `WLEDSTUDIO_TOKEN`.
 
 ## 2. Add a device
 
-On first start, Looks & effects shows a card **Add your WLED controller**: a name, the address
+On first start, the app shows a card **Add your WLED controller**: a name, the address
 (`wled-kitchen.local`, `192.168.1.40`, with `:port` if it isn't 80; a pasted `http://…/` is fine)
 and, only if you set one in WLED under Security, the settings PIN. Later devices are added with
 **Add device** in the header. Addresses must be on your network; public addresses are refused
@@ -32,10 +32,9 @@ unless you allow them.
 Adding only reads the device: the app stores it, then reads it once and says what it found
 ("Added Kitchen. Found: WLED 16.0.1, 250 LEDs."), or that it doesn't answer at that address.
 
-The **Device** select in the header picks the device you work on, in every view: Looks & effects,
-the Slot grid's write bar, the Effect studio's preview and room map, and the device Firmware
-checks and flashes. The browser remembers it across reloads. Headings that name the device have a
-**Change device** link back to it.
+The **Device** select in the header picks the device you work on in every view: **Design**,
+**Library**, **Presets on device**, **Effect code**, and **Firmware**. The browser remembers it across
+reloads. Headings that name the device have a **Change device** link back to it.
 
 **Device settings** (⚙ next to the Device select) holds what the app keeps about the current
 device; none of it is sent to the device:
@@ -49,12 +48,12 @@ device; none of it is sent to the device:
   Nothing on the device changes, the library stays, and backups of its presets stay in the data
   folder.
 
-**A device that doesn't answer** (switched off, off the network, a wrong address): Looks & effects
+**A device that doesn't answer** (switched off, off the network, a wrong address): Design
 says so where the live controls would be ("Desk does not answer at 192.168.1.40. Check that it is
 powered and on the network."), with **Try again** and **Change the address…**. The library beside it stays usable: organise,
 rename and delete looks; showing, editing, importing and writing wait until the device answers.
 
-## 3. Looks: effects with their own controls
+## 3. Design and Library
 
 The effect list shows the device's effects (2D-only effects are hidden on strips; ♪ marks
 sound-reactive ones). Picking one shows **only the controls that effect uses, with its own labels**,
@@ -77,7 +76,7 @@ read from WLED's effect metadata. Changes go to the strip at once.
   "effect changed", "colours only" for a look saved as effects and colours only, "♪ mic" for a
   sound-reactive look, "in 1 playlist", the walls it follows),
   then **Show on strip**, **Edit**, and a **⋯** menu with Rename, Move up and down, Move to
-  folder, Remove from this device (or Put on this device) and Delete.
+  folder and Delete. Device membership is managed in **Presets on device**.
 - **Show on strip** plays a look on the strip without saving anything on the device.
 - **"effect changed"** on a look's row means the effect on this device has different controls than
   when the look was saved: the tooltip and the write plan say what changed ("2 sliders renamed, 1
@@ -93,7 +92,7 @@ read from WLED's effect metadata. Changes go to the strip at once.
 - **A look's preset id** can be changed later: click "preset 6" (or "no preset id") on its row, or
   use the field at the top of the look editor. It changes the library; the next write puts the look
   at its new id (the old preset stays on the device: writing never deletes presets).
-- **The write bar** at the bottom of Looks & effects and the Slot grid compares the header's device
+- **The write bar** at the bottom of **Presets on device** compares the header's device
   with the library: "Desk: 3 presets differ from the library", or "Desk is up to date (written
   22:30)". It checks (a dry run that writes nothing) when the view opens, shortly after each change
   to the library, and on **Check again**; it never polls. **Review and write** opens the write
@@ -135,13 +134,13 @@ then either keeps existing names or explicitly replaces them. It never writes a 
 ## 4. The room's shape
 
 Under **Room shape** in the device settings, describe the strip as walls in LED order: a direction
-and how many LEDs each. The live view (**Live view of the strip**) and the Effect studio's preview
-are then drawn in that shape. Until a device has one, Looks & effects links to it (**Set the room
-shape…**).
+and how many LEDs each. The live view (**Live view of the strip**) and Effect code's preview
+are then drawn in that shape, with a live miniature in the room editor. Zones use inclusive
+First/Last LED fields. Until a device has one, Design links to it (**Set the room shape…**).
 
-## 5. Effect studio: your own effects
+## 5. Effect code: your own effects
 
-Effects are small C++ functions inside WLED's firmware. The Effect studio lets you write them,
+Effects are small C++ functions inside WLED's firmware. Effect code lets you write them,
 watch them run, and build them in.
 
 1. **Write:** in *Your effects' code*, **＋ New effect** opens a form: the folder name, the name
@@ -153,17 +152,16 @@ watch them run, and build them in.
    when that room shape has changed since. After **Create** the code opens, its folder is ticked for
    compiling, and **Compile and preview** is offered. Edit, **Save**. The files are in
    `./effects`, one folder per effect.
-2. **Watch:** tick the **effect folders to compile** (opening a file ticks its folder; the ticks
+2. **Compile:** tick the **effect folders to compile** (opening a file ticks its folder; the ticks
    are remembered), then **Compile and preview**: it compiles them to WebAssembly and runs them in
    the browser, with the effect's own sliders. The line above the preview says what it shows: the
    built-in example until you compile, then your folders and when they were compiled. Saving a
    file in them marks the preview out of date, with a **Compile** button. If compiling fails, the
    compiler's messages appear under the button (the full log behind **Full log**); click a
    `folder/file:line` to open the file at that line.
-3. **On the strip:** the **Device** select under the preview gives it that device's room shape and
-   LED count (the header's device, unless you pick another). **Show on the real strip** sends the
+3. **Watch:** the preview uses the header device's room shape and LED count. **Show on the real strip** sends the
    preview to it live (DDP). While it streams, an amber banner says so, with **Stop**; leaving the
-   Effect studio or closing the tab stops it too. The device's own effect comes back a few seconds
+   Effect code or closing the tab stops it too. The device's own effect comes back a few seconds
    after the stream stops.
 4. **Into firmware:** once the preview shows your effects, **Build firmware with …** under it opens
    **Firmware** with those folders ticked and the board that matches the header's device picked
@@ -223,7 +221,7 @@ when the chosen one is another board or release than the device runs. The app te
 what the device reports (`/json/info`: its release name or product, and its version). Your last
 choice per device and the ticked folders are remembered in the browser.
 
-**Your builds** lists the firmware builds (the Effect studio's preview compiles aren't among them):
+**Your builds** lists the firmware builds (Effect code's preview compiles aren't among them):
 when, board and release, effects, and the result: *ready to flash*, *failed check N* (hover for
 which) or *running*. Click one to open it.
 

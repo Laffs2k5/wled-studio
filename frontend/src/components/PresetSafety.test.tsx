@@ -2,9 +2,10 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PresetSafety } from "./PresetSafety";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
 
 test("delete and restore require the device name and retain inline results", async () => {
+  sessionStorage.setItem("wledstudio.token", "secret");
   const calls: string[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     calls.push(`${init?.method ?? "GET"} ${url} ${init?.body ?? ""}`);

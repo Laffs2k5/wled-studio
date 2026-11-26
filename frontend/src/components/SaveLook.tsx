@@ -12,22 +12,35 @@ interface Props {
   /** Called (and awaited) first: sends live changes still held back, so the look is what the strip shows. */
   beforeSave?: () => Promise<void>;
   onSaved: (look: Look) => void;
+  onOpenPresets?: () => void;
 }
 
 /** "Save as look…" under the live controls: what the strip shows now, kept in the library. */
-export function SaveLook({ deviceId, looks, playlists, notify, beforeSave, onSaved }: Props) {
+export function SaveLook({ deviceId, looks, playlists, notify, beforeSave, onSaved, onOpenPresets }: Props) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [pid, setPid] = useState("");
   const [layout, setLayout] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<Look | null>(null);
 
   if (!open) {
     return (
-      <div className="row save-look">
-        <button className="primary" onClick={() => setOpen(true)}>Save as look…</button>
-        <span className="muted small">Keeps what the strip shows now in the library.</span>
-      </div>
+      <>
+        <div className="row save-look">
+          <button className="primary" onClick={() => { setSaved(null); setOpen(true); }}>Save as look…</button>
+          <span className="muted small">Keeps what the strip shows now in the library.</span>
+        </div>
+        {saved && (
+          <div className="row action-result done small" aria-label="Look saved">
+            <span className="grow">Saved “{saved.name}” in the library. It is not on the device yet.</span>
+            {onOpenPresets && saved.preset_id && <button className="small primary" onClick={() => {
+              setSaved(null); onOpenPresets();
+            }}>Open Presets on device</button>}
+            <button className="small" onClick={() => setSaved(null)}>OK</button>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -43,7 +56,8 @@ export function SaveLook({ deviceId, looks, playlists, notify, beforeSave, onSav
     try {
       await beforeSave?.();
       const l = await api.capture(deviceId, name.trim(), id ?? undefined, !layout);
-      notify(`Saved “${l.name}” in the library. Not on the device yet: the bar at the bottom shows what writing would change.`);
+      notify(`Saved “${l.name}” in the library. It is not on the device yet.`);
+      setSaved(l);
       // only a saved look clears the form: the preset id too, so the next look doesn't land on the
       // same preset; after a failure both stay, to fix and try again
       setName(""); setPid(""); setOpen(false);

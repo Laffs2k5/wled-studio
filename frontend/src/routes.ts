@@ -18,7 +18,7 @@ export function parseRoute(hash = window.location.hash): AppRoute {
       : parts[0] === "slots" || parts[0] === "presets" ? "presets"
         : parts[0] === "studio" || parts[0] === "code" ? "studio"
           : parts[0] === "firmware" ? "firmware"
-            : parts.length === 0 ? "legacy" : "design";
+            : "design";
   const device = new URLSearchParams(query).get("device");
   if (view === "firmware" && parts[1] === "job" && parts[2]) {
     return { view, device, job: decodeURIComponent(parts[2]) };

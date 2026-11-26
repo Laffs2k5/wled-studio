@@ -39,6 +39,7 @@ interface Props {
   viewMode?: "design" | "library" | "legacy";
   /** A shared token: Library mutations notify the Presets view to invalidate its plan. */
   onLibraryChanged?: () => void;
+  onOpenPresets?: () => void;
 }
 
 /** What the panel shows instead of the live controls while the device doesn't answer: what's wrong,
@@ -69,7 +70,7 @@ export function DeviceOffline({ name, host, error, trying, onRetry, onEditAddres
 const SEND_DELAY_MS = 120;
 
 export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roomVersion = 0, onRoomShape, onEditAddress,
-  openLook, onLookOpened, viewMode = "legacy", onLibraryChanged }: Props) {
+  openLook, onLookOpened, viewMode = "legacy", onLibraryChanged, onOpenPresets }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<DeviceState | null>(null);
   const [looks, setLooks] = useState<Look[]>([]);
@@ -465,7 +466,7 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
         <EffectControls effect={effect} segment={segment} palettes={profile.palettes} rgbw={profile.leds.rgbw}
           onChange={change} />
         <SaveLook deviceId={deviceId} looks={looks} playlists={playlists} notify={notify} beforeSave={flush}
-          onSaved={() => reloadLooks()} />
+          onSaved={() => reloadLooks()} onOpenPresets={onOpenPresets} />
         <p className="muted small">
           {String(profile.info.product ?? "")} · WLED {String(profile.info.ver ?? "")} · {profile.leds.count} LEDs
         </p>

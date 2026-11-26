@@ -31,6 +31,7 @@ test("view navigation and the selected device are in the URL", async () => {
 });
 
 test("Design and Library are separate jobs; the legacy root remains combined", async () => {
+  history.replaceState(null, "", "#/library");
   backend({
     "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
     "GET /api/devices/desk/profile": () => profile,
@@ -63,6 +64,7 @@ test("first run asks for a device in a card of its own", async () => {
 });
 
 test("shows the device's effect with its own controls, and sends live changes", async () => {
+  history.replaceState(null, "", "#/library");
   const calls = backend({
     "GET /api/devices": () => [{ id: "desk", name: "Desk", host: "wled.lan", has_pin: false }],
     "GET /api/devices/desk/profile": () => profile,
@@ -267,6 +269,7 @@ test("one device picker in the header for every view, remembered across reloads"
 });
 
 test("the look editor: a frame of its own, the effect list picks for it, and after saving the device is said to be out of date", async () => {
+  history.replaceState(null, "", "#/library");
   const look = { name: "Evening", preset_id: 3, status: "ok", notes: [], owns_layout: true, ids: true, bounds: true,
     state: { on: true, bri: 90, seg: [{ id: 0, start: 0, stop: 60, fx: 8 }] } };
   const calls = backend({

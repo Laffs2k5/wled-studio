@@ -340,9 +340,9 @@ export function EffectStudio({ notify, load = Preview.load, device = null, onBui
         <h2>Effect code</h2>
         {!device && <p className="first-run-note">You can try effects in the browser without a device; add one to stream to the strip.</p>}
         <p>This build has no effect preview ({error}). Previews are compiled with Emscripten by wled-studio-builder.</p>
+        {!compileBox && <p className="muted small">No firmware builder or effect folders are configured in this build.</p>}
         {editor}
-        <h2>2. Compile</h2>
-        {compileBox}
+        {compileBox && <><h2>Compile</h2>{compileBox}</>}
       </section>
     );
   }

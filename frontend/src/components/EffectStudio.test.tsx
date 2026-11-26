@@ -196,6 +196,40 @@ test("saving a file that's in the preview marks the preview out of date", async 
   expect(screen.getByRole("button", { name: "Compile" })).toBeEnabled();
 });
 
+test("compile after save is opt-in and starts a new preview build", async () => {
+  const JID = "e".repeat(32);
+  const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+    if (key === "GET /api/firmware/status") return reply({ enabled: true });
+    if (key === "GET /api/firmware/usermods") return reply(["my_fx"]);
+    if (key === "GET /api/effects") return reply([{ folder: "my_fx", files: ["fx.cpp"] }]);
+    if (key === "GET /api/effects/my_fx/fx.cpp") return reply({ content: "x\n" });
+    if (key === "PUT /api/effects/my_fx/fx.cpp") return reply({ bytes: 2 });
+    if (key === "GET /api/effects/my_fx/git") return reply({ repo: false });
+    if (key === "GET /api/devices") return reply([]);
+    if (key === "POST /api/firmware/previews") return reply({ id: JID, state: "queued" }, 202);
+    if (key === `GET /api/firmware/jobs/${JID}`) return reply({ id: JID, state: "passed" });
+    return reply({ detail: "no route" }, 404);
+  });
+  vi.stubGlobal("fetch", fetcher);
+  render(<EffectStudio notify={() => {}} load={async () => new Preview(fakeModule() as never)} />);
+  fireEvent.click(await screen.findByRole("button", { name: "fx.cpp" }));
+  await waitFor(() => expect(screen.getByLabelText("my_fx")).toBeChecked());
+  const compileAfterSave = screen.getByLabelText("Compile after Save");
+  expect(compileAfterSave).not.toBeChecked();
+  fireEvent.click(compileAfterSave);
+  expect(compileAfterSave).toBeChecked();
+  const code = await screen.findByLabelText("Code");
+  const { viewOf } = await import("./Code");
+  await waitFor(() => expect(viewOf(code)?.state.doc.toString()).toBe("x\n"));
+  const v = viewOf(code)!;
+  v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: "y\n" }, userEvent: "input.type" });
+  fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/firmware/previews", expect.objectContaining({ method: "POST" })));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Compile and preview" })).toBeEnabled());
+});
+
 test("frame messages are RGBW with a channel byte", async () => {
   const { frameMessage } = await import("../preview");
   expect(Array.from(frameMessage(new Uint32Array([0x04ff8000, 0x00000001])))).toEqual([4, 255, 128, 0, 4, 0, 0, 1, 0]);

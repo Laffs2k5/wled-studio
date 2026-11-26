@@ -12,7 +12,8 @@ function stub(fail = false) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     urls.push(url);
     return fail ? new Response(JSON.stringify({ detail: "http://wled.lan: ConnectError" }), { status: 502 })
-      : new Response(JSON.stringify({ name: "Night", segments: [] }), { status: 200 });
+      : new Response(JSON.stringify({ name: "Night", preset_id: Number(new URL(`http://x${url}`).searchParams.get("preset_id")) || undefined,
+        segments: [] }), { status: 200 });
   }));
   return urls;
 }
@@ -38,8 +39,8 @@ test("a labelled form: name, an optional preset id with the next free one, and w
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
   expect(beforeSave).toHaveBeenCalled();
   expect(urls).toEqual(["/api/devices/desk/capture/Night?preset_id=3"]);
-  expect(notify).toHaveBeenCalledWith(
-    "Saved “Night” in the library. Not on the device yet: the bar at the bottom shows what writing would change.");
+  expect(notify).toHaveBeenCalledWith("Saved “Night” in the library. It is not on the device yet.");
+  expect(screen.getByLabelText("Look saved")).toHaveTextContent("Saved “Night”");
   // closed; opened again it's empty, so the next look doesn't land on the same preset
   fireEvent.click(screen.getByRole("button", { name: "Save as look…" }));
   expect(screen.getByLabelText("Look name")).toHaveValue("");
@@ -54,6 +55,17 @@ test("effects and colours only: saved without the layout", async () => {
   fireEvent.click(screen.getByText("Save in the library"));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
   expect(urls).toEqual(["/api/devices/desk/capture/Colours?layout=false"]);
+});
+
+test("a saved preset look can open Presets from Design", async () => {
+  stub();
+  const onOpenPresets = vi.fn();
+  open({ onOpenPresets });
+  fireEvent.change(screen.getByLabelText("Look name"), { target: { value: "Night" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use 3" }));
+  fireEvent.click(screen.getByText("Save in the library"));
+  fireEvent.click(await screen.findByRole("button", { name: "Open Presets on device" }));
+  expect(onOpenPresets).toHaveBeenCalled();
 });
 
 test("warns when the id is taken, the name exists, or the id isn't one", () => {
