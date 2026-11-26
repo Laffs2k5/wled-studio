@@ -103,7 +103,7 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
    - WLED doesn't unload a custom palette when its file is deleted (`/edit?func=delete`); it stays
      in memory until the next upload or reboot. A future "delete palette on the device" must say so;
    - WLED's live view reads zeros while the strip is off, even during a stream.
-2. **Flashing:** built 2026-11-24, not yet tried on hardware. From a passed gate job, the
+2. **Flashing:** built 2026-11-24 and exercised end to end on the spare WROVER 2026-11-26. From a passed gate job, the
    Firmware view plans a flash for a device and runs it:
    - **the plan** (reads only): flashing enabled behind the client-certificate proxy, the gate
      passed, the image within the app slot, WLED's OTA lock off, the boot preset using no effect
@@ -115,7 +115,9 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
      against the backup (the effect list is the image's, presets and config unchanged, free heap);
    - **the way back:** `/update?revert` for any device but a virtual one, also with the name typed.
 
-   Left: the spare ESP32 first (the image, OTA, revert, a USB recovery drill), then the controller.
+   Completed on the spare: USB recovery, Improv Wi-Fi setup, the custom 16.0.1 OTA, post-flash
+   effect/config/preset checks, and `/update?revert` back to stock. Left: the controller only,
+   after the owner's separate go.
    Tested against the fake device, which models WLED 16's `/update` and `?revert`. The proxy
    is set up where the app is deployed (docs/security.md).
 3. ~~Exact colours in the preview~~ (done 2026-11-24): previews compiled by the builder run
