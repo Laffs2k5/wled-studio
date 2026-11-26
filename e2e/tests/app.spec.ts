@@ -122,26 +122,32 @@ test("segments: add a layer, place and blend it, and looks restore their layout"
 
   await page.getByLabel("Look name").fill("E2E layers");
   await page.getByRole("button", { name: "Save in the library" }).click();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   const looks = page.getByRole("region", { name: "Looks" });
   await expect(looks.getByText("E2E layers")).toBeVisible();
 
   // back to one segment, saved as another look
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.getByRole("button", { name: "Remove segment 1" }).click();
   await expect.poll(async () => (await segs()).length).toBe(1);
   await page.getByRole("button", { name: "Save as look…" }).click();
   await page.getByLabel("Look name").fill("E2E single");
   await page.getByRole("button", { name: "Save in the library" }).click();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(looks.getByText("E2E single")).toBeVisible();
 
   // showing each look restores its own layout: the single one deletes the layer again
   await looks.getByRole("listitem").filter({ hasText: "E2E layers" }).getByRole("button", { name: "Show on strip" }).click();
   await expect.poll(async () => (await segs()).map((s: { start: number; stop: number; bm: number }) => [s.start, s.stop, s.bm]))
     .toEqual([[0, 60, 0], [10, 30, 2]]);
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Unnamed segment · seg 1/ })).toBeVisible();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   await looks.getByRole("listitem").filter({ hasText: "E2E single" }).getByRole("button", { name: "Show on strip" }).click();
   await expect.poll(async () => (await segs()).length).toBe(1);
 
   // add a layer again, then end the session: the device is back as it was at the start
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.getByRole("button", { name: "+ Segment" }).click();
   await expect.poll(async () => (await segs()).length).toBe(2);
   await page.getByRole("button", { name: "Put the strip back as it was" }).click();
@@ -218,6 +224,7 @@ test("a saved look is edited in the library, not on the strip", async ({ page, r
   await page.getByRole("button", { name: "Save as look…" }).click();
   await page.getByLabel("Look name").fill("E2E to edit");
   await page.getByRole("button", { name: "Save in the library" }).click();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   const looks = page.getByRole("region", { name: "Looks" });
   await expect(looks.getByText("E2E to edit")).toBeVisible();
   const before = await state();
@@ -225,13 +232,12 @@ test("a saved look is edited in the library, not on the strip", async ({ page, r
   await page.getByLabel("Edit E2E to edit").click();
   await expect(page.getByRole("region", { name: "Editing E2E to edit" })).toBeVisible();
   await expect(page.getByText("Editing the saved look “E2E to edit”. The strip does not change.")).toBeVisible();
-  // the effect list on the left picks for the look being edited, not for the strip
-  await page.getByRole("listbox", { name: "Effects" }).getByRole("option", { name: "Comet" }).click();
+  // the saved look's own effect picker changes the library item, not the strip
+  await page.getByLabel("Effect", { exact: true }).selectOption({ label: "Comet" });
   await expect(page.getByLabel("Effect", { exact: true }).locator("option:checked")).toHaveText("Comet");
   await page.getByLabel("Tail").fill("33");
   await page.getByRole("button", { name: "Save “E2E to edit”" }).click();
-  // back to live editing, with a note that the look is saved in the library only
-  await expect(page.getByRole("note", { name: "Saved look" })).toContainText("Saved “E2E to edit” in the library.");
+  await expect(looks.getByText("E2E to edit")).toBeVisible();
 
   const look = (await (await request.get("/api/looks")).json()).find((l: { name: string }) => l.name === "E2E to edit");
   expect(look.segments[0].effect).toBe("Comet");
