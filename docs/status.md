@@ -218,5 +218,5 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
 
 ## Waiting on
 
-- **Hardware:** a spare ESP32 (ordered) for the first flash of a self-built image.
-- **A real device for writes** (Next, 1).
+- **Installed hardware:** the first flash/revert rehearsal is complete on the spare WROVER; the
+  next write waits for the owner's separate go-ahead to use the installed controller.
