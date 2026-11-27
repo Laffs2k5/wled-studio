@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from . import fxmeta, netcheck
+from .cfg_admin import (ConfigBackups, ConfigChanged, ConfigRefused, ConfigVerification,
+                        inspect_restore as inspect_config_restore, restore as restore_config)
 from .devices import Device, DeviceStore
 from .deleted import record_deleted
 from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
@@ -222,6 +224,17 @@ class PresetMutationIn(Strict):
     override_protected: list[Annotated[int, Field(ge=1, le=250)]] = Field(default_factory=list, max_length=250)
 
 
+class ConfigRestorePlanIn(Strict):
+    backup: str = Field(min_length=1, max_length=120, pattern=r"^[^/\\]+$")
+
+
+class ConfigRestoreIn(ConfigRestorePlanIn):
+    confirm: Literal["restore"]
+    inspected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    override_device: bool = False
+    allow_network_changes: bool = False
+
+
 class TrialRestoreIn(Strict):
     confirm: str = Field(min_length=1, max_length=64)
     current_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -264,7 +277,8 @@ def device_or_404(device_id: str, request: Request) -> Device:
 
 def destructive_auth(request: Request) -> None:
     if not request.app.state.settings.token:
-        raise HTTPException(409, "Enable WLED Studio access-token protection before deleting or restoring presets.")
+        raise HTTPException(
+            409, "Enable WLED Studio access-token protection before deleting or restoring presets or device settings.")
 
 
 def state_sha256(state: dict) -> str:
@@ -1221,6 +1235,67 @@ def backup(device_id: str, name: str, request: Request):
         return backup_details(request.app.state.statestore.backup_path(device_id, name))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         raise HTTPException(404, "no such backup") from None
+
+
+@router.get("/devices/{device_id}/cfg/backups")
+def config_backups(device_id: str, request: Request):
+    device_or_404(device_id, request)
+    return ConfigBackups(request.app.state.settings.data_dir).list(device_id)
+
+
+@router.post("/devices/{device_id}/cfg/backups", status_code=201)
+async def backup_config(device_id: str, request: Request):
+    """Read cfg.json now; no wsec.json is read, stored or sent."""
+    dev = device_or_404(device_id, request)
+    try:
+        async with make_client(request, dev) as client:
+            cfg = await client.cfg_file()
+    except WLEDError as e:
+        raise device_errors(e) from None
+    return ConfigBackups(request.app.state.settings.data_dir).save(device_id, cfg)
+
+
+@router.get("/devices/{device_id}/cfg/backups/{name}")
+def config_backup(device_id: str, name: str, request: Request):
+    device_or_404(device_id, request)
+    try:
+        return ConfigBackups(request.app.state.settings.data_dir).details(device_id, name)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError):
+        raise HTTPException(404, "no such cfg backup") from None
+
+
+@router.post("/devices/{device_id}/cfg/restore-plan")
+async def plan_config_restore(device_id: str, body: ConfigRestorePlanIn, request: Request):
+    dev = device_or_404(device_id, request)
+    try:
+        async with make_client(request, dev) as client:
+            return await inspect_config_restore(
+                client, ConfigBackups(request.app.state.settings.data_dir), device_id, body.backup)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError):
+        raise HTTPException(404, "no such cfg backup") from None
+    except WLEDError as e:
+        raise device_errors(e) from None
+
+
+@router.post("/devices/{device_id}/cfg/restore")
+async def restore_device_config(device_id: str, body: ConfigRestoreIn, request: Request):
+    destructive_auth(request)
+    dev = device_or_404(device_id, request)
+    timing = getattr(request.app.state, "flash_timing", (2.0, 120.0))
+    try:
+        async with make_client(request, dev) as client:
+            return await restore_config(
+                client, ConfigBackups(request.app.state.settings.data_dir), device_id, body.backup,
+                body.inspected_sha256, timing, override_device=body.override_device,
+                allow_network_changes=body.allow_network_changes)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError):
+        raise HTTPException(404, "no such cfg backup") from None
+    except (ConfigChanged, ConfigRefused) as e:
+        raise HTTPException(409, str(e)) from None
+    except ConfigVerification as e:
+        raise HTTPException(502, str(e)) from None
+    except WLEDError as e:
+        raise device_errors(e) from None
 
 
 def protected_labels(request: Request) -> dict[int, list[str]]:

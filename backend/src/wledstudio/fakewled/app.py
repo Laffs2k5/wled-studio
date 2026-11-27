@@ -12,6 +12,7 @@ Behaviour modelled on WLED 16:
 - with a PIN set, /upload answers 401 until unlocked; an unlock lasts 15
   minutes; a PIN check within 3 s of the previous one is ignored;
 - GET /settings/lock locks again;
+- uploading cfg.json installs a whole configuration and reboots it;
 - `busy` makes the next N state requests answer {"error": 3}, as WLED does when
   its JSON buffer is in use;
 - firmware (WLED's /update): POST /update takes an image while unlocked and the OTA
@@ -82,6 +83,7 @@ class FakeDevice:
     rebooting_until: float = 0.0
     freeheap: int = 150000
     flashes: int = 0
+    config: dict | None = None
 
     def __post_init__(self):
         if not self.state:
@@ -220,7 +222,10 @@ def create_app(device: FakeDevice | None = None, clock=time.monotonic) -> FastAP
 
     @app.get("/cfg.json")
     def cfg():
+        if dev.config is not None:
+            return dev.config
         return {"def": {"ps": dev.boot_preset, "on": True, "bri": 128},
+                "id": {"mdns": "fake-device", "name": "Fake device"},
                 "ota": {"lock": dev.ota_lock, "lock-wifi": False, "aota": True, "same-subnet": True}}
 
     def page(code: int, title: str, text: str) -> Response:
@@ -299,6 +304,17 @@ def create_app(device: FakeDevice | None = None, clock=time.monotonic) -> FastAP
         dev.uploads.append(name)
         if name == "presets.json":
             dev.presets = json.loads(content)
+        elif name == "cfg.json":
+            cfg = json.loads(content)
+            if not isinstance(cfg, dict):
+                return PlainTextResponse("Invalid cfg.json", status_code=400)
+            dev.config = cfg
+            defaults = cfg.get("def") if isinstance(cfg.get("def"), dict) else {}
+            ota = cfg.get("ota") if isinstance(cfg.get("ota"), dict) else {}
+            if isinstance(defaults.get("ps"), int):
+                dev.boot_preset = defaults["ps"]
+            dev.ota_lock = bool(ota.get("lock", False))
+            dev.reboot(clock())
         elif name.startswith("palette") and name.endswith(".json"):
             dev.palette_files[int(name[len("palette"):-len(".json")])] = json.loads(content)
         return PlainTextResponse("File Uploaded!")

@@ -253,6 +253,27 @@ export interface PresetBackup {
   presets: { id: number; name: string; sha?: string }[];
 }
 
+export interface ConfigBackup {
+  name: string;
+  bytes: number;
+  sha256: string;
+  source: string;
+}
+export interface ConfigChange {
+  section: string;
+  path: string;
+  action: "add" | "remove" | "change";
+}
+export interface ConfigRestorePlan {
+  backup: string;
+  inspected_sha256: string;
+  backup_sha256: string;
+  changes: ConfigChange[];
+  network_sections: string[];
+  identity_match: boolean | null;
+  identity_differences: string[];
+}
+
 /** A flash or revert as it runs. */
 export interface FlashRun {
   id: string;
@@ -339,6 +360,16 @@ export const api = {
     request<Device>("PATCH", `/api/devices/${enc(id)}`, body),
   removeDevice: (id: string) => request<null>("DELETE", `/api/devices/${enc(id)}`),
   setPin: (id: string, pin: string | null) => request<null>("PUT", `/api/devices/${enc(id)}/pin`, { pin }),
+  configBackups: (id: string) =>
+    request<ConfigBackup[]>("GET", `/api/devices/${enc(id)}/cfg/backups`),
+  backupConfig: (id: string) =>
+    request<ConfigBackup>("POST", `/api/devices/${enc(id)}/cfg/backups`),
+  planConfigRestore: (id: string, backup: string) =>
+    request<ConfigRestorePlan>("POST", `/api/devices/${enc(id)}/cfg/restore-plan`, { backup }),
+  restoreConfig: (id: string, body: { confirm: string; backup: string; inspected_sha256: string;
+    override_device?: boolean; allow_network_changes?: boolean }) =>
+    request<{ restored: string; backup: string; differences: ConfigChange[] }>(
+      "POST", `/api/devices/${enc(id)}/cfg/restore`, body),
   profile: (id: string) => request<Profile>("GET", `/api/devices/${enc(id)}/profile`),
   state: (id: string) => request<DeviceState>("GET", `/api/devices/${enc(id)}/state`),
   setState: (id: string, patch: object) => request<DeviceState>("POST", `/api/devices/${enc(id)}/state`, patch),

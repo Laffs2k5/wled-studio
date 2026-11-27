@@ -23,6 +23,7 @@ test("one Presets view owns the device set, grid and a fresh write plan per data
     if (key === "GET /api/devices/desk/check") return reply([]);
     if (key === "GET /api/devices/desk/presets-on-device") return reply({ name: "Desk", sha256: "a".repeat(64), presets: [] });
     if (key === "GET /api/devices/desk/backups") return reply([]);
+    if (key === "GET /api/devices/desk/cfg/backups") return reply([]);
     if (key === "GET /api/devices/desk/bank-trial") return reply({ active: false, current_sha256: null });
     if (key === "POST /api/devices/desk/push") {
       const body = JSON.parse(String(init?.body));

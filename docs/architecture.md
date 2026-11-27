@@ -23,7 +23,10 @@ flowchart LR
     file. A room restore refuses a missing device or an existing model unless `replace` is explicit.
     A grid restore keeps its assignments, chooses a non-colliding id, appends " (restored)" to a
     taken name, and refuses preset ids that overlap another grid;
-  - `backups/<device>/` and `state/` (the last written presets hash per device);
+  - `backups/<device>/` and `state/` (the last written presets hash per device). Each preset
+    safety backup is `<stamp>-presets.json`; a device-settings backup is a
+    `<stamp>-cfg/cfg.json` folder, while flash/revert folders also contain `cfg.json` alongside
+    their other pre-write files;
   - `room-maps.json`: which device's room shape each effect folder's `room_map.h` was generated
     from, and a digest of that shape, so the studio can say when it's out of date (kept here, not
     in the effect folder, which may be a public repository);
@@ -81,8 +84,19 @@ flowchart LR
   (`changed`); "review" looks are written when accepted, all at once or by name. The UI's write
   bar runs the dry run when a view opens and, debounced, after library changes (never on a timer),
   and shows when the app last wrote the device (`last_write`, kept with the hash in `state/`).
+- **Device settings backups** read only `/cfg.json`, never WLED's secret `wsec.json`. The cfg
+  backup list includes manual backups and flash/revert folders. A restore first compares every
+  leaf path with the current file, identifies another device by matching WLED 16's `id.name` and
+  `id.mdns` (and any MAC-like `id` field when present), and flags the `nw`, `ap`, `eth` and `wifi`
+  sections. Both device identity and network changes need separate overrides. The restore then
+  checks the inspected hash again, saves the current cfg in a new `<stamp>-cfg` folder, uploads the
+  complete `cfg.json` with the settings PIN unlocked, waits for the device to reboot using the
+  same bounded poll as flashing, and reads cfg back. Any boot normalization is reported as
+  read-back differences; it is not treated as a failed upload.
 - **The fake device** (`wledstudio.fakewled`) implements the API subset with made-up effects; it
-  backs the tests and `docker compose --profile demo`.
+  backs the tests and `docker compose --profile demo`. Its cfg.json upload reboots and returns the
+  complete uploaded file unchanged, so the cfg restore tests found no normalization differences.
+  Normalization by real devices has not been verified.
 - **The virtual device** (`docker compose --profile virtual`) is wled-studio-builder's
   `virtual/`: WLED's own code compiled to WebAssembly behind WLED's API, a twin of a firmware. It
   reports `arch: "virtual"`, which the flash plan blocks.

@@ -19,6 +19,11 @@ Updated 2026-11-27. Milestones follow the plan's order: app first, firmware spik
   references, bank trials, drift/duplicate handling, device-only preset deletion and verified backup
   restore (refused for protected ids unless ticked, for the boot preset and for presets a playlist
   plays; a slot grid's ids are protected by themselves), and a print-ready visual remote layout.
+- **Device settings:** manual `cfg.json` backups, a list that also includes cfg files saved before
+  flashes and reverts, leaf-by-leaf restore previews, separate confirmation for another device and
+  network changes, a fresh backup before upload, bounded reboot waiting and read-back difference
+  reporting. WLED's `wsec.json` is never read, stored or uploaded. The fake returns cfg unchanged
+  after its modelled reboot; real-device normalization is not yet verified.
 - **Effect code:** ordered Edit → Compile → Preview/stream → Git, two-column on desktop and stacked on
   phones. Preview sound can be simulated, fixed, or sampled from the opt-in browser microphone.
   Compiler errors are marked in CodeMirror; compile-after-save is remembered and opt-in.

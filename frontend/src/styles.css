@@ -80,6 +80,7 @@ aside.editing, main.editing { border: 2px dashed var(--warn); }
 .device-set-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; }
 .device-set-items { display: grid; grid-template-columns: repeat(2, minmax(15rem, 1fr)); gap: 1rem; }
 .preset-safety { margin-top: 1rem; border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; background: var(--panel); }
+.device-cfg-backups { margin-top: 1rem; border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; background: var(--panel); }
 .stored-presets { list-style: none; padding: 0; }
 .preset-backups { margin-top: .75rem; }
 .preset-backups > button { margin: .2rem; display: block; }

@@ -35,7 +35,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from .notice import require_accepted
-from .wled import WLEDError, WLEDLocked
+from .wled import WLEDError, WLEDLocked, wait_for_reboot
 
 router = APIRouter()
 
@@ -245,17 +245,7 @@ def _backup(request: Request, device_id: str, what: str, files: dict[str, str]) 
 
 async def _wait_back(client, since: float, timing: tuple[float, float]) -> dict:
     """Poll /json/info until the device answers, booted after `since`."""
-    interval, timeout = timing
-    start = time.monotonic()
-    while time.monotonic() - start < timeout:
-        await asyncio.sleep(interval)
-        try:
-            info = await client.info()
-        except WLEDError:
-            continue
-        if isinstance(info.get("uptime"), (int, float)) and info["uptime"] <= time.monotonic() - since + interval + 5:
-            return info
-    raise WLEDError(f"the device didn't come back within {int(timeout)} s")
+    return await wait_for_reboot(client, since, timing)
 
 
 def _timing(request: Request) -> tuple[float, float]:

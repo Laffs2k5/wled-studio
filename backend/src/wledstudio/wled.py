@@ -226,6 +226,21 @@ class WLEDClient:
             return _ota_answer(r, "Reverted")
 
 
+async def wait_for_reboot(client: WLEDClient, since: float, timing: tuple[float, float]) -> dict:
+    """Poll /json/info until the device answers with an uptime from after `since`."""
+    interval, timeout = timing
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        await asyncio.sleep(interval)
+        try:
+            info = await client.info()
+        except WLEDError:
+            continue
+        if isinstance(info.get("uptime"), (int, float)) and info["uptime"] <= time.monotonic() - since + interval + 5:
+            return info
+    raise WLEDError(f"the device didn't come back within {int(timeout)} s")
+
+
 def page_text(html: str, limit: int = 200) -> str:
     """The words of one of WLED's small HTML message pages."""
     text = re.sub(r"<(script|style)\b.*?</\1>", " ", html, flags=re.S | re.I)
