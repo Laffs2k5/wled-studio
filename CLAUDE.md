@@ -80,6 +80,11 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
   `BUILDER_COMMIT` once held a mistyped SHA, and the image build failed with "not our ref".
 - The effect preview's compiler shim lives in wled-studio-builder (`preview/`); the Dockerfile's
   preview stage builds the example from there at `BUILDER_COMMIT`.
+- **WLED's `cpalcount` is an upper index bound with holes:** it is `customPalettes.size()`, including
+  gray placeholders, so custom-palette discovery can read `0..cpalcount-1` and must still ignore
+  404s. Without that field, mirror WLED 16's `loadCustomPalettes()` in `wled00/colors.cpp`:
+  read sequentially and stop after 21 consecutive 404s, because `WLED_MAX_CUSTOM_PALETTE_GAP`
+  is 20 in `wled00/const.h`. File index `i` has palette id `200-i`.
 - **A slot's name is given at write time, not stored.** `slots.expand_for_push` sets
   `device_name` (the grid's pattern) on every look or playlist whose preset id is a slot;
   `resolve_look`/`resolve_playlist` write it as the preset's `n`. The library keeps the plain
