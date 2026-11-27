@@ -384,16 +384,43 @@ def clear(pid: int, request: Request, grid: str | None = None):
 
 
 def expand_for_push(request: Request, looks: list[dict], playlists: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Materialize slot 'also use here' references for one plan/write without storing copies in the library."""
+    """The device's view of the library for one plan/write; nothing in the library changes.
+
+    - An item whose own preset id is a slot gets the slot's name on the device ("B2·3 Fire"):
+      a remote's bank shows on the device, and to whatever reads the device's preset names, by
+      that name. The library keeps the plain name, so playlists and sets still find it.
+    - Each "also use here" reference becomes a short-lived copy at the slot's id, with its name.
+
+    A preset id in more than one grid is named after the first of them."""
     state, _ = _load(request)
     if not state["grids"]:
         return looks, playlists
+    grids = [Grid(**entry["grid"]) for entry in state["grids"]]
+
+    def slot_of(pid) -> tuple[Grid, tuple[int, int]] | None:
+        if not isinstance(pid, int):
+            return None
+        for g in grids:
+            where = g.place(pid)
+            if where is not None:
+                return g, where
+        return None
+
+    def named(items: list[dict]) -> list[dict]:
+        out = []
+        for item in items:
+            hit = slot_of(item.get("preset_id"))
+            if hit is not None:
+                g, where = hit
+                item = {**item, "device_name": g.name_for(*where, g.base(item["name"]))}
+            out.append(item)
+        return out
+
     by_look = {look["name"]: look for look in looks}
     by_playlist = {playlist["name"]: playlist for playlist in playlists}
-    extra_looks = list(looks)
-    extra_playlists = list(playlists)
-    for entry in state["grids"]:
-        g = Grid(**entry["grid"])
+    extra_looks = named(looks)
+    extra_playlists = named(playlists)
+    for entry, g in zip(state["grids"], grids):
         for pid, assignment in entry.get("assignments", {}).items():
             where = g.place(int(pid))
             if where is None:
@@ -403,6 +430,7 @@ def expand_for_push(request: Request, looks: list[dict], playlists: list[dict]) 
                 continue
             item = copy.deepcopy(source)
             item["name"] = g.name_for(*where, g.base(source["name"]))
+            item.pop("device_name", None)
             item["preset_id"] = int(pid)
             (extra_looks if assignment["kind"] == "look" else extra_playlists).append(item)
     return extra_looks, extra_playlists

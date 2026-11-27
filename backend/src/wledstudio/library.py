@@ -237,7 +237,7 @@ def resolve_playlist(pl: dict, looks: dict[str, dict]) -> Resolved:
     body = {"ps": ids, "dur": [int(e.get("duration", 100)) for e in pl["entries"]],
             "transition": [int(e.get("transition", 7)) for e in pl["entries"]],
             "repeat": int(pl.get("repeat", 0)), "r": bool(pl.get("shuffle", False)), "end": end}
-    return Resolved({"n": pl["name"], "playlist": body}, "ok", notes)
+    return Resolved({"n": pl.get("device_name") or pl["name"], "playlist": body}, "ok", notes)
 
 
 def mic_for(look: dict, lists: DeviceLists) -> bool:
@@ -434,7 +434,8 @@ def resolve_look(look: dict, lists: DeviceLists, imported_ids: dict | None = Non
     if (look.get("clear_other_segments") and segs and lists.max_segments
             and all("start" in s and "stop" in s for s in segs)):
         segs += [{"stop": 0} for _ in range(len(segs), lists.max_segments)]
-    preset: dict = {"n": look["name"], "seg": segs}
+    # device_name: the name the slot grid gives an item on a slot's preset id (slots.expand_for_push)
+    preset: dict = {"n": look.get("device_name") or look["name"], "seg": segs}
     for k in PRESET_PASSTHROUGH:
         if k in look:
             preset[k] = look[k]

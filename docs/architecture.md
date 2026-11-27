@@ -51,7 +51,10 @@ flowchart LR
   (`shared_with`), and the write refuses until one of them moves. The slot grid references saved
   looks/playlists: filling normally moves the item to that id; "also use here" stores the extra
   assignment in `slots.json`. That reference is expanded only in the push plan, with the grid's
-  optional name pattern, so the library keeps one source item.
+  optional name pattern, so the library keeps one source item. **On the device every item on a
+  slot's id carries the slot's name** (`device_name`, set by `slots.expand_for_push` for the write
+  only): a moved look stays "Fire" in the library and is written as "B2·3 Fire", because whatever
+  reads the device's preset names (a remote's bank labels in home automation) depends on it.
 - **A look saved without the layout** (`layout=false` on capture) keeps no bounds and doesn't own
   the layout: shown, it changes only the segments it names, by position.
 - **Writing** replaces `presets.json` as a whole (`push.py`):

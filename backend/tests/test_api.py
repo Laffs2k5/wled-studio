@@ -791,3 +791,25 @@ def test_room_model(client, dev_id):
     assert client.delete(f"/api/devices/{dev_id}/room", headers=CSRF).status_code == 204
     assert client.get(f"/api/devices/{dev_id}/room").json() is None
     assert client.get("/api/devices/nope/room").status_code == 404
+
+
+def test_a_look_moved_into_a_slot_is_written_with_the_slots_name(client, dev_id, device):
+    """Filling a slot moves the look to its id; the device must get the slot's name (whatever reads
+    the device's preset names, a remote's bank labels say, depends on it), while the library and
+    a playlist that plays it keep the plain name."""
+    client.post(f"/api/devices/{dev_id}/capture/Fire?preset_id=1", headers=CSRF)
+    grid = {"rows": 2, "cols": 2, "first": 40, "row_step": 10, "name": "G{row}·{col} {name}"}
+    assert client.put("/api/slots/grid", json=grid, headers=CSRF).status_code == 200
+    assert client.put("/api/slots/51", json={"look": "Fire"}, headers=CSRF).status_code == 200
+    r = client.put("/api/playlists/Loop", json={"name": "Loop", "preset_id": 9, "entries": [{"look": "Fire"}]},
+                   headers=CSRF)
+    assert r.status_code in (200, 201), r.text
+    r = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False, "adopt_drift": True}, headers=CSRF).json()
+    assert r["done"] is True, r
+    assert device.presets["51"]["n"] == "G2·2 Fire"
+    assert device.presets["9"]["playlist"]["ps"] == [51] and device.presets["9"]["n"] == "Loop"
+    assert "Fire" in client.app.state.library.looks()
+    # a look already carrying the slot's name keeps it; nothing doubles
+    client.put("/api/looks/Fire/preset-id", json={"preset_id": 40}, headers=CSRF)
+    client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False, "adopt_drift": True}, headers=CSRF)
+    assert device.presets["40"]["n"] == "G1·1 Fire"

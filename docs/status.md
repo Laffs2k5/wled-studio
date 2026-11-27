@@ -209,8 +209,9 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
   for that: a block of preset ids as rows and columns, shaped by the user (rows, columns, first id,
   steps, a name pattern), showing which look or playlist sits in each slot. Filling moves a saved
   item to that id, or keeps its primary id and writes an additional grid reference at the slot's id.
-  The library stores one source item; copies exist only in an individual push plan. No remote, bank
-  or cue logic in the app.
+  The library stores one source item; copies exist only in an individual push plan. On the device,
+  whatever sits on a slot's id is named by the grid's pattern (fixed 2026-11-27: a moved item kept
+  its plain name). No remote, bank or cue logic in the app.
 - **Editing sessions and home automation:** the user flags "editing" in the home-automation system
   by hand; the app holds no token for it.
 - **Access:** on the LAN with the bearer token; a reverse proxy with client certificates (mTLS)
