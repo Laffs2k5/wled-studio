@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__, netcheck
 from .api import router
+from .archive import router as archive_router
 from .effects import router as effects_router
 from .effects_git import router as effects_git_router
 from .live import default_live_url
@@ -59,6 +60,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.state.protected_presets = ProtectedPresets(s.data_dir)
     app.add_middleware(SecurityMiddleware, settings=s)
     app.include_router(router)
+    app.include_router(archive_router)
     app.include_router(firmware_router)
     app.include_router(flash_router)
     app.include_router(notice_router)
