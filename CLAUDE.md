@@ -85,6 +85,9 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
   `resolve_look`/`resolve_playlist` write it as the preset's `n`. The library keeps the plain
   name, so don't rename library items to slot names: playlists and sets find items by name, and
   home automation reads the bank labels from the device's preset names.
+  The grid's pattern must match the names already in the cells, or the prefix is written twice
+  (`base()` strips only the grid's own prefix; the default is `R…`, real banks may be `B…`). The
+  grid view warns (`pattern_warning`).
 - **When a look gains a stored field, add it to `ArchiveLook` in `archive.py`.** The studio file
   refuses unknown look fields, so a field the app writes but the archive doesn't know makes every
   export un-importable (it happened: `imported_ids`). `test_archive.py` round-trips a library made
