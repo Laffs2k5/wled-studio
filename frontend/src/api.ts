@@ -205,6 +205,17 @@ export const slots = {
 /** The notice accepted before flashing or reverting (no warranty, no liability, no support). */
 export interface FlashNotice { version: string; title: string; text: string; remembered: boolean; accepted: string | null }
 
+/** What a studio file import does (or did): counts, names kept as they are, and the device
+ *  sections applied by device name (rooms, sets) or not matched here. Version 1 files carry only
+ *  the library, so the rest stays empty. */
+export interface ArchiveImport {
+  looks: number; playlists: number; palettes: number; kept: string[];
+  slot_grids?: number; kept_grids?: string[]; protected_presets?: number;
+  rooms?: string[]; sets?: string[]; unmatched_devices?: string[];
+}
+/** One earlier version of the library: what it held before a save. */
+export interface LibraryVersion { name: string; saved: string; looks: number; playlists: number; palettes: number }
+
 export interface PresetsOnDevice {
   name: string;
   sha256: string;
@@ -295,7 +306,10 @@ export const api = {
     request<{ id: number; label: string }[]>("PUT", "/api/protected-presets", rows),
   exportLibrary: () => transferLibrary() as Promise<Blob>,
   importLibrary: (file: File, mode: "keep" | "replace", preview = false) =>
-    transferLibrary(file, mode, preview) as Promise<{ looks: number; playlists: number; palettes: number; kept: string[] }>,
+    transferLibrary(file, mode, preview) as Promise<ArchiveImport>,
+  libraryVersions: () => request<LibraryVersion[]>("GET", "/api/library/versions"),
+  restoreLibraryVersion: (name: string) =>
+    request<{ looks: number; playlists: number; palettes: number }>("POST", `/api/library/versions/${encodeURIComponent(name)}/restore`, { confirm: "restore" }),
   devices: () => request<Device[]>("GET", "/api/devices"),
   addDevice: (name: string, host: string, pin?: string) =>
     request<Device>("POST", "/api/devices", pin ? { name, host, pin } : { name, host }),

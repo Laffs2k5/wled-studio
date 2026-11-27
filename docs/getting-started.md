@@ -136,9 +136,17 @@ header's device or **not on it yet**; after **Save palette** the editor closes a
 to use it (write presets once, then pick it in an effect's Palette list), with **Check and write**.
 The editor shows each stop's position as a number (0 to 255).
 
-The Library view can export a portable JSON file containing looks, playlists and palettes, excluding
-device PINs, hosts, device sets and remote-grid assignments. Import first previews what will be merged,
-then either keeps existing names or explicitly replaces them. It never writes a device.
+The Library view's **Studio file** exports everything you made as one JSON file: looks, playlists and
+palettes (with folders and order), the slot grids, the protected preset ids, and each device's room
+model and set, by the device's name. It holds no tokens, PINs or device addresses. **Import** shows
+first what it will do, then either keeps what is here under the same name or replaces it; a device's
+room and set go only to a device with that name here. It checks the whole file before writing
+anything, and never writes a device. Files from before (version 1, the library only) still import.
+
+**Earlier versions of the library** lists what the library held before each change (the newest 100;
+the app keeps 500). Restoring one brings back its looks, playlists and palettes, and the library from
+before the restore becomes an earlier version itself, so a restore, or an import you regret, can be
+undone the same way. Devices change only at the next write.
 
 In **Presets on device**, named slot grids lay out preset ids as remote buttons and banks. **Visual
 remote-button layout** renders the current assignments in a remote-shaped, print-ready view; clicking

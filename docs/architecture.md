@@ -15,7 +15,8 @@ flowchart LR
 
 - **One container** serves the built UI and the API. State lives in a data volume:
   - `devices.json` and `secrets/<id>.pin` (mode 0600);
-  - `library.json` with every earlier version in `history/`;
+  - `library.json` with its earlier versions in `history/` (`library-<n>.json`, the newest 500;
+    listed and restored through `/api/library/versions`);
   - `backups/<device>/` and `state/` (the last written presets hash per device);
   - `room-maps.json`: which device's room shape each effect folder's `room_map.h` was generated
     from, and a digest of that shape, so the studio can say when it's out of date (kept here, not

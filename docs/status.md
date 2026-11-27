@@ -11,7 +11,8 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
   room/set/trial/session status, linked virtual twins and persisted firmware history. Saving a preset
   look offers a direct hand-off to Presets on device.
 - **Library:** looks, playlists and palettes in one shared folder tree; inline organisation, drag/drop
-  into folders/playlists, library editor, portable JSON export/import and cross-device comparison.
+  into folders/playlists, library editor, the studio file (export/import of the library, grids, protected
+  ids, rooms and sets), earlier library versions to restore, and cross-device comparison.
 - **Presets on device:** one write owner for the device set, named remote grids and their "also use"
   references, bank trials, drift/duplicate handling, device-only preset deletion and verified backup
   restore (refused for protected ids unless ticked, for the boot preset and for presets a playlist
@@ -30,7 +31,7 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
 - **Devices and the profile:** each effect's own controls from its metadata; live control through
   a whitelisted schema; token login in the UI.
 - **The library:** looks by name, with each effect's metadata as it was when saved; capture and
-  show; history of every change.
+  show; history of every change, restorable (the newest 500 kept).
   - **Import** keeps every field WLED saves in a preset (and an `id` only where there was one), so
     an import followed by a write leaves unchanged presets unchanged.
   - **Writing** `presets.json`: backup, drift check, PIN, read-back verification.
