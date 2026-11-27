@@ -56,6 +56,10 @@ flowchart LR
   slot's id carries the slot's name** (`device_name`, set by `slots.expand_for_push` for the write
   only): a moved look stays "Fire" in the library and is written as "B2·3 Fire", because whatever
   reads the device's preset names (a remote's bank labels in home automation) depends on it.
+  The pattern must match the names already there: `base()` strips only a prefix made from it, so
+  "B2·3 Fire" under a pattern "R{row}·{col} {name}" would be written "R2·3 B2·3 Fire". The grid
+  view warns (`pattern_warning`, and a note on the cell) when a name starts like a slot name but
+  not the grid's pattern.
 - **A look saved without the layout** (`layout=false` on capture) keeps no bounds and doesn't own
   the layout: shown, it changes only the segments it names, by position.
 - **Writing** replaces `presets.json` as a whole (`push.py`):

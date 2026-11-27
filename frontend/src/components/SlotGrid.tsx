@@ -326,6 +326,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
           + New grid
         </button>
       </nav>
+      {data.pattern_warning && <p className="warn" role="alert">⚠ {data.pattern_warning}</p>}
       {items.length === 0 && (
         <p className="first-run-note">Fill this once you have saved some looks.</p>
       )}

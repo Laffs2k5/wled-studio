@@ -25,6 +25,11 @@ from .library import MAX_NAME_BYTES, LookError
 
 router = APIRouter(prefix="/api/slots")
 
+# A name that already starts like a slot name ("B2·3 Fire", "R1·4 x", "G12-3 y"): a short tag of
+# letters, a number, a separator, a number, a space. Used to warn when such a name doesn't match
+# the grid's own pattern: its prefix then isn't stripped, and the device would get it doubled.
+SLOT_LIKE = re.compile(r"^[^\W\d_]{0,3}\d+\s?[·.:/\-]\s?\d+\s+\S")
+
 # A grid made without a name (the single-grid routes, or an old slots.json migrated). Neutral on
 # purpose: the app can't know which remote a grid is for; rename it in the Slot grid view.
 DEFAULT_GRID_NAME = "Slot grid"
@@ -69,6 +74,10 @@ class Grid(BaseModel):
     def base(self, name: str) -> str:
         m = self.prefix_re().match(name)
         return m.group("base") if m else name
+
+    def foreign_prefix(self, name: str) -> bool:
+        """The name looks like a slot name, but not one made from this grid's pattern."""
+        return bool(SLOT_LIKE.match(name)) and not self.prefix_re().match(name)
 
     def name_for(self, row: int, col: int, base: str) -> str:
         """The slot's name for a base name, the base shortened to fit WLED's name limit."""
@@ -234,9 +243,20 @@ def _slots(request: Request, grid_id: str | None = None) -> dict:
                 notes.append("more than one item has this preset id: " + ", ".join(n for _, n in here))
             if name and g.prefix_re().match(name) and g.name_for(r, c, g.base(name)) != name:
                 notes.append("its name is another slot's")
+            if name and g.foreign_prefix(name):
+                notes.append(f"its name starts like a slot name, but not this grid's pattern “{g.name}”: "
+                             f"the device would get “{g.name_for(r, c, name)}”")
             cells.append({"row": r, "col": c, "preset_id": pid, "kind": kind, "name": name,
                           "base": g.base(name) if name else None, "notes": notes})
-    return {"grid": g.model_dump(), "cells": cells, "id": entry["id"], "name": entry["name"]}
+    foreign = [c["name"] for c in cells if c["name"] and g.foreign_prefix(c["name"])]
+    out = {"grid": g.model_dump(), "cells": cells, "id": entry["id"], "name": entry["name"]}
+    if foreign:
+        out["pattern_warning"] = (
+            f"{len(foreign)} slot{'s' if len(foreign) != 1 else ''} hold{'' if len(foreign) != 1 else 's'} a name "
+            f"that starts like a slot name but doesn't match this grid's name pattern “{g.name}” "
+            f"(e.g. “{foreign[0]}”). Writing now would put both prefixes on the device. "
+            "Change the pattern under Change the grid → Advanced to match the names.")
+    return out
 
 
 @router.get("")

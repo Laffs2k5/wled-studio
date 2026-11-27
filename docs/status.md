@@ -213,7 +213,9 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
   item to that id, or keeps its primary id and writes an additional grid reference at the slot's id.
   The library stores one source item; copies exist only in an individual push plan. On the device,
   whatever sits on a slot's id is named by the grid's pattern (fixed 2026-11-27: a moved item kept
-  its plain name). No remote, bank or cue logic in the app.
+  its plain name). The grid view warns when a slot's name starts like a slot name but not in the
+  grid's pattern, since writing would then double the prefix (2026-11-27). No remote, bank or cue
+  logic in the app.
 - **Editing sessions and home automation:** the user flags "editing" in the home-automation system
   by hand; the app holds no token for it.
 - **Access:** on the LAN with the bearer token; a reverse proxy with client certificates (mTLS)

@@ -102,6 +102,13 @@ test("the miniature shortens a tall grid", async () => {
   expect(gridProblem({ rows: 2, cols: 2, first: 1, row_step: 10, col_step: 1, name: `{name} ${"x".repeat(40)}` })).toMatch(/6 to 40 characters/);
 });
 
+test("a name that doesn't follow the grid's pattern is warned about above the grid", async () => {
+  const warning = "1 slot holds a name that starts like a slot name but doesn't match this grid's name pattern";
+  stub({ grid: GRID, cells: cells({ 40: "B1·1 Calm" }), pattern_warning: warning });
+  render(<SlotGrid notify={vi.fn()} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent(warning);
+});
+
 test("shows what sits where, and fills and empties slots", async () => {
   const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) });
   const notify = vi.fn();

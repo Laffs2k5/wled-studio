@@ -47,6 +47,20 @@ def test_cells_show_what_sits_where(client):
     assert cell(s, 2, 2)["name"] == "Party" and cell(s, 1, 2)["name"] is None
 
 
+def test_a_name_from_another_pattern_is_flagged(client):
+    # the docker1 case: names made as "B1·1 Chill", the grid's pattern still another letter
+    s = setup(client, [look("B1·1 Chill", 40), look("G1-2 Calm", 41), look("Party", 45), look("Mix 2·1 x", 46)])
+    warned = [c["preset_id"] for c in s["cells"] if any("this grid's pattern" in n for n in c["notes"])]
+    assert warned == [40]
+    assert "G1-1 B1·1 Chill" in cell(s, 1, 1)["notes"][0]
+    assert "1 slot holds" in s["pattern_warning"] and "“B1·1 Chill”" in s["pattern_warning"]
+    fixed = client.put("/api/slots/grid", json={**GRID, "name": "B{row}·{col} {name}"}, headers=CSRF).json()
+    assert cell(fixed, 1, 1)["base"] == "Chill" and cell(fixed, 1, 1)["notes"] == []
+    assert "“G1-2 Calm”" in fixed["pattern_warning"]                          # now G1-2 is the odd one
+    client.put("/api/slots/41", json={"look": "Party"}, headers=CSRF)            # moves Calm out of the grid
+    assert "pattern_warning" not in client.get("/api/slots").json()
+
+
 def test_filling_references_and_moves_without_copying(client):
     setup(client, [look("G1-1 Calm", 40, fx=3), look("Fire", fx=7)])
     r = client.put("/api/slots/40", json={"look": "Fire"}, headers=CSRF).json()

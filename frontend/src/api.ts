@@ -182,7 +182,7 @@ export interface DeviceSet {
 export interface SlotGridShape { rows: number; cols: number; first: number; row_step: number; col_step: number; name: string }
 export interface SlotCell { row: number; col: number; preset_id: number; kind: "look" | "playlist" | null; name: string | null; base: string | null; notes: string[] }
 export interface Slots { grid: SlotGridShape | null; cells: SlotCell[]; id?: string | null; name?: string | null;
-  filled?: string; freed?: string[]; protected_by?: string[] }
+  filled?: string; freed?: string[]; protected_by?: string[]; pattern_warning?: string }
 export interface NamedGrids { current: string | null; grids: Slots[] }
 
 export const slots = {
