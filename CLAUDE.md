@@ -80,3 +80,20 @@ firmware via the sibling repo `wled-studio-builder`). Public; EUPL-1.2. Status a
   `BUILDER_COMMIT` once held a mistyped SHA, and the image build failed with "not our ref".
 - The effect preview's compiler shim lives in wled-studio-builder (`preview/`); the Dockerfile's
   preview stage builds the example from there at `BUILDER_COMMIT`.
+- **A slot's name is given at write time, not stored.** `slots.expand_for_push` sets
+  `device_name` (the grid's pattern) on every look or playlist whose preset id is a slot;
+  `resolve_look`/`resolve_playlist` write it as the preset's `n`. The library keeps the plain
+  name, so don't rename library items to slot names: playlists and sets find items by name, and
+  home automation reads the bank labels from the device's preset names.
+- **When a look gains a stored field, add it to `ArchiveLook` in `archive.py`.** The studio file
+  refuses unknown look fields, so a field the app writes but the archive doesn't know makes every
+  export un-importable (it happened: `imported_ids`). `test_archive.py` round-trips a library made
+  the app's own ways and catches it, as long as the new field is made there too.
+- **Deleting and restoring device presets exist only with a token set**, and refuse protected ids
+  (the protected list plus every slot grid's ids) unless named in `override_protected`, the boot
+  preset, and presets a remaining playlist plays. Keep those refusals server-side; the UI's tick
+  only fills `override_protected`.
+- **Library history files are numbered after the newest** (`library-<n>.json`) and only the newest
+  500 are kept. Don't number by count: a count repeats once old files are removed.
+- **To test a staged tree outside the repo** (say, one commit of a split), set
+  `PYTHONPATH=<tree>/backend/src`: the venv's editable install otherwise imports the working copy.
