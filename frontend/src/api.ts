@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 import type { EditedLook } from "./components/LookEditor";
-import type { CheckItem, Device, EditingSession, DeviceState, Look, Palette, Playlist, Profile, PushResult } from "./types";
+import type { CheckItem, Device, DevicePalette, EditingSession, DeviceState, Look, Palette, Playlist, Profile, PushResult } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -396,6 +396,11 @@ export const api = {
     request<{ look: Look; shared_with: string[] }>("PUT", `/api/looks/${enc(name)}/preset-id`, { preset_id: presetId }),
   renameLook: (name: string, to: string) => request<Look>("POST", `/api/looks/${enc(name)}/rename`, { to }),
   palettes: () => request<Palette[]>("GET", "/api/palettes"),
+  devicePalettes: (id: string) =>
+    request<DevicePalette[]>("GET", `/api/devices/${enc(id)}/palettes`),
+  importDevicePalettes: (id: string, palettes: { index: number; name: string }[], replace = false) =>
+    request<{ imported: string[]; replaced: string[] }>(
+      "POST", `/api/devices/${enc(id)}/palettes/import`, { palettes, replace }),
   putPalette: (p: Palette) => request<Palette>("PUT", `/api/palettes/${enc(p.name)}`, p),
   deletePalette: (name: string) => request<null>("DELETE", `/api/palettes/${enc(name)}`),
   playlists: () => request<Playlist[]>("GET", "/api/playlists"),

@@ -750,6 +750,105 @@ def test_custom_palettes(client, dev_id, device):
     assert client.delete("/api/palettes/Ice", headers=CSRF).status_code == 404
 
 
+def test_lists_imports_and_resolves_device_palettes(client, dev_id, device):
+    device.palette_files = {
+        0: {"palette": [0, 255, 64, 0, 255, 0, 0, 255]},
+        2: {"palette": [0, "ffffff", 255, "0044ff"]},
+    }
+    same = {"name": "Ice", "stops": [[0, "ffffff"], [255, "0044ff"]]}
+    client.put("/api/palettes/Ice", json=same, headers=CSRF)
+    client.app.state.statestore.record_palettes(dev_id, {
+        "Owned sunset": {"index": 0, "sha": "old"},
+    })
+
+    rows = client.get(f"/api/devices/{dev_id}/palettes").json()
+    assert device.palette_reads == [0, 1, 2]
+    assert rows == [
+        {"index": 0, "id": 200, "stops": [[0, "ff4000"], [255, "0000ff"]],
+         "owned": True, "owned_name": "Owned sunset", "in_library": False, "library_name": None},
+        {"index": 2, "id": 198, "stops": [[0, "ffffff"], [255, "0044ff"]],
+         "owned": False, "owned_name": None, "in_library": True, "library_name": "Ice"},
+    ]
+
+    clash = client.post(f"/api/devices/{dev_id}/palettes/import",
+                        json={"palettes": [{"index": 2, "name": "Ice"}]}, headers=CSRF)
+    assert clash.status_code == 409
+    result = client.post(
+        f"/api/devices/{dev_id}/palettes/import",
+        json={"palettes": [{"index": 2, "name": "Device Ice"}]}, headers=CSRF)
+    assert result.status_code == 200 and result.json()["imported"] == ["Device Ice"]
+    manifest = client.app.state.statestore.palette_manifest(dev_id)
+    assert manifest["Device Ice"]["index"] == 2
+    assert manifest["Owned sunset"]["index"] == 0
+    assert len(manifest["Device Ice"]["sha"]) == 64
+
+    device.presets = {"0": {}, "3": {"n": "Imported look",
+                                      "seg": [{"fx": 8, "pal": 198, "start": 0, "stop": 60}]}}
+    imported = client.post(f"/api/devices/{dev_id}/import", headers=CSRF).json()
+    assert imported["imported"] == ["Imported look"]
+    look = client.get("/api/looks").json()[0]
+    assert look["segments"][0]["palette"] == "Device Ice"
+    assert "palette_id" not in look["segments"][0]
+
+    replacing = client.post(
+        f"/api/devices/{dev_id}/palettes/import",
+        json={"palettes": [{"index": 2, "name": "Ice"}], "replace": True}, headers=CSRF)
+    assert replacing.json()["replaced"] == ["Ice"]
+    assert client.get("/api/palettes").json()[0]["name"] == "Ice"
+
+
+def test_device_palette_fallback_stops_after_21_missing_files(client, dev_id, device, monkeypatch):
+    device.palette_files = {20: {"palette": [0, "112233", 255, "445566"]}}
+    info = device.info
+
+    def without_count(now=0.0):
+        data = info(now)
+        data.pop("cpalcount")
+        return data
+
+    monkeypatch.setattr(device, "info", without_count)
+    rows = client.get(f"/api/devices/{dev_id}/palettes").json()
+    assert rows[0]["index"] == 20
+    assert device.palette_reads == list(range(42))
+
+
+def test_push_keeps_unowned_custom_palette_slots(client, dev_id, device):
+    device.palette_files = {0: {"palette": [0, "112233", 255, "445566"]}}
+    client.put("/api/palettes/New", json={
+        "name": "New", "stops": [[0, "aabbcc"], [255, "ddeeff"]]}, headers=CSRF)
+    plan = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": True}, headers=CSRF).json()
+    assert plan["palettes"] == [{"palette": "New", "file": "palette1.json", "id": 199}]
+    result = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()
+    assert result["done"]
+    assert device.palette_files[0] == {"palette": [0, "112233", 255, "445566"]}
+    assert device.palette_files[1] == {"palette": [0, "aabbcc", 255, "ddeeff"]}
+
+
+def test_push_reports_when_device_has_no_free_custom_palette_file(client, dev_id, device):
+    device.palette_files = {
+        index: {"palette": [0, "112233", 255, "445566"]}
+        for index in range(129)
+    }
+    client.put("/api/palettes/New", json={
+        "name": "New", "stops": [[0, "aabbcc"], [255, "ddeeff"]]}, headers=CSRF)
+    response = client.post(
+        f"/api/devices/{dev_id}/push", json={"dry_run": True}, headers=CSRF)
+    assert response.status_code == 502
+    assert response.json()["detail"] == "the device has no free custom-palette file"
+
+
+def test_imported_palette_is_not_reuploaded(client, dev_id, device):
+    device.palette_files = {4: {"palette": [0, 1, 2, 3, 255, 4, 5, 6]}}
+    imported = client.post(
+        f"/api/devices/{dev_id}/palettes/import",
+        json={"palettes": [{"index": 4, "name": "From WLED"}]}, headers=CSRF)
+    assert imported.status_code == 200
+    device.uploads.clear()
+    result = client.post(f"/api/devices/{dev_id}/push", json={"dry_run": False}, headers=CSRF).json()
+    assert result["reason"] == "nothing to change"
+    assert "palette4.json" not in device.uploads
+
+
 def test_effect_replacement_suggests_and_explicitly_updates_the_shared_look(client, dev_id):
     look = {"name": "Old fire", "segments": [{"start": 0, "stop": 60, "effect": "Fire 2012"}]}
     assert client.put("/api/looks/Old%20fire", json=look, headers=CSRF).status_code == 200

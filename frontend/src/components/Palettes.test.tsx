@@ -65,3 +65,55 @@ test("after a save: the editor closes, the row says how to use it; each row says
   rerender(<Palettes palettes={[ice]} onChanged={() => {}} notify={() => {}} deviceName="Desk" pending={null} />);
   expect(screen.queryByText(/on Desk/)).toBeNull();                 // unknown while the device can't be checked
 });
+
+test("lists device palettes and imports only selected WLED-made files", async () => {
+  const calls: { url: string; body?: unknown }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined });
+    if (init?.method === "POST") return new Response(JSON.stringify({ imported: ["Warm"], replaced: [] }));
+    return new Response(JSON.stringify([
+      { index: 0, id: 200, stops: [[0, "112233"], [255, "445566"]],
+        owned: true, owned_name: "Studio", in_library: true, library_name: "Studio" },
+      { index: 2, id: 198, stops: [[0, "ff4400"], [255, "0000ff"]],
+        owned: false, owned_name: null, in_library: false, library_name: null },
+      { index: 3, id: 197, stops: [[0, "ffffff"], [255, "0044ff"]],
+        owned: false, owned_name: null, in_library: true, library_name: "Ice" },
+    ]));
+  }));
+  const onChanged = vi.fn();
+  render(<Palettes palettes={[{ name: "Studio", stops: [[0, "112233"], [255, "445566"]] },
+    { name: "Ice", stops: [[0, "ffffff"], [255, "0044ff"]] }]}
+    onChanged={onChanged} notify={() => {}} deviceId="desk" deviceName="Desk" />);
+
+  expect(await screen.findByLabelText("Palettes on the device")).toBeInTheDocument();
+  expect(screen.getByLabelText("Import palette 200")).not.toBeChecked();
+  expect(screen.getByLabelText("Import palette 198")).toBeChecked();
+  expect(screen.getByLabelText("Import palette 197")).not.toBeChecked();
+  expect(screen.getByText("Owned as “Studio”")).toBeInTheDocument();
+  expect(screen.getByText("Already in the library as “Ice”")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Name for palette 198"), { target: { value: "Warm" } });
+  fireEvent.click(screen.getByRole("button", { name: "Import" }));
+
+  await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  expect(calls.find((call) => call.url.endsWith("/palettes/import"))?.body).toEqual({
+    palettes: [{ index: 2, name: "Warm" }], replace: false,
+  });
+  expect(screen.getByRole("status")).toHaveTextContent("Imported 1 palette.");
+});
+
+test("asks before replacing a library palette during device import", async () => {
+  const f = vi.fn(async (_url: string, init?: RequestInit) => new Response(
+    JSON.stringify(init?.method === "POST" ? { imported: ["Ice"], replaced: ["Ice"] } : [
+      { index: 1, id: 199, stops: [[0, "ff0000"], [255, "0000ff"]],
+        owned: false, owned_name: null, in_library: false, library_name: null },
+    ])));
+  vi.stubGlobal("fetch", f);
+  render(<Palettes palettes={[{ name: "Ice", stops: [[0, "ffffff"], [255, "0000ff"]] }]}
+    onChanged={() => {}} notify={() => {}} deviceId="desk" />);
+  await screen.findByLabelText("Name for palette 199");
+  fireEvent.change(screen.getByLabelText("Name for palette 199"), { target: { value: "Ice" } });
+  fireEvent.click(screen.getByRole("button", { name: "Import" }));
+  expect(screen.getByLabelText("Replace existing palettes?")).toHaveTextContent("Replace “Ice” in the library?");
+  fireEvent.click(screen.getByRole("button", { name: "Replace and import" }));
+  await waitFor(() => expect(JSON.parse((f.mock.calls[1][1] as RequestInit).body as string).replace).toBe(true));
+});

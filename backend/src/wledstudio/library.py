@@ -566,13 +566,40 @@ def palette_file(pal: dict) -> str:
     return json.dumps({"palette": flat}, separators=(",", ":"))
 
 
-def assign_palettes(palettes: list[dict], manifest: dict[str, dict]) -> tuple[dict[str, dict], list[dict]]:
+def palette_from_file(data: dict, name: str) -> dict:
+    """Normalize either WLED custom-palette encoding to the library's stop pairs."""
+    raw = data.get("palette") if isinstance(data, dict) else None
+    if not isinstance(raw, list):
+        raise LookError("a custom palette file has no palette array")
+    if all(isinstance(raw[i], int) and isinstance(raw[i + 1], str)
+           for i in range(0, len(raw) - 1, 2)) and len(raw) % 2 == 0:
+        if any(len(raw[i + 1]) != 6 for i in range(0, len(raw), 2)):
+            raise LookError("a custom palette file has an invalid colour")
+        stops = [[raw[i], raw[i + 1]] for i in range(0, len(raw), 2)]
+    elif len(raw) % 4 == 0 and all(isinstance(v, int) and not isinstance(v, bool) for v in raw):
+        stops = []
+        for i in range(0, len(raw), 4):
+            pos, r, g, b = raw[i:i + 4]
+            if not all(0 <= channel <= 255 for channel in (r, g, b)):
+                raise LookError("a custom palette file has an invalid colour")
+            stops.append([pos, f"{r:02x}{g:02x}{b:02x}"])
+    else:
+        raise LookError("a custom palette file has invalid stops")
+    return check_palette({"name": name, "stops": stops})
+
+
+def assign_palettes(palettes: list[dict], manifest: dict[str, dict],
+                    occupied: Collection[int] = ()) -> tuple[dict[str, dict], list[dict]]:
     """Give each library palette a file index on the device, keeping existing ones.
 
-    manifest: name -> {"index": i, "sha": content hash}. Returns the new manifest and the
-    uploads needed (palettes that are new or changed)."""
+    manifest: name -> {"index": i, "sha": content hash}. Occupied indices that the
+    manifest doesn't own stay reserved, so a push can't replace a WLED-made palette.
+    Returns the new manifest and the uploads needed (palettes that are new or changed)."""
     import hashlib
-    used = {m["index"] for n, m in manifest.items() if n in {p["name"] for p in palettes}}
+    names = {p["name"] for p in palettes}
+    used = {m["index"] for n, m in manifest.items() if n in names}
+    owned = {m["index"] for m in manifest.values()}
+    blocked = set(occupied) - owned
     out, uploads = {}, []
     for pal in sorted(palettes, key=lambda p: p["name"]):
         content = palette_file(pal)
@@ -581,7 +608,9 @@ def assign_palettes(palettes: list[dict], manifest: dict[str, dict]) -> tuple[di
         if cur is not None:
             idx = cur["index"]
         else:
-            idx = next(i for i in range(MAX_CUSTOM_PALETTES) if i not in used)
+            idx = next((i for i in range(MAX_CUSTOM_PALETTES) if i not in used | blocked), None)
+            if idx is None:
+                raise LookError("the device has no free custom-palette file")
             used.add(idx)
         out[pal["name"]] = {"index": idx, "sha": sha}
         if cur is None or cur.get("sha") != sha:

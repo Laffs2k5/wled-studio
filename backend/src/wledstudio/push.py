@@ -17,9 +17,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .library import (CUSTOM_PALETTE_BASE, DeviceLists, assign_palettes, duplicate_ids, duplicates_message,
-                      plan_presets)
-from .wled import WLEDClient
+from .library import (CUSTOM_PALETTE_BASE, MAX_CUSTOM_PALETTES, DeviceLists, LookError, assign_palettes,
+                      duplicate_ids, duplicates_message, plan_presets)
+from .wled import WLEDClient, WLEDError
 
 
 def sha256(text: str) -> str:
@@ -81,6 +81,14 @@ class StateStore:
         p.write_text(text, encoding="utf-8")
         return p
 
+    def backup_palette(self, device_id: str, index: int, content: object) -> Path:
+        d = self.backups / device_id
+        d.mkdir(parents=True, exist_ok=True)
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        p = d / f"{stamp}-palette{index}.json"
+        p.write_text(json.dumps(content, separators=(",", ":")) + "\n", encoding="utf-8")
+        return p
+
     def palette_manifest(self, device_id: str) -> dict:
         p = self.dir / f"{device_id}.palettes.json"
         return json.loads(p.read_text()) if p.exists() else {}
@@ -124,11 +132,37 @@ class PushResult:
     drift_items: list | None = None  # additions, changes and removals since the last app write
 
 
-async def fetch_lists(client: WLEDClient, custom: dict[str, int] | None = None) -> DeviceLists:
+async def fetch_lists(client: WLEDClient, custom: dict[str, int] | None = None,
+                      *, info: dict | None = None) -> DeviceLists:
     """What the device offers, for resolving looks against it."""
-    maxseg = ((await client.info()).get("leds") or {}).get("maxseg")
+    info = info if info is not None else await client.info()
+    maxseg = ((info.get("leds")) or {}).get("maxseg")
     return DeviceLists(await client.effects(), await client.fxdata(), await client.palettes(), custom or {},
                        max_segments=maxseg if isinstance(maxseg, int) and 0 < maxseg <= 255 else None)
+
+
+async def custom_palette_files(client: WLEDClient, info: dict | None = None) -> dict[int, object]:
+    """Read the device's custom palette files without probing every possible index."""
+    info = info if info is not None else await client.info()
+    count = info.get("cpalcount")
+    bounded = isinstance(count, int) and not isinstance(count, bool) and 0 <= count <= MAX_CUSTOM_PALETTES
+    files = {}
+    missing = 0
+    limit = count if bounded else MAX_CUSTOM_PALETTES
+    for index in range(limit):
+        content = await client.custom_palette(index)
+        if content is None:
+            if bounded:
+                continue
+            # WLED 16's colors.cpp loadCustomPalettes() walks from index 0 and tolerates
+            # WLED_MAX_CUSTOM_PALETTE_GAP (20, const.h) missing files before stopping.
+            missing += 1
+            if missing > 20:
+                break
+            continue
+        missing = 0
+        files[index] = content
+    return files
 
 
 def diff_ids(before: dict, after: dict) -> list[str]:
@@ -166,9 +200,15 @@ async def _push(client: WLEDClient, device_id: str, looks: list[dict], state: St
     dups = duplicate_ids(looks, playlists or [])
     if dups and not dry_run:   # refused before the device is touched
         raise DuplicatePresetIds(duplicates_message(dups))
-    manifest, uploads = assign_palettes(palettes or [], state.palette_manifest(device_id))
+    info = await client.info()
+    existing_palettes = await custom_palette_files(client, info)
+    stored_manifest = state.palette_manifest(device_id)
+    try:
+        manifest, uploads = assign_palettes(palettes or [], stored_manifest, existing_palettes)
+    except LookError as e:
+        raise WLEDError(str(e)) from None
     custom = {n: CUSTOM_PALETTE_BASE - m["index"] for n, m in manifest.items()}
-    lists = await fetch_lists(client, custom)
+    lists = await fetch_lists(client, custom, info=info)
     pal_report = [{"palette": u["name"], "file": u["file"], "id": CUSTOM_PALETTE_BASE - u["index"]} for u in uploads]
     current_text = await client.presets_text()
     current = json.loads(current_text or "{}")
@@ -194,11 +234,18 @@ async def _push(client: WLEDClient, device_id: str, looks: list[dict], state: St
     if not changed and not uploads:
         return PushResult(False, drift, report, [], reason="nothing to change", palettes=[])
     backup = state.backup(device_id, current_text)
+    for u in uploads:
+        before = existing_palettes.get(u["index"])
+        if before is not None:
+            state.backup_palette(device_id, u["index"], before)
     new_text = canonical(planned)
     # palettes first, so the presets that use them find them; one unlocked session
     async with client.unlocked():
         for u in uploads:
             await client._upload_raw(u["file"], u["content"].encode("utf-8"))
+            if await client.custom_palette(u["index"]) != json.loads(u["content"]):
+                return PushResult(False, drift, report, changed, str(backup.name), palettes=pal_report,
+                                  reason=f"verification failed: {u['file']} differs from what was written")
         state.record_palettes(device_id, manifest)
         if changed:
             await client._upload_raw("presets.json", new_text.encode("utf-8"))

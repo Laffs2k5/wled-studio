@@ -40,6 +40,15 @@ flowchart LR
   stored with effect and palette *names* and a snapshot of each effect's metadata, and resolved to
   the device's ids when written (see `backend/src/wledstudio/library.py` for the change-check
   statuses).
+- **Custom palette files have per-device ownership.** WLED 16 stores them as
+  `palette<i>.json`, with id `200 - i`; wled-studio keeps a per-device manifest of the names,
+  indexes and content hashes it has saved. `/api/devices/<id>/palettes` reads both WLED stop
+  encodings, normalizes them to the library format, and reports ownership and equal library matches.
+  Importing copies selected stops into the library and claims their existing manifest indexes, so
+  presets using those ids resolve to the new names. Push discovery reserves every occupied index
+  absent from the manifest; replaced files are backed up and read back before presets are written.
+  `cpalcount` is the size of WLED's custom-palette vector (including gray placeholders), so the
+  backend probes only those indexes and ignores missing placeholder files.
 - **A look can own the segment layout** (`clear_other_segments`): showing it deletes the device's
   other segments, as WLED's own presets saved with segment bounds do. They pad the segment list
   with `{"stop":0}` up to the device's limit (`info.leds.maxseg`), and so does the app. Captured

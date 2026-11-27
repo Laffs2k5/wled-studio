@@ -318,7 +318,8 @@ export function DevicePanel({ deviceId, notify, onVirtual, deviceName, host, roo
       <Playlists looks={looks} playlists={playlists} onChanged={reloadLooks} notify={notify} checks={checks}
         deviceId={deviceId} deviceName={offlineName ?? profile?.device.name ?? deviceName} offline={!!offlineName}
         onShown={reloadState} beforeAction={beforeLiveAction} formOnly />
-      <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} deviceName={profile?.device.name ?? deviceName}
+      <Palettes palettes={palettes} onChanged={reloadLooks} notify={notify} deviceId={deviceId}
+        deviceName={profile?.device.name ?? deviceName}
         pending={offlineName ? null : pendingPalettes} onCheckAndWrite={offlineName ? undefined : () => setOpenPlan((n) => n + 1)} />
       <LibraryTransfer onChanged={reloadLooks} notify={notify} />
       <CrossDevice current={deviceId} looks={looks} notify={notify} onChanged={reloadLooks} />

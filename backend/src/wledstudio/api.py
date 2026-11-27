@@ -16,10 +16,11 @@ from .cfg_admin import (ConfigBackups, ConfigChanged, ConfigRefused, ConfigVerif
                         inspect_restore as inspect_config_restore, restore as restore_config)
 from .devices import Device, DeviceStore
 from .deleted import record_deleted
-from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
-                      import_presets, mic_for,
-                      playlist_from_preset, resolve_look, resolve_playlist, segment_from_state, tag_areas)
-from .push import DuplicatePresetIds, StateStore, fetch_lists, push
+from .library import (CUSTOM_PALETTE_BASE, MAX_CUSTOM_PALETTES, DeviceLists, LibraryStore, LookError,
+                      accept_snapshot, check_library, check_name, check_palette, import_presets, mic_for,
+                      palette_file, palette_from_file, playlist_from_preset, resolve_look, resolve_playlist,
+                      segment_from_state, tag_areas)
+from .push import DuplicatePresetIds, StateStore, custom_palette_files, fetch_lists, push
 from .preset_admin import (backup_details, changed_ids, inspect_device, mutate_presets, playlists_using,
                            preset_summary, PresetChanged, PresetRefused, PresetVerification)
 from .session import SEG_RESTORE, Sessions, restore_payload
@@ -165,6 +166,16 @@ class PlaylistIn(Strict):
 class PaletteIn(Strict):
     name: str
     stops: list[list[int | str]] = Field(min_length=2, max_length=18)
+
+
+class DevicePaletteImportIn(Strict):
+    index: int = Field(ge=0, lt=MAX_CUSTOM_PALETTES)
+    name: str = Field(min_length=1, max_length=64)
+
+
+class DevicePalettesImportIn(Strict):
+    palettes: list[DevicePaletteImportIn] = Field(min_length=1, max_length=MAX_CUSTOM_PALETTES)
+    replace: bool = False
 
 
 class RoomEdge(Strict):
@@ -803,6 +814,79 @@ def put_palette(name: str, body: PaletteIn, request: Request):
 def delete_palette(name: str, request: Request):
     if not request.app.state.library.delete_palette(name):
         raise HTTPException(404, "no such palette")
+
+
+@router.get("/devices/{device_id}/palettes")
+async def palettes_on_device(device_id: str, request: Request):
+    dev = device_or_404(device_id, request)
+    manifest = request.app.state.statestore.palette_manifest(dev.id)
+    owners = {entry["index"]: name for name, entry in manifest.items()}
+    library = request.app.state.library.palettes()
+    async with make_client(request, dev) as c:
+        try:
+            files = await custom_palette_files(c)
+        except WLEDError as e:
+            raise device_errors(e) from None
+    rows = []
+    for index, data in sorted(files.items()):
+        try:
+            pal = palette_from_file(data, f"Device palette {CUSTOM_PALETTE_BASE - index}")
+        except LookError as e:
+            raise HTTPException(502, f"palette{index}.json: {e}") from None
+        matching = next((name for name, item in library.items()
+                         if item["stops"] == pal["stops"]), None)
+        rows.append({"index": index, "id": CUSTOM_PALETTE_BASE - index, "stops": pal["stops"],
+                     "owned": index in owners, "owned_name": owners.get(index),
+                     "in_library": matching is not None, "library_name": matching})
+    return rows
+
+
+@router.post("/devices/{device_id}/palettes/import")
+async def import_device_palettes(device_id: str, body: DevicePalettesImportIn, request: Request):
+    dev = device_or_404(device_id, request)
+    choices = [(item.index, item.name) for item in body.palettes]
+    indices = [index for index, _ in choices]
+    if len(set(indices)) != len(indices):
+        raise HTTPException(422, "a device palette index can be imported only once")
+    names = [name for _, name in choices]
+    try:
+        names = [check_name(name) for name in names]
+    except LookError as e:
+        raise HTTPException(422, str(e)) from None
+    if len(set(names)) != len(names):
+        raise HTTPException(422, "imported palettes need different names")
+    library = request.app.state.library
+    current = library.palettes()
+    clashes = [name for name in names if name in current]
+    if clashes and not body.replace:
+        raise HTTPException(409, f"a palette named {clashes[0]!r} exists already")
+    async with make_client(request, dev) as c:
+        try:
+            contents = [await c.custom_palette(index) for index in indices]
+        except WLEDError as e:
+            raise device_errors(e) from None
+    data = library.load()
+    imported = []
+    for (index, _), normalized_name, content in zip(choices, names, contents):
+        if content is None:
+            raise HTTPException(404, f"palette{index}.json is not on the device")
+        try:
+            pal = check_palette(palette_from_file(content, normalized_name))
+        except LookError as e:
+            raise HTTPException(422, f"palette{index}.json: {e}") from None
+        data["palettes"][pal["name"]] = pal
+        imported.append((index, pal))
+    library.save(data)
+    manifest = dict(request.app.state.statestore.palette_manifest(dev.id))
+    selected = set(indices)
+    manifest = {name: entry for name, entry in manifest.items()
+                if entry["index"] not in selected and name not in names}
+    for index, pal in imported:
+        sha = hashlib.sha256(palette_file(pal).encode()).hexdigest()
+        manifest[pal["name"]] = {"index": index, "sha": sha}
+    request.app.state.statestore.record_palettes(dev.id, manifest)
+    return {"imported": [pal["name"] for _, pal in imported],
+            "replaced": [name for name in names if name in current]}
 
 
 @router.post("/devices/{device_id}/capture/{name}")

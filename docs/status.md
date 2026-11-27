@@ -64,7 +64,9 @@ Updated 2026-11-27. Milestones follow the plan's order: app first, firmware spik
 - **Playlists:** looks by name, durations, shuffle, an end look; unchanged playlists aren't
   rewritten.
 - **Custom palettes:** a gradient editor; kept by name; uploaded as `palette<i>.json` with stable
-  indexes per device, before the presets that use them.
+  indexes per device, before the presets that use them. The palette view reads WLED-made custom
+  files, shows their swatches and ownership, and imports selected ones into the library at their
+  existing ids. Pushes leave every device file outside the studio's manifest untouched.
 - **Live view** of the device, relayed by the backend: one device connection shared by all viewers.
 - **The change check:** each look and playlist shows its status on the device with the reasons in
   words (a control the look sets is gone, now sound-reactive, 1D → 2D, fewer colour slots, …); a
@@ -94,8 +96,8 @@ Updated 2026-11-27. Milestones follow the plan's order: app first, firmware spik
 ### Quality
 - **Security baseline** ([security.md](security.md)).
 - **Tests:**
-  - backend: pytest, 262 tests, 92 % coverage;
-  - frontend: Vitest, 254 tests, above 90 % of statements;
+  - backend: pytest, 277 tests, 92 % coverage;
+  - frontend: Vitest, 259 tests, above 90 % of statements;
   - browser tests (Playwright, Chromium) and a smoke test against the containers with the fake
     device;
   - the firmware profile end to end.

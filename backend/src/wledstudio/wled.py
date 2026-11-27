@@ -85,10 +85,18 @@ class WLEDClient:
 
     # --- reads ---
     async def get_json(self, path: str) -> Any:
+        body = await self.get_optional_json(path)
+        if body is None:
+            raise WLEDError(f"{self.base_url}{path}: HTTP 404")
+        return body
+
+    async def get_optional_json(self, path: str) -> Any | None:
         try:
             r = await self._http.get(path)
         except httpx.HTTPError as e:
             raise WLEDError(f"{self.base_url}{path}: {e.__class__.__name__}") from None
+        if r.status_code == 404:
+            return None
         if r.status_code != 200:
             raise WLEDError(f"{self.base_url}{path}: HTTP {r.status_code}")
         try:
@@ -107,6 +115,11 @@ class WLEDClient:
 
     async def palettes(self) -> list[str]:
         return await self.get_json("/json/pal")
+
+    async def custom_palette(self, index: int) -> Any | None:
+        if not 0 <= index < 129:
+            raise ValueError("custom palette index must be 0-128")
+        return await self.get_optional_json(f"/palette{index}.json")
 
     async def state(self) -> dict:
         return await self._retry_busy(lambda: self._http.get("/json/state"))

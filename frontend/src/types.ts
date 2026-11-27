@@ -154,3 +154,13 @@ export interface Playlist {
 export type PaletteStop = [number, string]; // [position 0-255, "rrggbb"]
 
 export interface Palette { name: string; stops: PaletteStop[] }
+
+export interface DevicePalette {
+  index: number;
+  id: number;
+  stops: PaletteStop[];
+  owned: boolean;
+  owned_name: string | null;
+  in_library: boolean;
+  library_name: string | null;
+}

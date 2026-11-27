@@ -66,6 +66,7 @@ class FakeDevice:
     busy: int = 0
     uploads: list = field(default_factory=list)
     palette_files: dict = field(default_factory=dict)
+    palette_reads: list = field(default_factory=list)
     ws_connections: int = 0
     audio_enabled: bool = False
     playlist: dict | None = None           # the last playlist sent as an object
@@ -294,6 +295,14 @@ def create_app(device: FakeDevice | None = None, clock=time.monotonic) -> FastAP
     @app.get("/presets.json")
     def presets():
         return Response(json.dumps(dev.presets, separators=(",", ":")), media_type="application/json")
+
+    @app.get("/palette{index}.json")
+    def palette_file(index: int):
+        dev.palette_reads.append(index)
+        data = dev.palette_files.get(index)
+        if data is None:
+            return Response(status_code=404)
+        return JSONResponse(data)
 
     @app.post("/upload")
     async def upload(data: UploadFile):
