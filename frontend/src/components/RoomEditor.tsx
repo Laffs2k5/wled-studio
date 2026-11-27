@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: EUPL-1.2
-import { useEffect, useRef, useState } from "react";
-import { request } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { deleted, request, type DeletedItem } from "../api";
 import { gapText, totalPixels, type Direction, type Room, type RoomEdge, type RoomZone } from "../room";
 import { drawMap, ledPositions } from "../room";
+import { RecentlyDeleted } from "./RecentlyDeleted";
 
 /** The strip's shape: edges in LED index order. Used to draw the live view and previews. Lives in
  * the device settings; `onSaved` is called after a save (not when the shape is first read). */
@@ -18,8 +19,11 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
   const [zones, setZones] = useState<RoomZone[]>([]);
   const [baseline, setBaseline] = useState("");
   const [discarding, setDiscarding] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [deletedVersion, setDeletedVersion] = useState(0);
+  const [removed, setRemoved] = useState<{ id: string | null; text: string } | null>(null);
   const preview = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
+  const load = useCallback(() => {
     request<Room | null>("GET", `/api/devices/${encodeURIComponent(deviceId)}/room`)
       .then((r) => {
         const nextEdges = r?.edges ?? [], nextZones = r?.zones ?? [];
@@ -27,8 +31,8 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
         setBaseline(JSON.stringify({ edges: nextEdges, zones: nextZones }));
       })
       .catch(() => { setEdges([]); setZones([]); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId]);
+  useEffect(load, [load]);
   const total = totalPixels({ edges });
   const dirty = baseline !== JSON.stringify({ edges, zones });
   useEffect(() => {
@@ -41,6 +45,16 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
   }, [edges, zones, total]);
   const set = (i: number, e: Partial<RoomEdge>) => setEdges(edges.map((x, j) => (j === i ? { ...x, ...e } : x)));
   const setZone = (i: number, z: Partial<RoomZone>) => setZones(zones.map((x, j) => (j === i ? { ...x, ...z } : x)));
+  const undoRemove = () => {
+    if (!removed?.id) return;
+    const id = removed.id;
+    deleted.restore(id).then(() => {
+      setRemoved({ id: null, text: "Room model restored." });
+      setDeletedVersion((n) => n + 1);
+      load();
+      onSaved(null);
+    }).catch((e) => setRemoved({ id, text: e.message }));
+  };
 
   return (
     <details className="room-editor" open={defaultOpen || undefined}>
@@ -48,6 +62,15 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
       <p className="muted small">Which LEDs are on which wall. The live view and the segment map draw it, looks can follow
         its walls, and room-aware effects take each LED's position from it.</p>
       <p className="muted small">Follow the strip from its first LED. Add one row per straight run.</p>
+      <RecentlyDeleted refresh={deletedVersion} notify={notify} onRestored={(item) => {
+        if (item.kind === "room" && item.device_id === deviceId) { load(); onSaved(null); }
+      }} />
+      {removed && (
+        <p className="action-result done" role="status">
+          {removed.text}{" "}
+          {removed.id && <button className="small" onClick={undoRemove}>Undo</button>}
+        </p>
+      )}
       {edges.length > 0 && (
         <canvas ref={preview} width={960} height={300} className="room room-preview" aria-label="Room shape preview" />
       )}
@@ -113,6 +136,33 @@ export function RoomEditor({ deviceId, ledCount, onSaved, notify, defaultOpen = 
               setEdges(old.edges); setZones(old.zones); setDiscarding(false);
             }}>Discard changes</button>
             <button onClick={() => setDiscarding(false)}>Keep editing</button>
+          </span>
+        )}
+        {!dirty && JSON.parse(baseline || '{"edges":[]}').edges.length > 0 && !removing && (
+          <button className="danger" onClick={() => setRemoving(true)}>Remove room model…</button>
+        )}
+        {removing && (
+          <span className="inline-confirm warn" role="group" aria-label="Remove the saved room model?">
+            Looks keep their saved LED ranges, but no longer follow this room model.
+            <button className="danger" onClick={async () => {
+              try {
+                await request("DELETE", `/api/devices/${encodeURIComponent(deviceId)}/room`);
+                setEdges([]); setZones([]);
+                setBaseline(JSON.stringify({ edges: [], zones: [] }));
+                setRemoved({ id: null, text: "Room model removed from the app." });
+                setDeletedVersion((n) => n + 1);
+                setRemoving(false);
+                onSaved(null);
+                deleted.list().then((rows) => {
+                  const item = rows.find((row: DeletedItem) =>
+                    row.kind === "room" && row.device_id === deviceId);
+                  if (item) setRemoved((current) => current ? { ...current, id: item.id } : current);
+                }).catch((e) => notify(e.message, true));
+              } catch (e) {
+                notify((e as Error).message, true);
+              }
+            }}>Yes, remove the room model</button>
+            <button onClick={() => setRemoving(false)}>Keep the room model</button>
           </span>
         )}
       </div>

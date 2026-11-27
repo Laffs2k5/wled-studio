@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, m
 
 from . import fxmeta, netcheck
 from .devices import Device, DeviceStore
+from .deleted import record_deleted
 from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, check_library, check_name,
                       import_presets, mic_for,
                       playlist_from_preset, resolve_look, resolve_playlist, segment_from_state, tag_areas)
@@ -1180,8 +1181,12 @@ def put_room(device_id: str, body: RoomIn, request: Request):
 
 @router.delete("/devices/{device_id}/room", status_code=204)
 def delete_room(device_id: str, request: Request):
-    device_or_404(device_id, request)
-    (request.app.state.settings.data_dir / "rooms" / f"{device_id}.json").unlink(missing_ok=True)
+    device = device_or_404(device_id, request)
+    path = request.app.state.settings.data_dir / "rooms" / f"{device_id}.json"
+    if path.exists():
+        room = json.loads(path.read_text(encoding="utf-8"))
+        record_deleted(request, "room", device_id, f"{device.name} room model", room)
+        path.unlink()
 
 
 @router.get("/devices/{device_id}/backups")

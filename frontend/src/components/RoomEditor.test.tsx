@@ -81,3 +81,78 @@ test("unsaved room edits ask before discard", async () => {
   fireEvent.click(within(screen.getByLabelText("Discard room shape changes?")).getByRole("button", { name: "Discard changes" }));
   expect(screen.getByLabelText("Wall 1 LEDs")).toHaveValue("5");
 });
+
+test("removing a room model offers Undo and refreshes the shape", async () => {
+  const calls: string[] = [];
+  const room = { edges: [{ direction: "right", pixels: 5 }] };
+  let saved = room as object | null;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    calls.push(key);
+    const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+    if (key === "GET /api/devices/desk/room") return reply(saved);
+    if (key === "DELETE /api/devices/desk/room") { saved = null; return reply(null); }
+    if (key === "GET /api/deleted") return reply(saved ? [] : [{
+      id: "a".repeat(32), kind: "room", label: "Desk room model", when: "2026-11-27T10:00:00Z",
+      device_id: "desk",
+    }]);
+    if (key.startsWith("POST /api/deleted/")) { saved = room; return reply({ kind: "room", label: "Desk room model" }); }
+    return reply(null);
+  }));
+  const onSaved = vi.fn();
+  render(<RoomEditor deviceId="desk" defaultOpen onSaved={onSaved} notify={() => {}} />);
+  await screen.findByDisplayValue("5");
+  fireEvent.click(screen.getByText("Remove room model…"));
+  fireEvent.click(screen.getByText("Yes, remove the room model"));
+  expect(await screen.findByText("Room model removed from the app.")).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
+  await waitFor(() => expect(screen.getByDisplayValue("5")).toBeInTheDocument());
+  expect(calls.some((key) => key.startsWith("POST /api/deleted/"))).toBe(true);
+  expect(onSaved).toHaveBeenCalledWith(null);
+});
+
+test("recently deleted rooms and grids can be restored", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    calls.push(key);
+    if (key === "GET /api/deleted") return new Response(JSON.stringify([
+      { id: "a".repeat(32), kind: "room", label: "Desk room model", when: "2026-11-27T10:00:00Z", device_id: "desk" },
+      { id: "b".repeat(32), kind: "grid", label: "Remote A", when: "2026-11-26T10:00:00Z", grid_id: "grid-1" },
+    ]));
+    if (key === "POST /api/deleted/" + "b".repeat(32) + "/restore") {
+      return new Response(JSON.stringify({ kind: "grid", label: "Remote A", id: "grid-2" }));
+    }
+    return new Response("null");
+  }));
+  render(<RoomEditor deviceId="desk" notify={() => {}} onSaved={() => {}} />);
+  fireEvent.click(await screen.findByText("Recently deleted (2)"));
+  expect(screen.getByText(/Room model — Desk room model/)).toBeInTheDocument();
+  expect(screen.getByText(/Slot grid — Remote A/)).toBeInTheDocument();
+  fireEvent.click(within(screen.getByText(/Slot grid — Remote A/).closest("li")!).getByRole("button", { name: "Restore" }));
+  await waitFor(() => expect(calls).toContain(`POST /api/deleted/${"b".repeat(32)}/restore`));
+});
+
+test("a room restored over a current one needs explicit replace", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? "GET"} ${url}`;
+    if (key === "GET /api/deleted") return new Response(JSON.stringify([
+      { id: "a".repeat(32), kind: "room", label: "Desk room model", when: "2026-11-27T10:00:00Z", device_id: "desk" },
+    ]));
+    if (key === "GET /api/devices/desk/room") return new Response("null");
+    if (key.startsWith("POST /api/deleted/") && init?.body === '{"replace":false}') {
+      return new Response(JSON.stringify({ detail: "This device has a room model now. Restore with replace to overwrite it." }),
+        { status: 409 });
+    }
+    if (key.startsWith("POST /api/deleted/") && init?.body === '{"replace":true}') {
+      return new Response(JSON.stringify({ kind: "room", label: "Desk room model" }));
+    }
+    return new Response("null");
+  }));
+  render(<RoomEditor deviceId="desk" notify={() => {}} onSaved={() => {}} />);
+  fireEvent.click(await screen.findByText("Recently deleted (1)"));
+  fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+  const confirm = await screen.findByRole("group", { name: "Replace the current room model with Desk room model?" });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Replace and restore" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Replace and restore" })).not.toBeInTheDocument());
+});

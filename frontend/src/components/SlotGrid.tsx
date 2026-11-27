@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: EUPL-1.2
 import { useCallback, useEffect, useState } from "react";
-import { api, slots as slotsApi, type SlotCell, type SlotGridShape, type Slots } from "../api";
+import { api, deleted, slots as slotsApi, type SlotCell, type SlotGridShape, type Slots } from "../api";
 import type { PushResult } from "../types";
 import { saveLiveSnapshot } from "../liveSnapshots";
+import { RecentlyDeleted } from "./RecentlyDeleted";
 
 const DEFAULT: SlotGridShape = { rows: 3, cols: 4, first: 101, row_step: 10, col_step: 1, name: "R{row}·{col} {name}" };
 
@@ -150,6 +151,8 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   const [restoreReady, setRestoreReady] = useState(false);
   const [fillMode, setFillMode] = useState<"move" | "also" | null>(null);
   const [pendingItem, setPendingItem] = useState<Item | null>(null);
+  const [deletedVersion, setDeletedVersion] = useState(0);
+  const [removed, setRemoved] = useState<{ id: string | null; text: string } | null>(null);
 
   const loadItems = useCallback(() => Promise.all([api.looks(), api.playlists()]).then(([l, p]) => setItems([
     ...l.map((x): Item => ({ kind: "look", name: x.name, preset_id: x.preset_id })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -212,6 +215,23 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
       notify(`Showing “${cell.name}” on ${deviceName ?? deviceId} (nothing stored on the device)`);
     } catch (e) { fail(e); }
   };
+  const undoRemove = () => {
+    if (!removed?.id) return;
+    deleted.restore(removed.id).then(() => {
+      setRemoved({ id: null, text: "Slot grid restored." });
+      setEditing(null);
+      setCreating(false);
+      setDeletedVersion((n) => n + 1);
+      onChanged?.();
+      load();
+    }).catch(fail);
+  };
+  const deletionResult = removed && (
+    <p className="action-result done" role="status">
+      {removed.text}{" "}
+      {removed.id && <button className="small" onClick={undoRemove}>Undo</button>}
+    </p>
+  );
   if (!data) return null;
   if (editing) {
     const g = editing;
@@ -222,6 +242,12 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
     return (
       <section className="slots">
         <h2>Slot grid</h2>
+        <RecentlyDeleted refresh={deletedVersion} notify={notify} onRestored={(item) => {
+          if (item.kind === "grid") {
+            setEditing(null); setCreating(false); onChanged?.(); load();
+          }
+        }} />
+        {deletionResult}
         {items.length === 0 && (
           <p className="first-run-note">Fill this once you have saved some looks.</p>
         )}
@@ -315,6 +341,12 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   return (<>
     <section className="slots">
       <h2>Slot grid</h2>
+      <RecentlyDeleted refresh={deletedVersion} notify={notify} onRestored={(item) => {
+        if (item.kind === "grid") {
+          setEditing(null); setCreating(false); onChanged?.(); load();
+        }
+      }} />
+      {deletionResult}
       <nav className="grid-tabs" aria-label="Named grids">
         {named.map((grid) => (
           <button key={grid.id} className={grid.id === data.id ? "primary" : ""}
@@ -508,7 +540,15 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
           <div className="inline-confirm warn" aria-label="Confirm removing the grid">
             <p>The looks keep their primary preset ids; only this layout and its "also use" assignments are forgotten.</p>
             <button className="danger" onClick={() => slotsApi.remove(data.id!).then(() => {
-              setConfirmRemove(false); setPicked(null); load();
+              setConfirmRemove(false); setPicked(null);
+              setRemoved({ id: null, text: "Slot grid removed from the app." });
+              setDeletedVersion((n) => n + 1);
+              onChanged?.();
+              load();
+              return deleted.list();
+            }).then((rows) => {
+              const item = rows.find((row) => row.kind === "grid" && row.grid_id === data.id);
+              if (item) setRemoved((current) => current ? { ...current, id: item.id } : current);
             }).catch(fail)}>Yes, remove the grid</button>
             <button onClick={() => setConfirmRemove(false)}>Keep the grid</button>
           </div>

@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .library import MAX_NAME_BYTES, LookError
+from .deleted import record_deleted
 
 router = APIRouter(prefix="/api/slots")
 
@@ -275,6 +276,7 @@ def delete_grid(request: Request):
     ctx, entry = _entries(request)
     state = ctx["state"]
     if entry:
+        record_deleted(request, "grid", entry["id"], entry["name"], copy.deepcopy(entry))
         state["grids"] = [g for g in state["grids"] if g["id"] != entry["id"]]
         state["current"] = state["grids"][0]["id"] if state["grids"] else None
         _save_state(request, state)
@@ -338,13 +340,67 @@ def select_grid(grid_id: str, request: Request):
 @router.delete("/grids/{grid_id}")
 def remove_named_grid(grid_id: str, request: Request):
     state, _ = _load(request)
-    if not any(g["id"] == grid_id for g in state["grids"]):
+    entry = next((g for g in state["grids"] if g["id"] == grid_id), None)
+    if entry is None:
         raise HTTPException(404, "no such grid")
+    record_deleted(request, "grid", grid_id, entry["name"], copy.deepcopy(entry))
     state["grids"] = [g for g in state["grids"] if g["id"] != grid_id]
     if state["current"] == grid_id:
         state["current"] = state["grids"][0]["id"] if state["grids"] else None
     _save_state(request, state)
     return {"current": state["current"], "grids": [g["id"] for g in state["grids"]]}
+
+
+def _grid_ids(grid: Grid) -> set[int]:
+    return {grid.id(row, col) for row in range(1, grid.rows + 1) for col in range(1, grid.cols + 1)}
+
+
+def restore_deleted_grid(request: Request, record: dict) -> dict:
+    state, _ = _load(request)
+    content = record.get("content")
+    try:
+        grid = Grid.model_validate(content["grid"])
+        assignments = content.get("assignments", {})
+        name = content["name"].strip()
+        old_id = content["id"]
+    except (AttributeError, KeyError, TypeError, ValueError) as e:
+        raise HTTPException(409, f"This deleted slot grid cannot be restored: {e}") from None
+    ids = _grid_ids(grid)
+    overlaps = []
+    for entry in state["grids"]:
+        other = Grid.model_validate(entry["grid"])
+        shared = sorted(ids & _grid_ids(other))
+        if shared:
+            overlaps.append(f"{entry['name']} ({', '.join(map(str, shared))})")
+    if overlaps:
+        raise HTTPException(
+            409, "Not restored: preset ids overlap another grid: " + "; ".join(overlaps) + ".")
+    names = {entry["name"].casefold() for entry in state["grids"]}
+    if name.casefold() in names:
+        base = name[:53]
+        suffix = " (restored)"
+        name = base + suffix
+        n = 2
+        while name.casefold() in names:
+            suffix = f" (restored {n})"
+            name = base[:64 - len(suffix)] + suffix
+            n += 1
+    used = {entry["id"] for entry in state["grids"]}
+    grid_id = old_id if old_id not in used else None
+    if grid_id is None:
+        n = 1
+        while f"grid-{n}" in used:
+            n += 1
+        grid_id = f"grid-{n}"
+    for pid in assignments:
+        if not str(pid).isdigit() or int(pid) not in ids:
+            raise HTTPException(409, f"Not restored: assignment at preset {pid} does not fit the grid.")
+    state["grids"].append({"id": grid_id, "name": name, "grid": grid.model_dump(),
+                           "assignments": assignments})
+    if state.get("current") is None:
+        state["current"] = grid_id
+    _save_state(request, state)
+    return {"kind": "grid", "label": name, "id": grid_id}
 
 
 @router.put("/{pid}")

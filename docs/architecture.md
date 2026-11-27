@@ -17,6 +17,12 @@ flowchart LR
   - `devices.json` and `secrets/<id>.pin` (mode 0600);
   - `library.json` with its earlier versions in `history/` (`library-<n>.json`, the newest 500;
     listed and restored through `/api/library/versions`);
+  - `deleted/`: the newest 50 deleted room models and slot grids, each with its original content
+    and deletion time. They are listed through `/api/deleted` and restored through
+    `/api/deleted/<id>/restore`; this is separate from library history and is not part of a studio
+    file. A room restore refuses a missing device or an existing model unless `replace` is explicit.
+    A grid restore keeps its assignments, chooses a non-colliding id, appends " (restored)" to a
+    taken name, and refuses preset ids that overlap another grid;
   - `backups/<device>/` and `state/` (the last written presets hash per device);
   - `room-maps.json`: which device's room shape each effect folder's `room_map.h` was generated
     from, and a digest of that shape, so the studio can say when it's out of date (kept here, not

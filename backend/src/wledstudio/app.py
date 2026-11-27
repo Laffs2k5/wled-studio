@@ -23,6 +23,7 @@ from .notice import router as notice_router
 from .slots import router as slots_router
 from .config import Settings
 from .devices import DeviceStore
+from .deleted import router as deleted_router
 from .library import LibraryStore
 from .push import StateStore
 from .security import SecurityMiddleware
@@ -64,6 +65,7 @@ def create_app(settings: Settings | None = None, transport_for=None, resolver=ne
     app.include_router(firmware_router)
     app.include_router(flash_router)
     app.include_router(notice_router)
+    app.include_router(deleted_router)
     app.include_router(slots_router)
     app.include_router(effects_git_router)   # before effects: its GET /{folder}/git would match /{folder}/{name}
     app.include_router(effects_router)

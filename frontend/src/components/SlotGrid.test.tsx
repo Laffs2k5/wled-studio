@@ -15,6 +15,7 @@ function stub(initial: object, sharedId = false) {
   const calls: string[] = [];
   let state = initial as { grid: object | null; cells: object[] };
   let shared = sharedId;
+  let removedGrid = false;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const key = `${init?.method ?? "GET"} ${url}`;
     calls.push(`${key} ${init?.body ?? ""}`);
@@ -23,6 +24,14 @@ function stub(initial: object, sharedId = false) {
       ? { current: "grid-1", grids: [{ ...state, id: "grid-1", name: "Remote A" }] }
       : { current: null, grids: [] });
     if (key === "GET /api/slots") return reply(state);
+    if (key === "GET /api/deleted") return reply(removedGrid ? [{
+      id: "a".repeat(32), kind: "grid", label: "Remote A", when: "2026-11-27T10:00:00Z", grid_id: "grid-1",
+    }] : []);
+    if (key.startsWith("POST /api/deleted/")) {
+      removedGrid = false;
+      state = initial as { grid: object | null; cells: object[] };
+      return reply({ kind: "grid", label: "Remote A", id: "grid-1" });
+    }
     if (key === "GET /api/looks") return reply([
       { name: "Fire", preset_id: 3 }, { name: "G1-1 Calm", preset_id: 40 },
       ...(shared ? [{ name: "Extra", preset_id: 40 }] : []),
@@ -38,8 +47,11 @@ function stub(initial: object, sharedId = false) {
     }
     if (key.startsWith("PUT /api/slots/41")) return reply({ grid: GRID, cells: cells({ 40: "G1-1 Calm", 41: "Fire" }), filled: "Fire", freed: [] });
     if (key.startsWith("DELETE /api/slots/40")) return reply({ grid: GRID, cells: cells({}), freed: ["G1-1 Calm"] });
-    if (key === "DELETE /api/slots/grid") { state = { grid: null, cells: [] }; return reply(state); }
-    if (key === "DELETE /api/slots/grids/grid-1") { state = { grid: null, cells: [] }; return reply({ current: null, grids: [] }); }
+    if (key === "DELETE /api/slots/grid") { state = { grid: null, cells: [] }; removedGrid = true; return reply(state); }
+    if (key === "DELETE /api/slots/grids/grid-1") {
+      state = { grid: null, cells: [] }; removedGrid = true;
+      return reply({ current: null, grids: [] });
+    }
     if (key === "PUT /api/looks/Extra/preset-id") { shared = false; return reply({ look: { name: "Extra" }, shared_with: [] }); }
     if (key === "POST /api/devices/desk/push") {
       const n = calls.filter((c) => c.startsWith("POST /api/devices/desk/push")).length;
@@ -218,4 +230,16 @@ test("removing the grid is explained and confirmed in grid settings", async () =
   fireEvent.click(screen.getByText("Yes, remove the grid"));
   await waitFor(() => expect(calls.some((c) => c.startsWith("DELETE /api/slots/grids/grid-1"))).toBe(true));
   expect(await screen.findByLabelText("Banks (rows)")).toBeInTheDocument();
+});
+
+test("removing a grid offers Undo for its full grid record", async () => {
+  const calls = stub({ grid: GRID, cells: cells({ 40: "G1-1 Calm" }) });
+  render(<SlotGrid notify={() => {}} />);
+  await screen.findByLabelText("Slot grid");
+  fireEvent.click(screen.getByText("Grid settings"));
+  fireEvent.click(screen.getByText("Remove the grid"));
+  fireEvent.click(screen.getByText("Yes, remove the grid"));
+  expect(await screen.findByText("Slot grid removed from the app.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  await waitFor(() => expect(calls.some((call) => call.startsWith("POST /api/deleted/"))).toBe(true));
 });

@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spikes alongside.
+Updated 2026-11-27. Milestones follow the plan's order: app first, firmware spikes alongside.
 
 ## Done
 
@@ -12,7 +12,9 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
   look offers a direct hand-off to Presets on device.
 - **Library:** looks, playlists and palettes in one shared folder tree; inline organisation, drag/drop
   into folders/playlists, library editor, the studio file (export/import of the library, grids, protected
-  ids, rooms and sets), earlier library versions to restore, and cross-device comparison.
+  ids, rooms and sets), earlier library versions to restore, and cross-device comparison. Deleting
+  a room model or named slot grid keeps the last 50 separately under "Recently deleted", with an
+  inline Undo after deletion and conflict checks on restore.
 - **Presets on device:** one write owner for the device set, named remote grids and their "also use"
   references, bank trials, drift/duplicate handling, device-only preset deletion and verified backup
   restore (refused for protected ids unless ticked, for the boot preset and for presets a playlist
@@ -87,8 +89,8 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
 ### Quality
 - **Security baseline** ([security.md](security.md)).
 - **Tests:**
-  - backend: pytest, 233 tests, 91 % coverage;
-  - frontend: Vitest, 245 tests, above 90 % of statements;
+  - backend: pytest, 262 tests, 92 % coverage;
+  - frontend: Vitest, 254 tests, above 90 % of statements;
   - browser tests (Playwright, Chromium) and a smoke test against the containers with the fake
     device;
   - the firmware profile end to end.

@@ -216,6 +216,28 @@ export interface ArchiveImport {
 /** One earlier version of the library: what it held before a save. */
 export interface LibraryVersion { name: string; saved: string; looks: number; playlists: number; palettes: number }
 
+export interface DeletedItem {
+  id: string;
+  kind: "room" | "grid";
+  label: string;
+  when: string;
+  device_id?: string;
+  grid_id?: string;
+}
+
+export interface RestoredItem {
+  kind: "room" | "grid";
+  label: string;
+  device_id?: string;
+  id?: string;
+}
+
+export const deleted = {
+  list: () => request<DeletedItem[]>("GET", "/api/deleted"),
+  restore: (id: string, replace = false) =>
+    request<RestoredItem>("POST", `/api/deleted/${encodeURIComponent(id)}/restore`, { replace }),
+};
+
 export interface PresetsOnDevice {
   name: string;
   sha256: string;
