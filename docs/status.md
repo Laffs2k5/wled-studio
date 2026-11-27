@@ -14,7 +14,8 @@ Updated 2026-11-26. Milestones follow the plan's order: app first, firmware spik
   into folders/playlists, library editor, portable JSON export/import and cross-device comparison.
 - **Presets on device:** one write owner for the device set, named remote grids and their "also use"
   references, bank trials, drift/duplicate handling, device-only preset deletion and verified backup
-  restore, protected remote/automation preset-ID warnings, and a print-ready visual remote layout.
+  restore (refused for protected ids unless ticked, for the boot preset and for presets a playlist
+  plays; a slot grid's ids are protected by themselves), and a print-ready visual remote layout.
 - **Effect code:** ordered Edit → Compile → Preview/stream → Git, two-column on desktop and stacked on
   phones. Preview sound can be simulated, fixed, or sampled from the opt-in browser microphone.
   Compiler errors are marked in CodeMirror; compile-after-save is remembered and opt-in.

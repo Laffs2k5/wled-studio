@@ -145,9 +145,9 @@ export const firmware = {
     request<PresetBackup>("GET", `/api/devices/${encodeURIComponent(device)}/backups/${encodeURIComponent(name)}`),
   presetsOnDevice: (device: string) =>
     request<PresetsOnDevice>("GET", `/api/devices/${encodeURIComponent(device)}/presets-on-device`),
-  deletePresets: (device: string, body: { confirm: string; inspected_sha256: string; preset_ids: number[] }) =>
+  deletePresets: (device: string, body: { confirm: string; inspected_sha256: string; preset_ids: number[]; override_protected?: number[] }) =>
     request<{ deleted: number[]; backup: string }>("POST", `/api/devices/${encodeURIComponent(device)}/presets/delete`, body),
-  restorePresets: (device: string, body: { confirm: string; inspected_sha256: string; backup: string }) =>
+  restorePresets: (device: string, body: { confirm: string; inspected_sha256: string; backup: string; override_protected?: number[] }) =>
     request<{ restored: string; backup: string }>("POST", `/api/devices/${encodeURIComponent(device)}/presets/restore`, body),
 };
 
@@ -208,13 +208,16 @@ export interface FlashNotice { version: string; title: string; text: string; rem
 export interface PresetsOnDevice {
   name: string;
   sha256: string;
-  presets: { id: number; name: string; library: boolean; on_device_set: boolean; protected_by?: string[] }[];
+  /** sha: a short content hash, to compare with a backup; boot: shown at power-on;
+   *  in_playlists: the device's playlists that play it; protected_by: remotes, automations, grids. */
+  presets: { id: number; name: string; library: boolean; on_device_set: boolean; protected_by?: string[];
+    sha?: string; boot?: boolean; in_playlists?: number[] }[];
 }
 export interface PresetBackup {
   name: string;
   bytes: number;
   sha256: string;
-  presets: { id: number; name: string }[];
+  presets: { id: number; name: string; sha?: string }[];
 }
 
 /** A flash or revert as it runs. */

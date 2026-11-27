@@ -17,7 +17,8 @@ from .library import (DeviceLists, LibraryStore, LookError, accept_snapshot, che
                       import_presets, mic_for,
                       playlist_from_preset, resolve_look, resolve_playlist, segment_from_state, tag_areas)
 from .push import DuplicatePresetIds, StateStore, fetch_lists, push
-from .preset_admin import backup_details, inspect_device, mutate_presets, preset_summary, PresetChanged, PresetVerification
+from .preset_admin import (backup_details, changed_ids, inspect_device, mutate_presets, playlists_using,
+                           preset_summary, PresetChanged, PresetRefused, PresetVerification)
 from .session import SEG_RESTORE, Sessions, restore_payload
 from .wled import WLEDClient, WLEDError, WLEDLocked, WLEDStateChanged
 
@@ -215,6 +216,9 @@ class PresetMutationIn(Strict):
     inspected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     preset_ids: list[Annotated[int, Field(ge=1, le=250)]] = Field(default_factory=list, max_length=250)
     backup: str | None = Field(default=None, max_length=100, pattern=r"^[^/\\]+-presets\.json$")
+    # protected ids (remotes, automations, slot grids) this change may delete or overwrite: each
+    # must be named here, or the change is refused
+    override_protected: list[Annotated[int, Field(ge=1, le=250)]] = Field(default_factory=list, max_length=250)
 
 
 class TrialRestoreIn(Strict):
@@ -1288,12 +1292,38 @@ def backup(device_id: str, name: str, request: Request):
         raise HTTPException(404, "no such backup") from None
 
 
+def protected_labels(request: Request) -> dict[int, list[str]]:
+    """Preset ids something outside the library depends on: the user's list (remotes, home
+    automation) and every slot grid's ids (a remote's banks)."""
+    labels = {pid: list(names) for pid, names in request.app.state.protected_presets.labels().items()}
+    from .slots import _load as load_slots, Grid
+    try:
+        state, _ = load_slots(request)
+    except (ValueError, json.JSONDecodeError):
+        state = {"grids": []}
+    for entry in state.get("grids", []):
+        g = Grid(**entry["grid"])
+        for r in range(1, g.rows + 1):
+            for c in range(1, g.cols + 1):
+                labels.setdefault(g.id(r, c), []).append(f"slot grid {entry.get('name') or entry['id']}")
+    return labels
+
+
+def refuse_protected(touched: list[int], override: list[int], labels: dict[int, list[str]], verb: str) -> None:
+    hit = [pid for pid in touched if labels.get(pid) and pid not in override]
+    if hit:
+        parts = "; ".join(f"preset {pid} ({', '.join(labels[pid])})" for pid in hit)
+        raise PresetRefused(f"Not {verb}: protected presets would change: {parts}. "
+                            "Tick them as intended, or leave them out.")
+
+
 @router.get("/devices/{device_id}/presets-on-device")
 async def presets_on_device(device_id: str, request: Request):
     dev = device_or_404(device_id, request)
     async with make_client(request, dev) as client:
         try:
             text, presets = await inspect_device(client)
+            boot = int(((await client.cfg_file()).get("def") or {}).get("ps") or 0)
         except (WLEDError, json.JSONDecodeError) as e:
             raise device_errors(e) from None
     lib = request.app.state.library.load()
@@ -1302,56 +1332,93 @@ async def presets_on_device(device_id: str, request: Request):
     assigned_looks, assigned_playlists, _ = request.app.state.library.for_device(device_id)
     assigned_ids = {item.get("preset_id") for item in assigned_looks + assigned_playlists
                     if item.get("preset_id") is not None}
+    labels = protected_labels(request)
     rows = preset_summary(presets)
+    used_by = playlists_using(presets, {row["id"] for row in rows})
     for row in rows:
         row["library"] = row["id"] in all_named_ids
         row["on_device_set"] = row["id"] in assigned_ids
-        row["protected_by"] = request.app.state.protected_presets.labels().get(row["id"], [])
+        row["protected_by"] = labels.get(row["id"], [])
+        row["boot"] = row["id"] == boot
+        row["in_playlists"] = sorted(pl for pl, ids in used_by.items() if row["id"] in ids)
     return {"name": dev.name, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "presets": rows}
 
 
 @router.post("/devices/{device_id}/presets/delete")
 async def delete_presets(device_id: str, body: PresetMutationIn, request: Request):
+    """Delete presets from the device, never the library. Refused when an id isn't there, when it
+    is protected and not named in override_protected, when it is the boot preset, or when a
+    playlist that stays would still play it."""
     destructive_auth(request)
     dev = device_or_404(device_id, request)
     if body.confirm != dev.name:
         raise HTTPException(400, "The device name did not match.")
     if not body.preset_ids or body.backup is not None:
         raise HTTPException(422, "Choose preset ids and do not supply a backup.")
+    ids = sorted(set(body.preset_ids))
+    labels = protected_labels(request)
     try:
         async with make_client(request, dev) as client:
-            _, current = await inspect_device(client)
-            expected = json.loads(json.dumps(current))
-            for preset_id in body.preset_ids:
-                expected.pop(str(preset_id), None)
+            boot = int(((await client.cfg_file()).get("def") or {}).get("ps") or 0)
+
+            def plan(current: dict) -> dict:
+                missing = [pid for pid in ids if str(pid) not in current]
+                if missing:
+                    raise PresetRefused(f"Not deleted: no preset {', '.join(map(str, missing))} on {dev.name}.")
+                refuse_protected(ids, body.override_protected, labels, "deleted")
+                if boot in ids:
+                    raise PresetRefused(f"Not deleted: preset {boot} is what {dev.name} shows at power-on. "
+                                        "Choose another boot preset in WLED first.")
+                broken = playlists_using(current, set(ids), leaving=set(ids))
+                if broken:
+                    parts = "; ".join(f"playlist {pl} plays {', '.join(map(str, hit))}" for pl, hit in broken.items())
+                    raise PresetRefused(f"Not deleted: {parts}. Delete the playlist too, or change it first.")
+                for pid in ids:
+                    current.pop(str(pid))
+                return current
+
             backup = await mutate_presets(client, request.app.state.statestore, dev.id,
-                                          body.inspected_sha256, expected)
+                                          body.inspected_sha256, plan)
     except PresetChanged as e:
+        raise HTTPException(409, str(e)) from None
+    except PresetRefused as e:
         raise HTTPException(409, str(e)) from None
     except PresetVerification as e:
         raise HTTPException(502, str(e)) from None
     except WLEDError as e:
         raise device_errors(e) from None
-    return {"deleted": body.preset_ids, "backup": backup}
+    return {"deleted": ids, "backup": backup}
 
 
 @router.post("/devices/{device_id}/presets/restore")
 async def restore_presets(device_id: str, body: PresetMutationIn, request: Request):
+    """Replace the device's presets.json with one of its backups. Every protected id the restore
+    would add, remove or change must be named in override_protected."""
     destructive_auth(request)
     dev = device_or_404(device_id, request)
     if body.confirm != dev.name:
         raise HTTPException(400, "The device name did not match.")
     if body.backup is None or body.preset_ids:
         raise HTTPException(422, "Choose exactly one backup and no preset ids.")
+    labels = protected_labels(request)
     try:
         path = request.app.state.statestore.backup_path(device_id, body.backup)
-        expected = json.loads(path.read_text(encoding="utf-8"))
+        restored = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(restored, dict):
+            raise json.JSONDecodeError("not an object", "", 0)
+
+        def plan(current: dict) -> dict:
+            refuse_protected(changed_ids(current, restored), body.override_protected, labels, "restored")
+            return restored
+
         async with make_client(request, dev) as client:
             backup = await mutate_presets(client, request.app.state.statestore, dev.id,
-                                          body.inspected_sha256, expected)
+                                          body.inspected_sha256, plan)
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         raise HTTPException(404, "no such backup") from None
     except PresetChanged as e:
+        raise HTTPException(409, str(e)) from None
+    except PresetRefused as e:
         raise HTTPException(409, str(e)) from None
     except PresetVerification as e:
         raise HTTPException(502, str(e)) from None
