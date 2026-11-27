@@ -10,7 +10,8 @@ on:
   push:
     branches: [main]
     paths: ["compose.yaml", "proxy/**", "scripts/firmware-e2e.sh", ".github/workflows/firmware-e2e.yml",
-            "backend/src/wledstudio/firmware.py"]
+            "backend/src/wledstudio/firmware.py", "backend/src/wledstudio/flash.py",
+            "backend/src/wledstudio/notice.py", "backend/src/wledstudio/wled.py"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
