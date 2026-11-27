@@ -117,7 +117,7 @@ def test_named_grids_migrate_once_and_keep_assignments_independent(client):
     p = client.app.state.settings.data_dir / "slots.json"
     p.write_text(json.dumps({"grid": GRID, "assignments": {}}), encoding="utf-8")
     old = client.get("/api/slots/grids").json()
-    assert old["current"] == "grid-1" and old["grids"][0]["name"] == "Remote A"
+    assert old["current"] == "grid-1" and old["grids"][0]["name"] == "Slot grid"
     created = client.post("/api/slots/grids", json={
         "name": "Remote B", "grid": {**GRID, "first": 101},
     }, headers=CSRF).json()

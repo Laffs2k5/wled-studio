@@ -141,7 +141,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
   const [picked, setPicked] = useState<SlotCell | null>(null);
   const [over, setOver] = useState<number | null>(null);   // the slot a look is dragged over
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [gridName, setGridName] = useState("Remote A");
+  const [gridName, setGridName] = useState("Slot grid");
   const [creating, setCreating] = useState(false);
   const [trialRow, setTrialRow] = useState<number | null>(null);
   const [trialAt, setTrialAt] = useState(0);
@@ -502,7 +502,7 @@ export function SlotGrid({ notify, deviceId = null, deviceName, onOpenLook, plan
       <details className="grid-settings">
         <summary>Grid settings</summary>
         <p className="muted small">This named grid is independent; preset ids remain global on the device.</p>
-        <button onClick={() => { setGridName(data.name ?? "Remote A"); setEditing(g); setCreating(false); }}>Change the grid</button>
+        <button onClick={() => { setGridName(data.name ?? "Slot grid"); setEditing(g); setCreating(false); }}>Change the grid</button>
         {confirmRemove ? (
           <div className="inline-confirm warn" aria-label="Confirm removing the grid">
             <p>The looks keep their primary preset ids; only this layout and its "also use" assignments are forgotten.</p>

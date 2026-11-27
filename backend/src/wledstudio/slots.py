@@ -25,6 +25,10 @@ from .library import MAX_NAME_BYTES, LookError
 
 router = APIRouter(prefix="/api/slots")
 
+# A grid made without a name (the single-grid routes, or an old slots.json migrated). Neutral on
+# purpose: the app can't know which remote a grid is for; rename it in the Slot grid view.
+DEFAULT_GRID_NAME = "Slot grid"
+
 
 class Grid(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -125,7 +129,7 @@ def _load(request: Request) -> tuple[dict, bool]:
         return {"version": 2, "current": None, "grids": []}, True
     return {
         "version": 2, "current": "grid-1",
-        "grids": [{"id": "grid-1", "name": "Remote A", "grid": old["grid"],
+        "grids": [{"id": "grid-1", "name": DEFAULT_GRID_NAME, "grid": old["grid"],
                    "assignments": old.get("assignments", {})}],
     }, True
 
@@ -169,7 +173,7 @@ def _save_current(request: Request, grid: Grid, assignments: dict | None = None)
         n = 1
         while f"grid-{n}" in used:
             n += 1
-        entry = {"id": f"grid-{n}", "name": "Remote A", "grid": grid.model_dump(), "assignments": {}}
+        entry = {"id": f"grid-{n}", "name": DEFAULT_GRID_NAME, "grid": grid.model_dump(), "assignments": {}}
         state["grids"].append(entry)
         state["current"] = entry["id"]
     current = entry["assignments"] if assignments is None else assignments
