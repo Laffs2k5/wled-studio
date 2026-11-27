@@ -17,13 +17,17 @@ current lists, and the snapshot is compared with the device's metadata:
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
+import re
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import fxmeta
+
+HISTORY_NAME = re.compile(r"^library-(\d{5,})\.json$")
 
 SEG_SLIDERS = ("sx", "ix", "c1", "c2", "c3")
 SEG_CHECKS = ("o1", "o2", "o3")
@@ -616,15 +620,57 @@ class LibraryStore:
         lib.setdefault("sets", {})
         return lib
 
+    HISTORY_KEEP = 500   # earlier versions kept; older ones are removed (the app's data backup has them)
+
+    def _versions(self) -> list[Path]:
+        """The history files, oldest first, by their number (library-<n>.json)."""
+        if not self.history.exists():
+            return []
+        files = [p for p in self.history.glob("library-*.json") if HISTORY_NAME.match(p.name)]
+        return sorted(files, key=lambda p: int(HISTORY_NAME.match(p.name).group(1)))
+
     def save(self, lib: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists():
             self.history.mkdir(exist_ok=True)
-            n = len(list(self.history.glob("library-*.json")))
+            versions = self._versions()
+            # numbered after the newest, not by count: a count repeats once old versions are removed
+            n = int(HISTORY_NAME.match(versions[-1].name).group(1)) + 1 if versions else 0
             (self.history / f"library-{n:05d}.json").write_bytes(self.path.read_bytes())
+            for old in versions[: max(0, len(versions) + 1 - self.HISTORY_KEEP)]:
+                old.unlink(missing_ok=True)
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(lib, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         os.replace(tmp, self.path)
+
+    def versions(self, limit: int = 100) -> list[dict]:
+        """The library's earlier versions, newest first: what it held before each save."""
+        out = []
+        for p in reversed(self._versions()[-limit:]):
+            try:
+                old = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            saved = dt.datetime.fromtimestamp(p.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
+            out.append({"name": p.name, "saved": saved,
+                        **{k: len(old.get(k, {})) for k in ("looks", "playlists", "palettes")}})
+        return out
+
+    def restore_version(self, name: str) -> dict:
+        """Make an earlier version the library again. The current library becomes a version
+        itself first (save does that), so a restore can be undone the same way."""
+        if not HISTORY_NAME.match(name):
+            raise KeyError(name)
+        p = self.history / name
+        if not p.exists():
+            raise KeyError(name)
+        old = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(old, dict) or not isinstance(old.get("looks"), dict):
+            raise LookError(f"{name} isn't a library")
+        for k in ("playlists", "palettes", "sets"):
+            old.setdefault(k, {})
+        self.save(old)
+        return {k: len(old[k]) for k in ("looks", "playlists", "palettes")}
 
     def rename_look(self, old: str, new: str) -> dict:
         """Rename a look, and every playlist's reference to it, in one save."""

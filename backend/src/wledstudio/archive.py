@@ -267,3 +267,26 @@ async def import_library(request: Request, mode: Literal["keep", "replace"] = "k
         (d / f"{device_id}.json").write_text(json.dumps(room, indent=1) + "\n")
     return result
 
+
+# --- the library's earlier versions -------------------------------------------------
+
+class VersionRestoreIn(Strict):
+    confirm: Literal["restore"]
+
+
+@router.get("/library/versions")
+def library_versions(request: Request):
+    """What the library held before each of its last saves, newest first (at most 100)."""
+    return request.app.state.library.versions()
+
+
+@router.post("/library/versions/{name}/restore")
+def restore_library_version(name: str, body: VersionRestoreIn, request: Request):
+    """The library as it was then. Grids, protected ids and rooms aren't part of the library and
+    stay as they are; a grid reference to an item the old library lacks shows as missing."""
+    try:
+        return request.app.state.library.restore_version(name)
+    except KeyError:
+        raise HTTPException(404, "no such version") from None
+    except (LookError, ValueError) as e:
+        raise HTTPException(422, str(e)) from None

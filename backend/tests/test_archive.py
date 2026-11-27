@@ -149,3 +149,27 @@ def test_device_sections_apply_only_to_devices_with_that_name(tmp_path):
     assert r["unmatched_devices"] == ["Other strip"] and r["rooms"] == []
     assert b.get(f"/api/devices/{b_dev}/room").json() is None
 
+
+def test_an_earlier_library_comes_back_and_the_restore_can_be_undone(client):
+    client.put("/api/looks/Calm", json={"name": "Calm", "bri": 10, "segments": []}, headers=CSRF)
+    client.put("/api/looks/Calm", json={"name": "Calm", "bri": 99, "segments": []}, headers=CSRF)
+    versions = client.get("/api/library/versions").json()
+    assert [v["looks"] for v in versions] == [1]   # before the 2nd save (the 1st had nothing before it)
+    assert client.post(f"/api/library/versions/{versions[0]['name']}/restore", json={}, headers=CSRF).status_code == 422
+    r = client.post(f"/api/library/versions/{versions[0]['name']}/restore", json={"confirm": "restore"}, headers=CSRF)
+    assert r.status_code == 200 and client.app.state.library.looks()["Calm"]["bri"] == 10
+    newest = client.get("/api/library/versions").json()[0]    # the library before the restore
+    client.post(f"/api/library/versions/{newest['name']}/restore", json={"confirm": "restore"}, headers=CSRF)
+    assert client.app.state.library.looks()["Calm"]["bri"] == 99
+    for bad in ("../library.json", "library-1.json", "library-99999.json"):
+        assert client.post(f"/api/library/versions/{bad}/restore", json={"confirm": "restore"},
+                           headers=CSRF).status_code == 404
+
+
+def test_the_history_keeps_the_newest_versions_and_numbers_on(client, monkeypatch):
+    from wledstudio.library import LibraryStore
+    monkeypatch.setattr(LibraryStore, "HISTORY_KEEP", 3)
+    for i in range(6):
+        client.put("/api/looks/Calm", json={"name": "Calm", "bri": i, "segments": []}, headers=CSRF)
+    names = sorted(p.name for p in client.app.state.library.history.glob("library-*.json"))
+    assert names == ["library-00002.json", "library-00003.json", "library-00004.json"]
