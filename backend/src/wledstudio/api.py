@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
-from . import fxmeta, netcheck
+from . import fxmeta, hooks, netcheck
 from .cfg_admin import (ConfigBackups, ConfigChanged, ConfigRefused, ConfigVerification,
                         inspect_restore as inspect_config_restore, restore as restore_config)
 from .devices import Device, DeviceStore
@@ -51,6 +51,10 @@ class DeviceEditIn(Strict):
 
 class PinIn(Strict):
     pin: SecretStr | None = Field(default=None, max_length=16)
+
+
+class HookIn(Strict):
+    url: SecretStr | None = Field(default=None, max_length=500)
 
 
 class SegmentState(Strict):
@@ -333,7 +337,7 @@ def health():
 
 def device_view(ds: DeviceStore, d: Device) -> dict:
     view = {"id": d.id, "name": d.name, "host": d.host, "has_pin": ds.pin(d.id) is not None,
-            "virtual": d.virtual}
+            "has_editing_hook": ds.hook(d.id) is not None, "virtual": d.virtual}
     if d.twin_id is not None:
         view["twin_id"] = d.twin_id
     return view
@@ -464,6 +468,28 @@ def set_pin(device_id: str, body: PinIn, request: Request):
     request.app.state.devices.set_pin(device_id, body.pin.get_secret_value() if body.pin else None)
 
 
+@router.put("/devices/{device_id}/editing-hook", status_code=204)
+def set_editing_hook(device_id: str, body: HookIn, request: Request):
+    """Set (or with no url, remove) the URL told when editing starts and ends (hooks.py)."""
+    device_or_404(device_id, request)
+    url = None
+    if body.url is not None:
+        try:
+            url = hooks.check_url(body.url.get_secret_value(), request.app.state.settings.allow_public_devices,
+                                  request.app.state.resolver)
+        except hooks.HookError as e:
+            raise HTTPException(422, str(e)) from None
+    request.app.state.devices.set_hook(device_id, url)
+
+
+async def tell_hook(request: Request, dev: Device, editing: bool) -> str | None:
+    """Tell the device's editing hook, if it has one: "ok", why not, or None without a hook."""
+    url = request.app.state.devices.hook(dev.id)
+    if url is None:
+        return None
+    return await hooks.notify(url, editing, dev.id, dev.name, request.app.state.hook_transport)
+
+
 @router.get("/devices/{device_id}/profile")
 async def profile(device_id: str, request: Request):
     dev = device_or_404(device_id, request)
@@ -591,12 +617,19 @@ async def start_session(device_id: str, request: Request):
     sessions: Sessions = request.app.state.sessions
     if sessions.get(dev.id) is not None:
         raise HTTPException(409, "an editing session is already running on this device")
+    # the hook first, so whatever it holds off has stopped writing before the snapshot
+    hook = await tell_hook(request, dev, True)
     async with make_client(request, dev) as c:
         try:
             snapshot = await c.state()
         except WLEDError as e:
+            if hook == "ok":
+                await tell_hook(request, dev, False)   # no session after all
             raise device_errors(e) from None
-    return session_info(sessions.start(dev.id, snapshot))
+    info = session_info(sessions.start(dev.id, snapshot))
+    if hook is not None:
+        info["hook"] = hook
+    return info
 
 
 @router.delete("/devices/{device_id}/session")
@@ -614,7 +647,11 @@ async def end_session(device_id: str, request: Request, restore: bool = True):
             except WLEDError as e:
                 raise device_errors(e) from None  # the session stays, so it can be tried again
     sessions.end(dev.id)
-    return {"restored": restore}
+    out: dict = {"restored": restore}
+    hook = await tell_hook(request, dev, False)
+    if hook is not None:
+        out["hook"] = hook
+    return out
 
 
 @router.get("/devices/{device_id}/presets")

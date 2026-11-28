@@ -5,7 +5,7 @@ import type { Device } from "../types";
 import { normaliseHost } from "./AddDevice";
 import { RoomEditor } from "./RoomEditor";
 
-type Where = "address" | "pin" | "twin" | "remove";
+type Where = "address" | "pin" | "hook" | "twin" | "remove";
 
 interface Props {
   device: Device;
@@ -29,6 +29,7 @@ export function DeviceSettings({ device, devices = [], focus = null, onClose, on
   const [name, setName] = useState(device.name);
   const [host, setHost] = useState(device.host);
   const [pin, setPin] = useState("");
+  const [hook, setHook] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [twinId, setTwinId] = useState(device.twin_id ?? "");
@@ -137,6 +138,39 @@ export function DeviceSettings({ device, devices = [], focus = null, onClose, on
           )}
         </form>
         {outcome("pin")}
+      </div>
+
+      <div className="settings-group" role="group" aria-labelledby={`${id}-hook-h`}>
+        <h3 id={`${id}-hook-h`}>Editing hook</h3>
+        <p className="muted small" id={`${id}-hook-hint`}>
+          A URL the app tells when editing starts and ends (a POST with <code>{"{\"editing\": true}"}</code> or{" "}
+          <code>false</code>), so other software that drives this device, such as a home automation webhook, can
+          hold off meanwhile. It is kept like the PIN and never shown again.{" "}
+          {device.has_editing_hook ? "A hook is set." : "No hook is set."}
+        </p>
+        <form className="row" onSubmit={(e) => {
+          e.preventDefault();
+          run("hook", async () => {
+            await api.setEditingHook(device.id, hook.trim());
+            setHook("");
+            onChanged();
+            return "Editing hook saved.";
+          });
+        }}>
+          <label className="sr-only" htmlFor={`${id}-hook`}>{device.has_editing_hook ? "New hook URL" : "Hook URL"}</label>
+          <input id={`${id}-hook`} type="password" value={hook} autoComplete="off" maxLength={500} spellCheck={false}
+            placeholder={device.has_editing_hook ? "New hook URL" : "http://…"} aria-describedby={`${id}-hook-hint`}
+            onChange={(e) => setHook(e.target.value)} />
+          <button className="primary" disabled={busy || !hook.trim()}>Save hook</button>
+          {device.has_editing_hook && (
+            <button type="button" disabled={busy} onClick={() => run("hook", async () => {
+              await api.setEditingHook(device.id, null);
+              onChanged();
+              return "Editing hook removed.";
+            })}>Remove hook</button>
+          )}
+        </form>
+        {outcome("hook")}
       </div>
 
       {!device.virtual && (

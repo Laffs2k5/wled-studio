@@ -62,6 +62,7 @@ export function SessionBar({ deviceId, notify, beforeAction, onRestored, effects
         <button disabled={busy} onClick={() => run(async () => {
           const s = await api.startSession(deviceId);
           setSession(s);
+          if (s.hook && s.hook !== "ok") notify(`Editing hook not told: ${s.hook}`, true);
         })}>
           Remember what the strip shows now
         </button>
@@ -79,18 +80,20 @@ export function SessionBar({ deviceId, notify, beforeAction, onRestored, effects
       </span>
       <button disabled={busy} onClick={() => run(async () => {
         await beforeAction?.();
-        await api.endSession(deviceId, true);
+        const r = await api.endSession(deviceId, true);
         setSession(null);
         notify("The strip is back as it was");
+        if (r.hook && r.hook !== "ok") notify(`Editing hook not told: ${r.hook}`, true);
         onRestored();
       })}>
         Put the strip back as it was
       </button>
       <button disabled={busy} onClick={() => run(async () => {
         await beforeAction?.();
-        await api.endSession(deviceId, false);
+        const r = await api.endSession(deviceId, false);
         setSession(null);
         notify("The strip keeps what it shows now");
+        if (r.hook && r.hook !== "ok") notify(`Editing hook not told: ${r.hook}`, true);
       })}>
         Keep what it shows now
       </button>

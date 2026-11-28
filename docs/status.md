@@ -79,6 +79,9 @@ Updated 2026-11-27. Milestones follow the plan's order: app first, firmware spik
   shows now" ends the session without touching the device. Saving looks is not affected.
 
 ### Effect code and firmware
+- **The editing hook** (per device): the app POSTs `{"editing": true|false}` to a URL when a session
+  starts and ends, and `false` after a restart, so a home automation can hold off while someone
+  edits. The URL is kept like a PIN and gets the SSRF check.
 - **Effect code:** sound for sound effects in the preview (WLED's simulated beat with its four
   styles, or a fixed sound level, through the builder's `preview_audio`); a code editor for `./effects` (CodeMirror 6: C++ and JSON highlighting, folding, bracket matching, search and replace, multiple cursors, Tab indents, indent guides, a light or dark theme following the system); new effects from a template with a fixed effect
   id; compiled unchanged to WebAssembly through the builder's job service and animated in the

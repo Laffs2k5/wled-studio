@@ -42,6 +42,11 @@ device; none of it is sent to the device:
   adding);
 - **Settings PIN** (WLED → Security): needed to write presets, palettes and firmware, and never
   shown again. **Save PIN** stores a new one; **Remove PIN** is a button of its own;
+- **Editing hook**: a URL the app POSTs `{"editing": true}` to when you start trying things
+  ("Remember what the strip shows now") and `{"editing": false}` when that ends, with the device's
+  name and id, so other software that drives the device (a home automation webhook) can hold off
+  meanwhile. After a restart the app sends `false` to every hook, since no session survives it. A
+  hook that fails never blocks editing; the app says so. Kept like the PIN, never shown again;
 - **Room shape** (section 4);
 - **Remove device…**: asks first and says what goes: the app's records of the device (its address,
   PIN, room shape, which looks go on it, and the record of what the app last wrote and flashed).

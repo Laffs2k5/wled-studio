@@ -4,6 +4,8 @@ export interface Device {
   name: string;
   host: string;
   has_pin: boolean;
+  /** An editing hook is set: a URL the app tells when editing starts and ends (never shown). */
+  has_editing_hook?: boolean;
   /** A virtual WLED (no LEDs, can't be flashed), as the device said when the app last read it. */
   virtual?: boolean;
   /** The virtual firmware twin this real device is linked to for offline work. */
@@ -115,6 +117,8 @@ export interface EditingSession {
   started: number | null;
   /** What the strip showed when the session started: the preset or playlist it played, its effects. */
   showed?: { preset: number | null; playlist: number | null; fx: number[] } | null;
+  /** The editing hook's answer when the session started: "ok" or why not (absent without a hook). */
+  hook?: string;
 }
 
 /** A look's or playlist's change-check status on one device (GET /api/devices/<id>/check). */

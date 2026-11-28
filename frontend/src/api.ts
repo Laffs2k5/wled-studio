@@ -360,6 +360,8 @@ export const api = {
     request<Device>("PATCH", `/api/devices/${enc(id)}`, body),
   removeDevice: (id: string) => request<null>("DELETE", `/api/devices/${enc(id)}`),
   setPin: (id: string, pin: string | null) => request<null>("PUT", `/api/devices/${enc(id)}/pin`, { pin }),
+  setEditingHook: (id: string, url: string | null) =>
+    request<null>("PUT", `/api/devices/${enc(id)}/editing-hook`, { url }),
   configBackups: (id: string) =>
     request<ConfigBackup[]>("GET", `/api/devices/${enc(id)}/cfg/backups`),
   backupConfig: (id: string) =>
@@ -431,7 +433,7 @@ export const api = {
   session: (id: string) => request<EditingSession>("GET", `/api/devices/${enc(id)}/session`),
   startSession: (id: string) => request<EditingSession>("POST", `/api/devices/${enc(id)}/session`),
   endSession: (id: string, restore: boolean) =>
-    request<{ restored: boolean }>("DELETE", `/api/devices/${enc(id)}/session?restore=${restore}`),
+    request<{ restored: boolean; hook?: string }>("DELETE", `/api/devices/${enc(id)}/session?restore=${restore}`),
   startBankTrial: (id: string) => request<{ active: boolean; current_sha256: string }>(
     "POST", `/api/devices/${enc(id)}/bank-trial`),
   bankTrial: (id: string) => request<{ active: boolean; current_sha256: string | null }>(

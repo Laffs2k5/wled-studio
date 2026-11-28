@@ -115,6 +115,7 @@ class DeviceStore:
                 dev.twin_id = None
         self._save(devices)
         self.set_pin(device_id, None)
+        self.set_hook(device_id, None)
         return True
 
     # PINs: never returned by the API, only whether one is set
@@ -135,4 +136,21 @@ class DeviceStore:
         if env:
             return env
         p = self._pin_path(device_id)
+        return p.read_text(encoding="utf-8").strip() if p.exists() else None
+
+    # The editing hook's URL (hooks.py): it may carry a secret, so it's kept like a PIN
+    def _hook_path(self, device_id: str) -> Path:
+        if not ID_RE.match(device_id):
+            raise ValueError("bad device id")
+        return self.secrets / f"{device_id}.hook"
+
+    def set_hook(self, device_id: str, url: str | None) -> None:
+        p = self._hook_path(device_id)
+        if url is None:
+            p.unlink(missing_ok=True)
+        else:
+            _write_private(p, url)
+
+    def hook(self, device_id: str) -> str | None:
+        p = self._hook_path(device_id)
         return p.read_text(encoding="utf-8").strip() if p.exists() else None

@@ -116,7 +116,7 @@ def test_add_list_remove_device(client):
     body = r.json()
     assert body["has_pin"] is True and "pin" not in body
     listed = client.get("/api/devices").json()
-    assert listed == [{"id": "desk", "name": "Desk", "host": "wled.lan", "has_pin": True, "virtual": False}]
+    assert listed == [{"id": "desk", "name": "Desk", "host": "wled.lan", "has_pin": True, "has_editing_hook": False, "virtual": False}]
     assert "1234" not in json.dumps(listed)
     assert client.delete("/api/devices/desk", headers=CSRF).status_code == 204
     assert client.delete("/api/devices/desk", headers=CSRF).status_code == 404
@@ -125,7 +125,7 @@ def test_add_list_remove_device(client):
 def test_edit_a_devices_name_and_address(client, dev_id):
     r = client.patch(f"/api/devices/{dev_id}", json={"name": " Desk ", "host": "wled-other.lan"}, headers=CSRF)
     assert r.status_code == 200, r.text
-    assert r.json() == {"id": dev_id, "name": "Desk", "host": "wled-other.lan", "has_pin": False, "virtual": False}
+    assert r.json() == {"id": dev_id, "name": "Desk", "host": "wled-other.lan", "has_pin": False, "has_editing_hook": False, "virtual": False}
     assert client.get("/api/devices").json()[0]["host"] == "wled-other.lan"
     # the address is checked as when adding; the name alone can change
     assert client.patch(f"/api/devices/{dev_id}", json={"host": "wled.lan/path"}, headers=CSRF).status_code == 422

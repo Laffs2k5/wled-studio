@@ -72,6 +72,25 @@ test("the PIN is saved and removed by separate buttons; it is write-only", async
   expect(p.onChanged).toHaveBeenCalledTimes(2);
 });
 
+test("the editing hook is saved and removed; it is write-only", async () => {
+  const calls = stub();
+  const p = open();
+  expect(screen.getByText(/No hook is set/)).toBeInTheDocument();
+  const input = screen.getByLabelText("Hook URL");
+  expect(input).toHaveAttribute("type", "password");
+  expect(screen.getByRole("button", { name: "Save hook" })).toBeDisabled();
+  fireEvent.change(input, { target: { value: " http://hub.lan/api/webhook/x " } });
+  fireEvent.click(screen.getByRole("button", { name: "Save hook" }));
+  expect(await screen.findByText("Editing hook saved.")).toBeInTheDocument();
+  expect(JSON.parse(calls.find((c) => c.key === "PUT /api/devices/desk/editing-hook")!.body!))
+    .toEqual({ url: "http://hub.lan/api/webhook/x" });
+  p.rerender({ ...desk, has_editing_hook: true } as typeof desk);
+  expect(screen.getByText(/A hook is set/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Remove hook" }));
+  expect(await screen.findByText("Editing hook removed.")).toBeInTheDocument();
+  expect(JSON.parse(calls.filter((c) => c.key === "PUT /api/devices/desk/editing-hook")[1].body!)).toEqual({ url: null });
+});
+
 test("removing asks first, and says what goes and what stays", async () => {
   const calls = stub();
   const p = open();
